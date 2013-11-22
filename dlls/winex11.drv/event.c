@@ -945,6 +945,7 @@ static BOOL X11DRV_Expose( HWND hwnd, XEvent *xev )
 static BOOL X11DRV_MapNotify( HWND hwnd, XEvent *event )
 {
     struct x11drv_win_data *data;
+    BOOL is_embedded;
 
     if (event->xany.window == x11drv_thread_data()->clip_window)
     {
@@ -959,7 +960,12 @@ static BOOL X11DRV_MapNotify( HWND hwnd, XEvent *event )
         if (hwndFocus && IsChild( hwnd, hwndFocus ))
             set_input_focus( data );
     }
+
+    is_embedded = data->embedded;
     release_win_data( data );
+
+    if (is_embedded)
+        EnableWindow( hwnd, TRUE );
     return TRUE;
 }
 
@@ -969,8 +975,19 @@ static BOOL X11DRV_MapNotify( HWND hwnd, XEvent *event )
  */
 static BOOL X11DRV_UnmapNotify( HWND hwnd, XEvent *event )
 {
+    struct x11drv_win_data *data;
+    BOOL is_embedded;
+
     if (event->xany.window == x11drv_thread_data()->clip_window)
         clipping_cursor = FALSE;
+
+    if (!(data = get_win_data( hwnd ))) return FALSE;
+
+    is_embedded = data->embedded;
+    release_win_data( data );
+
+    if (is_embedded)
+        EnableWindow( hwnd, FALSE );
     return TRUE;
 }
 
