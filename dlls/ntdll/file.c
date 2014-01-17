@@ -1999,6 +1999,41 @@ cleanup:
 }
 
 
+/*
+ * Retrieve the unix name corresponding to a file handle, remove that symlink, and then recreate
+ * a directory at the location of the old filename.
+ */
+NTSTATUS FILE_RemoveSymlink(HANDLE handle, REPARSE_GUID_DATA_BUFFER *buffer)
+{
+    int dest_fd, needs_close;
+    ANSI_STRING unix_name;
+    NTSTATUS status;
+
+    if ((status = server_get_unix_fd( handle, FILE_SPECIAL_ACCESS, &dest_fd, &needs_close, NULL, NULL )))
+        return status;
+
+    if ((status = server_get_unix_name( handle, &unix_name )))
+        goto cleanup;
+
+    TRACE("Deleting symlink %s\n", unix_name.Buffer);
+    if (unlink( unix_name.Buffer ) < 0)
+    {
+        status = FILE_GetNtStatus();
+        goto cleanup;
+    }
+    if (mkdir( unix_name.Buffer, 0775 ) < 0)
+    {
+        status = FILE_GetNtStatus();
+        goto cleanup;
+    }
+    status = STATUS_SUCCESS;
+
+cleanup:
+    if (needs_close) close( dest_fd );
+    return status;
+}
+
+
 /**************************************************************************
  *              NtFsControlFile                 [NTDLL.@]
  *              ZwFsControlFile                 [NTDLL.@]
@@ -2156,6 +2191,22 @@ NTSTATUS WINAPI NtFsControlFile(HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc
         status = STATUS_SUCCESS;
         break;
 
+    case FSCTL_DELETE_REPARSE_POINT:
+    {
+        REPARSE_GUID_DATA_BUFFER *buffer = (REPARSE_GUID_DATA_BUFFER *)in_buffer;
+
+        switch(buffer->ReparseTag)
+        {
+        case IO_REPARSE_TAG_MOUNT_POINT:
+            status = FILE_RemoveSymlink( handle, buffer );
+            break;
+        default:
+            FIXME("stub: FSCTL_DELETE_REPARSE_POINT(%x)\n", buffer->ReparseTag);
+            status = STATUS_NOT_IMPLEMENTED;
+            break;
+        }
+        break;
+    }
     case FSCTL_GET_REPARSE_POINT:
     {
         REPARSE_DATA_BUFFER *buffer = (REPARSE_DATA_BUFFER *)out_buffer;

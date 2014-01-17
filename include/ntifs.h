@@ -47,6 +47,17 @@ typedef struct _REPARSE_DATA_BUFFER {
     };
 } REPARSE_DATA_BUFFER, *PREPARSE_DATA_BUFFER;
 
+typedef struct _REPARSE_GUID_DATA_BUFFER {
+    DWORD ReparseTag;
+    WORD  ReparseDataLength;
+    WORD  Reserved;
+    GUID  ReparseGuid;
+    struct {
+        BYTE DataBuffer[1];
+    } GenericReparseBuffer;
+} REPARSE_GUID_DATA_BUFFER, *PREPARSE_GUID_DATA_BUFFER;
+
 #define IO_REPARSE_TAG_MOUNT_POINT           0xa0000003
+#define REPARSE_GUID_DATA_BUFFER_HEADER_SIZE FIELD_OFFSET(REPARSE_GUID_DATA_BUFFER, GenericReparseBuffer)
 
 #endif /* __WINE_NTIFS_H */

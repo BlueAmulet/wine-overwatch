@@ -4532,12 +4532,15 @@ static void test_junction_points(void)
     static const WCHAR junctionW[] = {'\\','j','u','n','c','t','i','o','n',0};
     WCHAR path[MAX_PATH], junction_path[MAX_PATH], target_path[MAX_PATH];
     static const WCHAR targetW[] = {'\\','t','a','r','g','e','t',0};
+    FILE_BASIC_INFORMATION old_attrib, new_attrib;
     static const WCHAR fooW[] = {'f','o','o',0};
     static WCHAR volW[] = {'c',':','\\',0};
+    REPARSE_GUID_DATA_BUFFER guid_buffer;
     static const WCHAR dotW[] = {'.',0};
     REPARSE_DATA_BUFFER *buffer = NULL;
     DWORD dwret, dwLen, dwFlags;
     INT buffer_len, string_len;
+    IO_STATUS_BLOCK iosb;
     UNICODE_STRING nameW;
     HANDLE hJunction;
     WCHAR *dest;
@@ -4585,6 +4588,8 @@ static void test_junction_points(void)
         win_skip("Failed to open junction point directory handle (0x%x).\n", GetLastError());
         goto cleanup;
     }
+    dwret = NtQueryInformationFile(hJunction, &iosb, &old_attrib, sizeof(old_attrib), FileBasicInformation);
+    ok(dwret == STATUS_SUCCESS, "Failed to get junction point folder's attributes (0x%x).\n", dwret);
     buffer_len = build_reparse_buffer(nameW.Buffer, &buffer);
     bret = DeviceIoControl(hJunction, FSCTL_SET_REPARSE_POINT, (LPVOID)buffer, buffer_len, NULL, 0, &dwret, 0);
     ok(bret, "Failed to create junction point! (0x%x)\n", GetLastError());
@@ -4599,6 +4604,23 @@ static void test_junction_points(void)
     ok(bret, "Failed to read junction point!\n");
     ok((memcmp(dest, nameW.Buffer, string_len) == 0), "Junction point destination does not match ('%s' != '%s')!\n",
                                                       wine_dbgstr_w(dest), wine_dbgstr_w(nameW.Buffer));
+
+    /* Delete the junction point */
+    memset(&old_attrib, 0x00, sizeof(old_attrib));
+    old_attrib.LastAccessTime.QuadPart = 0x200deadcafebeef;
+    dwret = NtSetInformationFile(hJunction, &iosb, &old_attrib, sizeof(old_attrib), FileBasicInformation);
+    ok(dwret == STATUS_SUCCESS, "Failed to set junction point folder's attributes (0x%x).\n", dwret);
+    memset(&guid_buffer, 0x00, sizeof(guid_buffer));
+    guid_buffer.ReparseTag = IO_REPARSE_TAG_MOUNT_POINT;
+    bret = DeviceIoControl(hJunction, FSCTL_DELETE_REPARSE_POINT, (LPVOID)&guid_buffer,
+                           REPARSE_GUID_DATA_BUFFER_HEADER_SIZE, NULL, 0, &dwret, 0);
+    ok(bret, "Failed to delete junction point! (0x%x)\n", GetLastError());
+    memset(&new_attrib, 0x00, sizeof(new_attrib));
+    dwret = NtQueryInformationFile(hJunction, &iosb, &new_attrib, sizeof(new_attrib), FileBasicInformation);
+    ok(dwret == STATUS_SUCCESS, "Failed to get junction point folder's attributes (0x%x).\n", dwret);
+    /* conversion bug: we see 0x1c9c380deadbee6 on Wine */
+    todo_wine ok(old_attrib.LastAccessTime.QuadPart == new_attrib.LastAccessTime.QuadPart,
+                 "Junction point folder's access time does not match.\n");
     CloseHandle(hJunction);
 
 cleanup:
