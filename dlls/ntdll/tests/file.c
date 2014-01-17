@@ -4659,6 +4659,15 @@ static void test_junction_points(void)
     ok(dwret != (DWORD)~0, "Junction point doesn't exist (attributes: 0x%x)!\n", dwret);
     ok(dwret & FILE_ATTRIBUTE_REPARSE_POINT, "File is not a junction point! (attributes: 0x%x)\n", dwret);
 
+    /* Test deleting a junction point's target */
+    dwret = GetFileAttributesW(junction_path);
+    ok(dwret == 0x410 || broken(dwret == 0x430) /* win2k */,
+       "Unexpected junction point attributes (0x%x != 0x410)!\n", dwret);
+    bret = RemoveDirectoryW(target_path);
+    ok(bret, "Failed to delete junction point target!\n");
+    bret = CreateDirectoryW(target_path, NULL);
+    ok(bret, "Failed to create junction point target directory.\n");
+
 cleanup:
     /* Cleanup */
     pRtlFreeUnicodeString( &nameW );
