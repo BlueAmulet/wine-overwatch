@@ -4537,9 +4537,10 @@ static void test_junction_points(void)
     static const WCHAR dotW[] = {'.',0};
     REPARSE_DATA_BUFFER *buffer = NULL;
     DWORD dwret, dwLen, dwFlags;
+    INT buffer_len, string_len;
     UNICODE_STRING nameW;
     HANDLE hJunction;
-    INT buffer_len;
+    WCHAR *dest;
     BOOL bret;
 
     /* Create a temporary folder for the junction point tests */
@@ -4587,6 +4588,17 @@ static void test_junction_points(void)
     buffer_len = build_reparse_buffer(nameW.Buffer, &buffer);
     bret = DeviceIoControl(hJunction, FSCTL_SET_REPARSE_POINT, (LPVOID)buffer, buffer_len, NULL, 0, &dwret, 0);
     ok(bret, "Failed to create junction point! (0x%x)\n", GetLastError());
+
+    /* Read back the junction point */
+    HeapFree(GetProcessHeap(), 0, buffer);
+    buffer_len = sizeof(*buffer) + MAX_PATH*sizeof(WCHAR);
+    buffer = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, buffer_len);
+    bret = DeviceIoControl(hJunction, FSCTL_GET_REPARSE_POINT, NULL, 0, (LPVOID)buffer, buffer_len, &dwret, 0);
+    string_len = buffer->MountPointReparseBuffer.SubstituteNameLength;
+    dest = &buffer->MountPointReparseBuffer.PathBuffer[buffer->MountPointReparseBuffer.SubstituteNameOffset/sizeof(WCHAR)];
+    ok(bret, "Failed to read junction point!\n");
+    ok((memcmp(dest, nameW.Buffer, string_len) == 0), "Junction point destination does not match ('%s' != '%s')!\n",
+                                                      wine_dbgstr_w(dest), wine_dbgstr_w(nameW.Buffer));
     CloseHandle(hJunction);
 
 cleanup:

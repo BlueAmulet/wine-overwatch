@@ -1945,6 +1945,60 @@ cleanup:
 }
 
 
+/*
+ * Retrieve the unix name corresponding to a file handle and use that to find the destination of the symlink
+ * corresponding to that file handle.
+ */
+NTSTATUS FILE_GetSymlink(HANDLE handle, REPARSE_DATA_BUFFER *buffer)
+{
+    ANSI_STRING unix_src, unix_dest;
+    BOOL dest_allocated = FALSE;
+    int dest_fd, needs_close;
+    UNICODE_STRING nt_dest;
+    NTSTATUS status;
+    VOID *dest_name;
+    ssize_t ret;
+
+    if ((status = server_get_unix_fd( handle, FILE_ANY_ACCESS, &dest_fd, &needs_close, NULL, NULL )))
+        return status;
+
+    if ((status = server_get_unix_name( handle, &unix_src )))
+        goto cleanup;
+
+    unix_dest.Buffer = RtlAllocateHeap( GetProcessHeap(), 0, PATH_MAX );
+    unix_dest.MaximumLength = PATH_MAX;
+    dest_allocated = TRUE;
+    ret = readlink( unix_src.Buffer, unix_dest.Buffer, unix_dest.MaximumLength );
+    if (ret < 0)
+    {
+        status = FILE_GetNtStatus();
+        goto cleanup;
+    }
+    unix_dest.Length = ret;
+
+    if ((status = wine_unix_to_nt_file_name( &unix_dest, &nt_dest )))
+        goto cleanup;
+
+    if (nt_dest.Length > buffer->MountPointReparseBuffer.SubstituteNameLength)
+    {
+        status = STATUS_BUFFER_TOO_SMALL;
+        goto cleanup;
+    }
+
+    buffer->ReparseTag = IO_REPARSE_TAG_MOUNT_POINT;
+    buffer->MountPointReparseBuffer.SubstituteNameLength = nt_dest.Length;
+    buffer->MountPointReparseBuffer.SubstituteNameOffset = 0;
+    dest_name = &buffer->MountPointReparseBuffer.PathBuffer[buffer->MountPointReparseBuffer.SubstituteNameOffset];
+    memcpy( dest_name, nt_dest.Buffer, nt_dest.Length );
+    status = STATUS_SUCCESS;
+
+cleanup:
+    if (dest_allocated) RtlFreeAnsiString( &unix_dest );
+    if (needs_close) close( dest_fd );
+    return status;
+}
+
+
 /**************************************************************************
  *              NtFsControlFile                 [NTDLL.@]
  *              ZwFsControlFile                 [NTDLL.@]
@@ -2102,6 +2156,15 @@ NTSTATUS WINAPI NtFsControlFile(HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc
         status = STATUS_SUCCESS;
         break;
 
+    case FSCTL_GET_REPARSE_POINT:
+    {
+        REPARSE_DATA_BUFFER *buffer = (REPARSE_DATA_BUFFER *)out_buffer;
+        DWORD max_length = out_size-FIELD_OFFSET(REPARSE_DATA_BUFFER, MountPointReparseBuffer.PathBuffer[1]);
+
+        buffer->MountPointReparseBuffer.SubstituteNameLength = max_length;
+        status = FILE_GetSymlink( handle, buffer );
+        break;
+    }
     case FSCTL_SET_REPARSE_POINT:
     {
         REPARSE_DATA_BUFFER *buffer = (REPARSE_DATA_BUFFER *)in_buffer;
