@@ -1686,6 +1686,7 @@ BOOL WINAPI CreateDirectoryExW( LPCWSTR template, LPCWSTR path, LPSECURITY_ATTRI
  */
 BOOL WINAPI RemoveDirectoryW( LPCWSTR path )
 {
+    FILE_BASIC_INFORMATION info;
     OBJECT_ATTRIBUTES attr;
     UNICODE_STRING nt_name;
     ANSI_STRING unix_name;
@@ -1719,15 +1720,23 @@ BOOL WINAPI RemoveDirectoryW( LPCWSTR path )
     }
 
     status = wine_nt_to_unix_file_name( &nt_name, &unix_name, FILE_OPEN, FALSE );
-    RtlFreeUnicodeString( &nt_name );
     if (status != STATUS_SUCCESS)
     {
         SetLastError( RtlNtStatusToDosError(status) );
+        RtlFreeUnicodeString( &nt_name );
         NtClose( handle );
         return FALSE;
     }
 
-    if (!(ret = (rmdir( unix_name.Buffer ) != -1))) FILE_SetDosError();
+    status = NtQueryAttributesFile( &attr, &info );
+    if (status == STATUS_SUCCESS && (info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) &&
+                                    (info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+        ret = (unlink( unix_name.Buffer ) != -1);
+    else
+        ret = (rmdir( unix_name.Buffer ) != -1);
+    if (!ret) FILE_SetDosError();
+
+    RtlFreeUnicodeString( &nt_name );
     RtlFreeAnsiString( &unix_name );
     NtClose( handle );
     return ret;
