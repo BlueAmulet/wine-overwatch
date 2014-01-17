@@ -1330,6 +1330,12 @@ enum server_fd_type
 @END
 
 
+/* Mark a socket to be reused after "closed" */
+@REQ(reuse_socket)
+    obj_handle_t handle;       /* handle to the socket */
+@END
+
+
 /* Set socket event parameters */
 @REQ(set_socket_event)
     obj_handle_t  handle;        /* handle to the socket */

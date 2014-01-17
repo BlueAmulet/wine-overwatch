@@ -8436,7 +8436,6 @@ static void test_TransmitFile(void)
                  err, WSAENOTSOCK);
 
     /* Test TransmitFile with a UDP datagram socket */
-    closesocket(client);
     client = socket(AF_INET, SOCK_DGRAM, 0);
     bret = pTransmitFile(client, NULL, 0, 0, NULL, NULL, 0);
     err = WSAGetLastError();
