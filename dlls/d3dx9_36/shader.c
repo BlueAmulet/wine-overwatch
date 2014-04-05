@@ -1,6 +1,7 @@
 /*
  * Copyright 2008 Luis Busquets
  * Copyright 2009 Matteo Bruni
+ * Copyright 2010, 2013 Christian Costa
  * Copyright 2011 Travis Athougies
  *
  * This library is free software; you can redistribute it and/or
@@ -2410,6 +2411,98 @@ HRESULT WINAPI D3DXCreateTextureShader(const DWORD *function, ID3DXTextureShader
     object->ref = 1;
 
     *texture_shader = &object->ID3DXTextureShader_iface;
+
+    return D3D_OK;
+}
+
+static const DWORD* skip_instruction(const DWORD *byte_code, UINT shader_model)
+{
+    TRACE("Shader model %u\n", shader_model);
+
+    /* Handle all special instructions whose arguments may contain D3DSIO_DCL */
+    if ((*byte_code & D3DSI_OPCODE_MASK) == D3DSIO_COMMENT)
+    {
+        byte_code += 1 + ((*byte_code & D3DSI_COMMENTSIZE_MASK) >> D3DSI_COMMENTSIZE_SHIFT);
+    }
+    else if (shader_model >= 2)
+    {
+        byte_code += 1 + ((*byte_code & D3DSI_INSTLENGTH_MASK) >> D3DSI_INSTLENGTH_SHIFT);
+    }
+    else if ((*byte_code & D3DSI_OPCODE_MASK) == D3DSIO_DEF)
+    {
+        byte_code += 1 + 5;
+    }
+    else
+    {
+        /* Handle remaining safe instructions */
+        while (*++byte_code & (1u << 31));
+    }
+
+    return byte_code;
+}
+
+static UINT get_shader_semantics(const DWORD *byte_code, D3DXSEMANTIC *semantics, DWORD type)
+{
+    const DWORD *ptr = byte_code;
+    UINT shader_model = (*ptr >> 8) & 0xff;
+    UINT i = 0;
+
+    TRACE("Shader version: %#x\n", *ptr);
+    ptr++;
+
+    while (*ptr != D3DSIO_END)
+    {
+        if (*ptr & (1u << 31))
+        {
+            FIXME("Opcode expected\n");
+            return 0;
+        }
+        else if ((*ptr & D3DSI_OPCODE_MASK) == D3DSIO_DCL)
+        {
+            DWORD param1 = *++ptr;
+            DWORD param2 = *++ptr;
+            DWORD usage = (param1 & D3DSP_DCL_USAGE_MASK) >> D3DSP_DCL_USAGE_SHIFT;
+            DWORD usage_index = (param1 & D3DSP_DCL_USAGEINDEX_MASK) >> D3DSP_DCL_USAGEINDEX_SHIFT;
+            DWORD reg_type = ((param2 & D3DSP_REGTYPE_MASK2) >> D3DSP_REGTYPE_SHIFT2)
+                    | ((param2 & D3DSP_REGTYPE_MASK) >> D3DSP_REGTYPE_SHIFT);
+
+            TRACE("D3DSIO_DCL param1: %#x, param2: %#x, usage: %u, usage_index: %u, reg_type: %u\n",
+                   param1, param2, usage, usage_index, reg_type);
+
+            if (reg_type == type)
+            {
+                if (semantics)
+                {
+                    semantics[i].Usage = usage;
+                    semantics[i].UsageIndex = usage_index;
+                }
+                i++;
+            }
+
+            ptr++;
+        }
+        else
+        {
+            ptr = skip_instruction(ptr, shader_model);
+        }
+    }
+
+    return i;
+}
+
+HRESULT WINAPI D3DXGetShaderInputSemantics(const DWORD *byte_code, D3DXSEMANTIC *semantics, UINT *count)
+{
+    UINT nb_semantics;
+
+    TRACE("byte_code %p, semantics %p, count %p\n", byte_code, semantics, count);
+
+    if (!byte_code)
+        return D3DERR_INVALIDCALL;
+
+    nb_semantics = get_shader_semantics(byte_code, semantics, D3DSPR_INPUT);
+
+    if (count)
+        *count = nb_semantics;
 
     return D3D_OK;
 }
