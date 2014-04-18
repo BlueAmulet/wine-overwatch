@@ -502,6 +502,29 @@ static void convert_generic_sd( struct security_descriptor *sd )
     }
 }
 
+static struct security_descriptor *get_xattr_sd( int fd )
+{
+    struct security_descriptor *sd;
+    char buffer[XATTR_SIZE_MAX];
+    int n;
+
+    n = xattr_fget( fd, WINE_XATTR_SD, buffer, sizeof(buffer) );
+    if (n == -1 || n < 2 + sizeof(struct security_descriptor)) return NULL;
+
+    /* validate that we can handle the descriptor */
+    if (buffer[0] != SECURITY_DESCRIPTOR_REVISION || buffer[1] != 0 ||
+            !sd_is_valid( (struct security_descriptor *)&buffer[2], n - 2 ))
+        return NULL;
+
+    sd = mem_alloc( n - 2 );
+    if (sd)
+    {
+        memcpy( sd, &buffer[2], n - 2 );
+        convert_generic_sd( sd ); /* for backwards compatibility */
+    }
+    return sd;
+}
+
 struct security_descriptor *get_file_sd( struct object *obj, struct fd *fd, mode_t *mode,
                                          uid_t *uid )
 {
@@ -517,9 +540,10 @@ struct security_descriptor *get_file_sd( struct object *obj, struct fd *fd, mode
         (st.st_uid == *uid))
         return obj->sd;
 
-    sd = mode_to_sd( st.st_mode,
-                     security_unix_uid_to_sid( st.st_uid ),
-                     token_get_primary_group( current->process->token ));
+    sd = get_xattr_sd( unix_fd );
+    if (!sd) sd = mode_to_sd( st.st_mode,
+                              security_unix_uid_to_sid( st.st_uid ),
+                              token_get_primary_group( current->process->token ));
     if (!sd) return obj->sd;
 
     *mode = st.st_mode;
