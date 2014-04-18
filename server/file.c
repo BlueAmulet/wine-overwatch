@@ -71,6 +71,7 @@ struct file
 };
 
 static unsigned int generic_file_map_access( unsigned int access );
+static struct security_descriptor *get_xattr_sd( int fd );
 
 static void file_dump( struct object *obj, int verbose );
 static struct object_type *file_get_type( struct object *obj );
@@ -228,11 +229,142 @@ static void set_xattr_sd( int fd, const struct security_descriptor *sd )
     xattr_fset( fd, WINE_XATTR_SD, buffer, len );
 }
 
+static struct security_descriptor *inherit_sd( const struct security_descriptor *parent_sd, int is_dir )
+{
+    const DWORD inheritance_mask = INHERIT_ONLY_ACE | OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE;
+    struct security_descriptor *sd = NULL;
+    const ACL *parent_dacl;
+    int present;
+    ACL *dacl;
+
+    parent_dacl = sd_get_dacl( parent_sd, &present );
+    if (present && parent_dacl)
+    {
+        size_t dacl_size = sizeof(ACL), ace_count = 0;
+        const ACE_HEADER *parent_ace;
+        const SID *user, *group;
+        ACE_HEADER *ace;
+        char *ptr;
+        ULONG i;
+
+        /* Calculate the size of the DACL */
+        parent_ace = (const ACE_HEADER *)(parent_dacl + 1);
+        for (i = 0; i < parent_dacl->AceCount; i++, parent_ace = ace_next( parent_ace ))
+        {
+            if (!(parent_ace->AceFlags & inheritance_mask)) continue;
+
+            ace_count++;
+            dacl_size += parent_ace->AceSize;
+        }
+        if (!ace_count) return sd; /* No inheritance */
+
+        /* Fill in the security descriptor so that it is compatible with our DACL */
+        user = (const SID *)(parent_sd + 1);
+        group = (const SID *)((char *)(parent_sd + 1) + parent_sd->owner_len);
+        sd = mem_alloc( sizeof(struct security_descriptor) + parent_sd->owner_len
+                        + parent_sd->group_len + dacl_size );
+        if (!sd) return sd;
+        sd->control = SE_DACL_PRESENT;
+        sd->owner_len = parent_sd->owner_len;
+        sd->group_len = parent_sd->group_len;
+        sd->sacl_len = 0;
+        sd->dacl_len = dacl_size;
+        ptr = (char *)(sd + 1);
+        memcpy( ptr, user, sd->owner_len );
+        ptr += sd->owner_len;
+        memcpy( ptr, group, sd->group_len );
+        ptr += sd->group_len;
+        dacl = (ACL *)ptr;
+        dacl->AclRevision = ACL_REVISION;
+        dacl->Sbz1 = 0;
+        dacl->AclSize = dacl_size;
+        dacl->AceCount = ace_count;
+        dacl->Sbz2 = 0;
+        ace = (ACE_HEADER *)(dacl + 1);
+
+        /* Build the new DACL, inheriting from the parent's information */
+        parent_ace = (const ACE_HEADER *)(parent_dacl + 1);
+        for (i = 0; i < parent_dacl->AceCount; i++, parent_ace = ace_next( parent_ace ))
+        {
+            DWORD flags = parent_ace->AceFlags;
+
+            if (!(flags & inheritance_mask)) continue;
+
+            ace->AceType = parent_ace->AceType;
+            if (is_dir && (flags & CONTAINER_INHERIT_ACE))
+                flags &= ~INHERIT_ONLY_ACE;
+            else if (!is_dir && (flags & OBJECT_INHERIT_ACE))
+                flags &= ~INHERIT_ONLY_ACE;
+            else if (is_dir && (flags & OBJECT_INHERIT_ACE))
+                flags |= INHERIT_ONLY_ACE;
+            if (is_dir)
+                ace->AceFlags = flags | INHERITED_ACE;
+            else
+                ace->AceFlags = (parent_ace->AceFlags & ~inheritance_mask) | INHERITED_ACE;
+            ace->AceSize = parent_ace->AceSize;
+            memcpy( ace + 1, parent_ace + 1, parent_ace->AceSize - sizeof(ACE_HEADER));
+            ace = (ACE_HEADER *)ace_next( ace );
+        }
+    }
+    return sd;
+}
+
+static struct security_descriptor *file_get_parent_sd( struct fd *root, const char *child_name,
+                                                       int child_len, int is_dir )
+{
+    struct security_descriptor *parent_sd, *sd = NULL;
+    mode_t parent_mode = 0555;
+    char *p, *parent_name;
+    struct fd *parent_fd;
+    int unix_fd;
+
+    if (!(parent_name = mem_alloc( child_len + 1 ))) return NULL;
+    memcpy( parent_name, child_name, child_len );
+    parent_name[child_len] = 0;
+
+    /* skip trailing slashes */
+    p = parent_name + strlen( parent_name ) - 1;
+    while (p > parent_name && *p == '/') p--;
+
+    /* remove last path component */
+    if (p == parent_name && *p == '/')
+    {
+        free(parent_name);
+        return NULL;
+    }
+    while (p > parent_name && *p != '/') p--;
+    while (p > parent_name && *p == '/') p--;
+    p[1] = 0;
+
+    parent_fd = open_fd( root, parent_name, O_NONBLOCK | O_LARGEFILE, &parent_mode,
+                         READ_CONTROL|ACCESS_SYSTEM_SECURITY,
+                         FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,
+                         FILE_OPEN_FOR_BACKUP_INTENT );
+    free( parent_name );
+
+    if (parent_fd)
+    {
+        unix_fd = get_unix_fd( parent_fd );
+        if (unix_fd != -1)
+        {
+            parent_sd = get_xattr_sd( unix_fd );
+            if (parent_sd)
+            {
+                sd = inherit_sd( parent_sd, is_dir );
+                free( parent_sd );
+            }
+        }
+        release_object( parent_fd );
+    }
+    return sd;
+}
+
 static struct object *create_file( struct fd *root, const char *nameptr, data_size_t len,
                                    unsigned int access, unsigned int sharing, int create,
                                    unsigned int options, unsigned int attrs,
                                    const struct security_descriptor *sd )
 {
+    struct security_descriptor *temp_sd = NULL;
     struct object *obj = NULL;
     struct fd *fd;
     int flags;
@@ -260,6 +392,10 @@ static struct object *create_file( struct fd *root, const char *nameptr, data_si
                             access |= FILE_WRITE_ATTRIBUTES; break;
     default:                set_error( STATUS_INVALID_PARAMETER ); goto done;
     }
+
+    /* Note: inheritance of security descriptors only occurs on creation when sd is NULL */
+    if (!sd && (create == FILE_CREATE || create == FILE_OVERWRITE_IF))
+        sd = temp_sd = file_get_parent_sd( root, nameptr, len, options & FILE_DIRECTORY_FILE );
 
     if (sd)
     {
@@ -300,6 +436,7 @@ static struct object *create_file( struct fd *root, const char *nameptr, data_si
     release_object( fd );
 
 done:
+    free( temp_sd );
     free( name );
     return obj;
 }
