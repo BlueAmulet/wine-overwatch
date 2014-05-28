@@ -36,6 +36,12 @@
 #ifdef HAVE_UNISTD_H
 # include <unistd.h>
 #endif
+#ifdef HAVE_DLADDR
+# include <dlfcn.h>
+#endif
+#ifdef HAVE_LINK_H
+# include <link.h>
+#endif
 #include <pthread.h>
 
 #include "wine/library.h"
@@ -90,7 +96,8 @@ static void check_command_line( int argc, char *argv[] )
         "Usage: wine PROGRAM [ARGUMENTS...]   Run the specified program\n"
         "       wine --help                   Display this help and exit\n"
         "       wine --version                Output version information and exit\n"
-        "       wine --patches                Output patch information and exit";
+        "       wine --patches                Output patch information and exit\n"
+        "       wine --check-libs             Checks if shared libs are installed";
 
     if (argc <= 1)
     {
@@ -145,6 +152,47 @@ static void check_command_line( int argc, char *argv[] )
         }
 
         exit(0);
+    }
+    if (!strcmp( argv[1], "--check-libs" ))
+    {
+        void* lib_handle;
+        int ret = 0;
+        const char **wine_libs = wine_get_libs();
+
+        for(; *wine_libs; wine_libs++)
+        {
+            lib_handle = wine_dlopen( *wine_libs, RTLD_NOW, NULL, 0 );
+            if (lib_handle)
+            {
+            #ifdef HAVE_DLADDR
+                Dl_info libinfo;
+                void* symbol;
+
+            #ifdef HAVE_LINK_H
+                struct link_map *lm = (struct link_map *)lib_handle;
+                symbol = (void *)lm->l_addr;
+            #else
+                symbol = wine_dlsym( lib_handle, "_init", NULL, 0 );
+            #endif
+                if (symbol && wine_dladdr( symbol, &libinfo, NULL, 0 ))
+                {
+                    printf( "%s: %s\n", *wine_libs, libinfo.dli_fname );
+                }
+                else
+            #endif
+                {
+                    printf( "%s: found\n", *wine_libs );
+                }
+                wine_dlclose( lib_handle, NULL, 0 );
+            }
+            else
+            {
+                printf( "%s: missing\n", *wine_libs );
+                ret = 1;
+            }
+        }
+
+        exit(ret);
     }
 }
 

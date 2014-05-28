@@ -443,6 +443,130 @@ const char *wine_get_build_dir(void)
     return build_dir;
 }
 
+const char *wine_libs[] = {
+#ifdef SONAME_LIBCAIRO
+    SONAME_LIBCAIRO,
+#endif
+#ifdef SONAME_LIBCAPI20
+    SONAME_LIBCAPI20,
+#endif
+#ifdef SONAME_LIBCUPS
+    SONAME_LIBCUPS,
+#endif
+#ifdef SONAME_LIBCURSES
+    SONAME_LIBCURSES,
+#endif
+#ifdef SONAME_LIBDBUS_1
+    SONAME_LIBDBUS_1,
+#endif
+#ifdef SONAME_LIBFONTCONFIG
+    SONAME_LIBFONTCONFIG,
+#endif
+#ifdef SONAME_LIBFREETYPE
+    SONAME_LIBFREETYPE,
+#endif
+#ifdef SONAME_LIBGL
+    SONAME_LIBGL,
+#endif
+#ifdef SONAME_LIBGNUTLS
+    SONAME_LIBGNUTLS,
+#endif
+#ifdef SONAME_LIBGOBJECT_2_0
+    SONAME_LIBGOBJECT_2_0,
+#endif
+#ifdef SONAME_LIBGSM
+    SONAME_LIBGSM,
+#endif
+#ifdef SONAME_LIBGTK_3
+    SONAME_LIBGTK_3,
+#endif
+#ifdef SONAME_LIBHAL
+    SONAME_LIBHAL,
+#endif
+#ifdef SONAME_LIBJPEG
+    SONAME_LIBJPEG,
+#endif
+#ifdef SONAME_LIBNCURSES
+    SONAME_LIBNCURSES,
+#endif
+#ifdef SONAME_LIBNETAPI
+    SONAME_LIBNETAPI,
+#endif
+#ifdef SONAME_LIBODBC
+    SONAME_LIBODBC,
+#endif
+#ifdef SONAME_LIBOSMESA
+    SONAME_LIBOSMESA,
+#endif
+#ifdef SONAME_LIBPCAP
+    SONAME_LIBPCAP,
+#endif
+#ifdef SONAME_LIBPNG
+    SONAME_LIBPNG,
+#endif
+#ifdef SONAME_LIBSANE
+    SONAME_LIBSANE,
+#endif
+#ifdef SONAME_LIBTIFF
+    SONAME_LIBTIFF,
+#endif
+#ifdef SONAME_LIBTXC_DXTN
+    SONAME_LIBTXC_DXTN,
+#endif
+#ifdef SONAME_LIBV4L1
+    SONAME_LIBV4L1,
+#endif
+#ifdef SONAME_LIBVA
+    SONAME_LIBVA,
+#endif
+#ifdef SONAME_LIBVA_DRM
+    SONAME_LIBVA_DRM,
+#endif
+#ifdef SONAME_LIBVA_X11
+    SONAME_LIBVA_X11,
+#endif
+#ifdef SONAME_LIBX11
+    SONAME_LIBX11,
+#endif
+#ifdef SONAME_LIBX11_XCB
+    SONAME_LIBX11_XCB,
+#endif
+#ifdef SONAME_LIBXCOMPOSITE
+    SONAME_LIBXCOMPOSITE,
+#endif
+#ifdef SONAME_LIBXCURSOR
+    SONAME_LIBXCURSOR,
+#endif
+#ifdef SONAME_LIBXEXT
+    SONAME_LIBXEXT,
+#endif
+#ifdef SONAME_LIBXI
+    SONAME_LIBXI,
+#endif
+#ifdef SONAME_LIBXINERAMA
+    SONAME_LIBXINERAMA,
+#endif
+#ifdef SONAME_LIBXRANDR
+    SONAME_LIBXRANDR,
+#endif
+#ifdef SONAME_LIBXRENDER
+    SONAME_LIBXRENDER,
+#endif
+#ifdef SONAME_LIBXSLT
+    SONAME_LIBXSLT,
+#endif
+#ifdef SONAME_LIBXXF86VM
+    SONAME_LIBXXF86VM,
+#endif
+    NULL
+};
+
+/* return the list of shared libs used by wine */
+const char **wine_get_libs(void)
+{
+    return &wine_libs[0];
+}
+
 /* return the full name of the server directory (the one containing the socket) */
 const char *wine_get_server_dir(void)
 {

@@ -1041,6 +1041,42 @@ void *wine_dlopen( const char *filename, int flag, char *error, size_t errorsize
 }
 
 /***********************************************************************
+ *      wine_dladdr
+ */
+int wine_dladdr( void *addr, void *info, char *error, size_t errorsize )
+{
+#ifdef HAVE_DLADDR
+    int ret;
+    const char *s;
+    dlerror(); dlerror();
+    ret = dladdr( addr, (Dl_info *)info );
+    s = dlerror();
+    if (error && errorsize)
+    {
+        if (s)
+        {
+            size_t len = strlen(s);
+            if (len >= errorsize) len = errorsize - 1;
+            memcpy( error, s, len );
+            error[len] = 0;
+        }
+        else error[0] = 0;
+    }
+    dlerror();
+    return ret;
+#else
+    if (error)
+    {
+        static const char msg[] = "dladdr interface not detected by configure";
+        size_t len = min( errorsize, sizeof(msg) );
+        memcpy( error, msg, len );
+        error[len - 1] = 0;
+    }
+    return 0;
+#endif
+}
+
+/***********************************************************************
  *		wine_dlsym
  */
 void *wine_dlsym( void *handle, const char *symbol, char *error, size_t errorsize )
