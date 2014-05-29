@@ -90,6 +90,7 @@ WINE_1.0
     wine_get_ss;
     wine_get_user_name;
     wine_get_version;
+    wine_get_patches;
     wine_init;
     wine_init_argv0_path;
     wine_is_dbcs_leadbyte;

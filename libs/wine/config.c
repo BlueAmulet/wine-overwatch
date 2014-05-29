@@ -477,6 +477,12 @@ const char *wine_get_version(void)
     return PACKAGE_VERSION;
 }
 
+/* return the applied non-standard patches */
+const void *wine_get_patches(void)
+{
+    return NULL;
+}
+
 /* return the build id string */
 const char *wine_get_build_id(void)
 {

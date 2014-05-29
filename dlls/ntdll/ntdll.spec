@@ -1478,6 +1478,7 @@
 
 # Version
 @ cdecl wine_get_version() NTDLL_wine_get_version
+@ cdecl wine_get_patches() NTDLL_wine_get_patches
 @ cdecl wine_get_build_id() NTDLL_wine_get_build_id
 @ cdecl wine_get_host_version(ptr ptr) NTDLL_wine_get_host_version
 
