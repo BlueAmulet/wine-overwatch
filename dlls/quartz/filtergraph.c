@@ -2597,16 +2597,37 @@ static HRESULT WINAPI MediaSeeking_SetPositions(IMediaSeeking *iface, LONGLONG *
     return hr;
 }
 
+static HRESULT WINAPI found_getposition(IFilterGraphImpl *This, IMediaSeeking *seek, DWORD_PTR pargs)
+{
+    struct pos_args *args = (void*)pargs;
+
+    return IMediaSeeking_GetPositions(seek, args->current, args->stop);
+}
+
 static HRESULT WINAPI MediaSeeking_GetPositions(IMediaSeeking *iface, LONGLONG *pCurrent,
         LONGLONG *pStop)
 {
     IFilterGraphImpl *This = impl_from_IMediaSeeking(iface);
+    struct pos_args args;
+    LONGLONG time = 0;
     HRESULT hr;
 
     TRACE("(%p/%p)->(%p, %p)\n", This, iface, pCurrent, pStop);
-    hr = IMediaSeeking_GetCurrentPosition(iface, pCurrent);
-    if (SUCCEEDED(hr))
-        hr = IMediaSeeking_GetStopPosition(iface, pStop);
+
+    args.current = pCurrent;
+    args.stop = pStop;
+    EnterCriticalSection(&This->cs);
+    hr = all_renderers_seek(This, found_getposition, (DWORD_PTR)&args);
+    if (This->state == State_Running && This->refClock && This->start_time >= 0)
+    {
+        IReferenceClock_GetTime(This->refClock, &time);
+        if (time)
+            time -= This->start_time;
+    }
+    if (This->pause_time > 0)
+        time += This->pause_time;
+    *pCurrent += time;
+    LeaveCriticalSection(&This->cs);
 
     return hr;
 }
