@@ -2498,31 +2498,6 @@ static HRESULT WINAPI MediaSeeking_GetStopPosition(IMediaSeeking *iface, LONGLON
     return hr;
 }
 
-static HRESULT WINAPI MediaSeeking_GetCurrentPosition(IMediaSeeking *iface, LONGLONG *pCurrent)
-{
-    IFilterGraphImpl *This = impl_from_IMediaSeeking(iface);
-    LONGLONG time = 0;
-
-    if (!pCurrent)
-        return E_POINTER;
-
-    EnterCriticalSection(&This->cs);
-    if (This->state == State_Running && This->refClock && This->start_time >= 0)
-    {
-        IReferenceClock_GetTime(This->refClock, &time);
-        if (time)
-            time -= This->start_time;
-    }
-    if (This->pause_time > 0)
-        time += This->pause_time;
-    *pCurrent = time;
-    LeaveCriticalSection(&This->cs);
-
-    TRACE("Time: %u.%03u\n", (DWORD)(*pCurrent / 10000000), (DWORD)((*pCurrent / 10000)%1000));
-
-    return S_OK;
-}
-
 static HRESULT WINAPI MediaSeeking_ConvertTimeFormat(IMediaSeeking *iface, LONGLONG *pTarget,
         const GUID *pTargetFormat, LONGLONG Source, const GUID *pSourceFormat)
 {
@@ -2628,6 +2603,21 @@ static HRESULT WINAPI MediaSeeking_GetPositions(IMediaSeeking *iface, LONGLONG *
         time += This->pause_time;
     *pCurrent += time;
     LeaveCriticalSection(&This->cs);
+
+    return hr;
+}
+
+static HRESULT WINAPI MediaSeeking_GetCurrentPosition(IMediaSeeking *iface, LONGLONG *pCurrent)
+{
+    LONGLONG time;
+    HRESULT hr;
+
+    if (!pCurrent)
+        return E_POINTER;
+
+    hr = MediaSeeking_GetPositions(iface, pCurrent, &time);
+
+    TRACE("Time: %u.%03u\n", (DWORD)(*pCurrent / 10000000), (DWORD)((*pCurrent / 10000)%1000));
 
     return hr;
 }
