@@ -2869,6 +2869,7 @@ NTSTATUS CDECL wine_nt_to_unix_file_name( const UNICODE_STRING *nameW, ANSI_STRI
                                           UINT disposition, BOOLEAN check_case )
 {
     static const WCHAR unixW[] = {'u','n','i','x'};
+    static const WCHAR pipeW[] = {'p','i','p','e'};
     static const WCHAR invalid_charsW[] = { INVALID_NT_CHARS, 0 };
 
     NTSTATUS status = STATUS_SUCCESS;
@@ -2879,6 +2880,7 @@ NTSTATUS CDECL wine_nt_to_unix_file_name( const UNICODE_STRING *nameW, ANSI_STRI
     int pos, ret, name_len, unix_len, prefix_len, used_default;
     WCHAR prefix[MAX_DIR_ENTRY_LEN];
     BOOLEAN is_unix = FALSE;
+    BOOLEAN is_pipe = FALSE;
 
     name     = nameW->Buffer;
     name_len = nameW->Length / sizeof(WCHAR);
@@ -2912,13 +2914,17 @@ NTSTATUS CDECL wine_nt_to_unix_file_name( const UNICODE_STRING *nameW, ANSI_STRI
     name += prefix_len;
     name_len -= prefix_len;
 
-    /* check for invalid characters (all chars except 0 are valid for unix) */
-    is_unix = (prefix_len == 4 && !memcmp( prefix, unixW, sizeof(unixW) ));
-    if (is_unix)
+    /* check for invalid characters (all chars except 0 are valid for unix and pipes) */
+    if (prefix_len == 4)
+    {
+        is_unix = !memcmp( prefix, unixW, sizeof(unixW) );
+        is_pipe = !memcmp( prefix, pipeW, sizeof(pipeW) );
+    }
+    if (is_unix || is_pipe)
     {
         for (p = name; p < name + name_len; p++)
             if (!*p) return STATUS_OBJECT_NAME_INVALID;
-        check_case = TRUE;
+        check_case |= is_unix;
     }
     else
     {
