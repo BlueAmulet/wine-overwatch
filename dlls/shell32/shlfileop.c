@@ -1059,7 +1059,7 @@ static HRESULT parse_file_list(FILE_LIST *flList, LPCWSTR szFiles)
 
     /* empty list */
     if (!szFiles[0])
-        return ERROR_ACCESS_DENIED;
+        return ERROR_ACCESS_DENIED; /* S_OK for Windows 95/98 */
 
     flList->feFiles = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
                                 flList->num_alloc * sizeof(FILE_ENTRY));
@@ -1576,7 +1576,19 @@ int WINAPI SHFileOperationW(LPSHFILEOPSTRUCTW lpFileOp)
     ZeroMemory(&flTo, sizeof(FILE_LIST));
 
     if ((ret = parse_file_list(&flFrom, lpFileOp->pFrom)))
+    {
+        if (ret != ERROR_ACCESS_DENIED)
+            return ret;
+
+        /* Win 9X */
+        if (GetVersion() & 0x80000000)
+            return S_OK;
+
+        FIXME("The return value of this function call depends on the windows version.\n");
+        FIXME("For old software it might be necessary to set the windows version to 95/98 using winecfg.\n");
+
         return ret;
+    }
 
     if (lpFileOp->wFunc != FO_DELETE)
         parse_file_list(&flTo, lpFileOp->pTo);
