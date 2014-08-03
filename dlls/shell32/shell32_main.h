@@ -225,4 +225,7 @@ HRESULT get_typeinfo(enum tid_t, ITypeInfo**) DECLSPEC_HIDDEN;
 void release_typelib(void) DECLSPEC_HIDDEN;
 void release_desktop_folder(void) DECLSPEC_HIDDEN;
 
+void SHELL_GetInternalImageLists(HIMAGELIST *lpSmallList, HIMAGELIST *lpLargeList,
+    HIMAGELIST *lpExtraLargeList, HIMAGELIST *lpJumboList) DECLSPEC_HIDDEN;
+
 #endif
