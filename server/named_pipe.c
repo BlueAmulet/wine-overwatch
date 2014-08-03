@@ -900,6 +900,8 @@ DECL_HANDLER(create_named_pipe)
         return;
     }
 
+    reply->flags = req->flags & ~(NAMED_PIPE_MESSAGE_STREAM_WRITE | NAMED_PIPE_MESSAGE_STREAM_READ);
+
     if (!name.len)  /* pipes need a root directory even without a name */
     {
         if (!objattr->rootdir)

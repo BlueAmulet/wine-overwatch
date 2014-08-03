@@ -2423,6 +2423,7 @@ enum message_type
     unsigned int   flags;
     VARARG(objattr,object_attributes); /* object attributes */
 @REPLY
+    unsigned int   flags;
     obj_handle_t   handle;       /* handle to the pipe */
 @END
 

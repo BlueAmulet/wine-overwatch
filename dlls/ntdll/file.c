@@ -3553,6 +3553,7 @@ NTSTATUS WINAPI NtCreateNamedPipeFile( PHANDLE handle, ULONG access,
     NTSTATUS status;
     data_size_t len;
     struct object_attributes *objattr;
+    unsigned int flags;
 
     TRACE("(%p %x %s %p %x %d %x %d %d %d %d %d %d %p)\n",
           handle, access, debugstr_w(attr->ObjectName->Buffer), iosb, sharing, dispo,
@@ -3567,15 +3568,16 @@ NTSTATUS WINAPI NtCreateNamedPipeFile( PHANDLE handle, ULONG access,
 
     if ((status = alloc_object_attributes( attr, &objattr, &len ))) return status;
 
+    flags = (pipe_type ? NAMED_PIPE_MESSAGE_STREAM_WRITE   : 0) |
+            (read_mode ? NAMED_PIPE_MESSAGE_STREAM_READ    : 0) |
+            (completion_mode ? NAMED_PIPE_NONBLOCKING_MODE : 0);
+
     SERVER_START_REQ( create_named_pipe )
     {
         req->access  = access;
         req->options = options;
         req->sharing = sharing;
-        req->flags = 
-            (pipe_type ? NAMED_PIPE_MESSAGE_STREAM_WRITE   : 0) |
-            (read_mode ? NAMED_PIPE_MESSAGE_STREAM_READ    : 0) |
-            (completion_mode ? NAMED_PIPE_NONBLOCKING_MODE : 0);
+        req->flags   = flags;
         req->maxinstances = max_inst;
         req->outsize = outbound_quota;
         req->insize  = inbound_quota;
@@ -3583,8 +3585,12 @@ NTSTATUS WINAPI NtCreateNamedPipeFile( PHANDLE handle, ULONG access,
         wine_server_add_data( req, objattr, len );
         status = wine_server_call( req );
         if (!status) *handle = wine_server_ptr_handle( reply->handle );
+        flags &= ~reply->flags; /* contains now all unsupported flags */
     }
     SERVER_END_REQ;
+
+    if (!status && (flags & (NAMED_PIPE_MESSAGE_STREAM_WRITE | NAMED_PIPE_MESSAGE_STREAM_READ)))
+        FIXME("Message mode not supported, falling back to byte mode.\n");
 
     RtlFreeHeap( GetProcessHeap(), 0, objattr );
     return status;
