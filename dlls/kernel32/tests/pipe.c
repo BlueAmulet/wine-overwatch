@@ -47,6 +47,7 @@ static void CALLBACK user_apc(ULONG_PTR param)
 enum rpcThreadOp
 {
     RPC_READFILE,
+    RPC_WRITEFILE,
     RPC_PEEKNAMEDPIPE
 };
 
@@ -72,6 +73,14 @@ static DWORD CALLBACK rpcThreadMain(LPVOID arg)
                                                         (DWORD)rpcargs->args[2],          /* bytesToRead */
                                                         (LPDWORD)rpcargs->args[3],        /* bytesRead */
                                                         (LPOVERLAPPED)rpcargs->args[4] ); /* overlapped */
+            break;
+
+        case RPC_WRITEFILE:
+            rpcargs->returnValue = (ULONG_PTR)WriteFile( (HANDLE)rpcargs->args[0],        /* hFile */
+                                                         (LPCVOID)rpcargs->args[1],       /* buffer */
+                                                         (DWORD)rpcargs->args[2],         /* bytesToWrite */
+                                                         (LPDWORD)rpcargs->args[3],       /* bytesWritten */
+                                                         (LPOVERLAPPED)rpcargs->args[4] ); /* overlapped */
             break;
 
         case RPC_PEEKNAMEDPIPE:
@@ -678,6 +687,121 @@ static void test_CreateNamedPipe(int pipemode)
             ok(readden == 0, "peek got %d bytes total 10\n", readden);
             ok(leftmsg == 0, "peek got %d bytes left in message 10\n", leftmsg);
 
+        }
+
+        /* Test behaviour for very huge messages (which don't fit completely in the buffer) */
+        {
+            static char big_obuf[512 * 1024];
+            static char big_ibuf[512 * 1024];
+            struct rpcThreadArgs rpcargs;
+            HANDLE thread;
+            DWORD threadId;
+            memset(big_obuf, 0xAA, sizeof(big_obuf));
+
+            /* Ensure that both pipes are empty before we continue with the next test */
+            while (PeekNamedPipe(hFile, NULL, 0, NULL, &readden, NULL) && readden > 0)
+                ok(ReadFile(hFile, big_ibuf, sizeof(big_ibuf), &readden, NULL) ||
+                   GetLastError() == ERROR_MORE_DATA, "ReadFile\n");
+
+            while (PeekNamedPipe(hnp, NULL, 0, NULL, &readden, NULL) && readden > 0)
+                ok(ReadFile(hnp, big_ibuf, sizeof(big_ibuf), &readden, NULL) ||
+                   GetLastError() == ERROR_MORE_DATA, "ReadFile\n");
+
+            readden = leftmsg = -1;
+            ok(PeekNamedPipe(hFile, NULL, 0, NULL, &readden, &leftmsg), "PeekNamedPipe\n");
+            ok(readden == 0, "peek got %d bytes total\n", readden);
+            ok(leftmsg == 0, "peek got %d bytes left in message\n", leftmsg);
+
+            /* transmit big message, receive with buffer of equal size */
+            memset(big_ibuf, 0, sizeof(big_ibuf));
+            rpcargs.returnValue = 0;
+            rpcargs.lastError = GetLastError();
+            rpcargs.op = RPC_WRITEFILE;
+            rpcargs.args[0] = (ULONG_PTR)hnp;
+            rpcargs.args[1] = (ULONG_PTR)big_obuf;
+            rpcargs.args[2] = (ULONG_PTR)sizeof(big_obuf);
+            rpcargs.args[3] = (ULONG_PTR)&written;
+            rpcargs.args[4] = (ULONG_PTR)NULL;
+
+            thread = CreateThread(NULL, 0, rpcThreadMain, (void *)&rpcargs, 0, &threadId);
+            ok(thread != NULL, "CreateThread failed. %d\n", GetLastError());
+            ret = WaitForSingleObject(thread, 200);
+            ok(ret == WAIT_TIMEOUT, "WaitForSingleObject returned %d instead of %d.\n", ret, WAIT_TIMEOUT);
+            ok(ReadFile(hFile, big_ibuf, sizeof(big_ibuf), &readden, NULL), "ReadFile\n");
+            todo_wine
+            ok(readden == sizeof(big_obuf), "read got %d bytes\n", readden);
+            todo_wine
+            ok(memcmp(big_ibuf, big_obuf, sizeof(big_obuf)) == 0, "content check\n");
+            do
+            {
+                ret = WaitForSingleObject(thread, 1);
+                while (PeekNamedPipe(hFile, NULL, 0, NULL, &readden, NULL) && readden > 0)
+                    ok(ReadFile(hFile, big_ibuf, sizeof(big_ibuf), &readden, NULL) ||
+                       GetLastError() == ERROR_MORE_DATA, "ReadFile\n");
+            }
+            while (ret == WAIT_TIMEOUT);
+            ok(WaitForSingleObject(thread, INFINITE) == WAIT_OBJECT_0, "WaitForSingleObject failed with %d.\n", GetLastError());
+            ok((BOOL)rpcargs.returnValue, "WriteFile\n");
+            ok(written == sizeof(big_obuf), "write file len\n");
+            CloseHandle(thread);
+
+            readden = leftmsg = -1;
+            ok(PeekNamedPipe(hFile, NULL, 0, NULL, &readden, &leftmsg), "PeekNamedPipe\n");
+            ok(readden == 0, "peek got %d bytes total\n", readden);
+            ok(leftmsg == 0, "peek got %d bytes left in message\n", leftmsg);
+
+            /* same as above, but receive as multiple parts */
+            memset(big_ibuf, 0, sizeof(big_ibuf));
+            rpcargs.returnValue = 0;
+            rpcargs.lastError = GetLastError();
+
+            thread = CreateThread(NULL, 0, rpcThreadMain, (void *)&rpcargs, 0, &threadId);
+            ok(thread != NULL, "CreateThread failed. %d\n", GetLastError());
+            ret = WaitForSingleObject(thread, 200);
+            ok(ret == WAIT_TIMEOUT, "WaitForSingleObject returned %d instead of %d.\n", ret, WAIT_TIMEOUT);
+            if (pipemode == PIPE_TYPE_BYTE)
+            {
+                ok(ReadFile(hFile, big_ibuf, 32, &readden, NULL), "ReadFile\n");
+                ok(readden == 32, "read got %d bytes\n", readden);
+                ok(ReadFile(hFile, big_ibuf + 32, 32, &readden, NULL), "ReadFile\n");
+            }
+            else
+            {
+                SetLastError(0xdeadbeef);
+                todo_wine
+                ok(!ReadFile(hFile, big_ibuf, 32, &readden, NULL), "ReadFile\n");
+                todo_wine
+                ok(GetLastError() == ERROR_MORE_DATA, "wrong error\n");
+                ok(readden == 32, "read got %d bytes\n", readden);
+                SetLastError(0xdeadbeef);
+                todo_wine
+                ok(!ReadFile(hFile, big_ibuf + 32, 32, &readden, NULL), "ReadFile\n");
+                todo_wine
+                ok(GetLastError() == ERROR_MORE_DATA, "wrong error\n");
+            }
+            ok(readden == 32, "read got %d bytes\n", readden);
+            ok(ReadFile(hFile, big_ibuf + 64, sizeof(big_ibuf) - 64, &readden, NULL), "ReadFile\n");
+            todo_wine
+            ok(readden == sizeof(big_obuf) - 64, "read got %d bytes\n", readden);
+            todo_wine
+            ok(memcmp(big_ibuf, big_obuf, sizeof(big_obuf)) == 0, "content check\n");
+            do
+            {
+                ret = WaitForSingleObject(thread, 1);
+                while (PeekNamedPipe(hFile, NULL, 0, NULL, &readden, NULL) && readden > 0)
+                    ok(ReadFile(hFile, big_ibuf, sizeof(big_ibuf), &readden, NULL) ||
+                       GetLastError() == ERROR_MORE_DATA, "ReadFile\n");
+            }
+            while (ret == WAIT_TIMEOUT);
+            ok(WaitForSingleObject(thread, INFINITE) == WAIT_OBJECT_0, "WaitForSingleObject failed with %d.\n", GetLastError());
+            ok((BOOL)rpcargs.returnValue, "WriteFile\n");
+            ok(written == sizeof(big_obuf), "write file len\n");
+            CloseHandle(thread);
+
+            readden = leftmsg = -1;
+            ok(PeekNamedPipe(hFile, NULL, 0, NULL, &readden, &leftmsg), "PeekNamedPipe\n");
+            ok(readden == 0, "peek got %d bytes total\n", readden);
+            ok(leftmsg == 0, "peek got %d bytes left in message\n", leftmsg);
         }
 
         /* Picky conformance tests */
