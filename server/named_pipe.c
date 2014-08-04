@@ -42,6 +42,10 @@
 #include <poll.h>
 #endif
 
+#ifndef SO_PEEK_OFF
+#define SO_PEEK_OFF 42
+#endif
+
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
 #include "windef.h"
@@ -49,6 +53,7 @@
 #include "winioctl.h"
 
 #include "file.h"
+#include "sock.h"
 #include "handle.h"
 #include "thread.h"
 #include "request.h"
@@ -750,14 +755,43 @@ static int named_pipe_link_name( struct object *obj, struct object_name *name, s
     return 1;
 }
 
+/* check if message mode named pipes are supported */
+static int is_messagemode_supported(void)
+{
+#ifdef __linux__
+    static const int zero = 0;
+    static int messagemode = -1;
+    int fd;
+
+    if (messagemode < 0)
+    {
+        fd = socket( PF_UNIX, SOCK_SEQPACKET, 0 );
+        messagemode = (fd != -1) && (setsockopt( fd, SOL_SOCKET, SO_PEEK_OFF, &zero, sizeof(zero) ) != -1);
+        if (fd != -1) close( fd );
+    }
+
+    return messagemode;
+#else
+    return 0;
+#endif
+}
+
+static inline int messagemode_flags( int flags )
+{
+    if (!is_messagemode_supported())
+        flags &= ~(NAMED_PIPE_MESSAGE_STREAM_WRITE | NAMED_PIPE_MESSAGE_STREAM_READ);
+    return flags;
+}
+
 static struct object *named_pipe_open_file( struct object *obj, unsigned int access,
                                             unsigned int sharing, unsigned int options )
 {
+    static const int zero = 0;
     struct named_pipe *pipe = (struct named_pipe *)obj;
     struct pipe_server *server;
     struct pipe_client *client;
     unsigned int pipe_sharing;
-    int fds[2];
+    int fds[2], type;
 
     if (!(server = find_available_server( pipe )))
     {
@@ -776,7 +810,10 @@ static struct object *named_pipe_open_file( struct object *obj, unsigned int acc
 
     if ((client = create_pipe_client( options, pipe->flags )))
     {
-        if (!socketpair( PF_UNIX, SOCK_STREAM, 0, fds ))
+        type = ((pipe->flags & NAMED_PIPE_MESSAGE_STREAM_WRITE) && is_messagemode_supported()) ?
+               SOCK_SEQPACKET : SOCK_STREAM;
+
+        if (!socketpair( PF_UNIX, type, 0, fds ))
         {
             assert( !server->fd );
 
@@ -786,32 +823,55 @@ static struct object *named_pipe_open_file( struct object *obj, unsigned int acc
             if (is_overlapped( options )) fcntl( fds[1], F_SETFL, O_NONBLOCK );
             if (is_overlapped( server->options )) fcntl( fds[0], F_SETFL, O_NONBLOCK );
 
-            if (pipe->insize)
+            /* FIXME: For message mode we don't pay attention to the provided buffer size.
+             * Linux pipes cannot dynamically adjust size, so we leave the size to the system
+             * instead of using the application provided value. Please note that this will
+             * have the effect that the application doesn't block when sending very large
+             * messages. */
+            if (type != SOCK_SEQPACKET)
             {
-                setsockopt( fds[0], SOL_SOCKET, SO_RCVBUF, &pipe->insize, sizeof(pipe->insize) );
-                setsockopt( fds[1], SOL_SOCKET, SO_RCVBUF, &pipe->insize, sizeof(pipe->insize) );
-            }
-            if (pipe->outsize)
-            {
-                setsockopt( fds[0], SOL_SOCKET, SO_SNDBUF, &pipe->outsize, sizeof(pipe->outsize) );
-                setsockopt( fds[1], SOL_SOCKET, SO_SNDBUF, &pipe->outsize, sizeof(pipe->outsize) );
+                if (pipe->insize)
+                {
+                    setsockopt( fds[0], SOL_SOCKET, SO_RCVBUF, &pipe->insize, sizeof(pipe->insize) );
+                    setsockopt( fds[1], SOL_SOCKET, SO_RCVBUF, &pipe->insize, sizeof(pipe->insize) );
+                }
+                if (pipe->outsize)
+                {
+                    setsockopt( fds[0], SOL_SOCKET, SO_SNDBUF, &pipe->outsize, sizeof(pipe->outsize) );
+                    setsockopt( fds[1], SOL_SOCKET, SO_SNDBUF, &pipe->outsize, sizeof(pipe->outsize) );
+                }
             }
 
-            client->fd = create_anonymous_fd( &pipe_client_fd_ops, fds[1], &client->obj, options );
-            server->fd = create_anonymous_fd( &pipe_server_fd_ops, fds[0], &server->obj, server->options );
-            if (client->fd && server->fd)
+            if (type != SOCK_SEQPACKET || (setsockopt( fds[0], SOL_SOCKET, SO_PEEK_OFF, &zero, sizeof(zero) ) != -1 &&
+                                           setsockopt( fds[1], SOL_SOCKET, SO_PEEK_OFF, &zero, sizeof(zero) ) != -1))
             {
-                allow_fd_caching( client->fd );
-                allow_fd_caching( server->fd );
-                fd_copy_completion( server->ioctl_fd, server->fd );
-                if (server->state == ps_wait_open)
-                    fd_async_wake_up( server->ioctl_fd, ASYNC_TYPE_WAIT, STATUS_SUCCESS );
-                set_server_state( server, ps_connected_server );
-                server->client = client;
-                client->server = server;
+            #ifdef __linux__
+                fcntl( fds[0], F_SETSIG, messagemode_flags( server->pipe_flags ) );
+                fcntl( fds[1], F_SETSIG, messagemode_flags( client->pipe_flags ) );
+            #endif
+
+                client->fd = create_anonymous_fd( &pipe_client_fd_ops, fds[1], &client->obj, options );
+                server->fd = create_anonymous_fd( &pipe_server_fd_ops, fds[0], &server->obj, server->options );
+                if (client->fd && server->fd)
+                {
+                    allow_fd_caching( client->fd );
+                    allow_fd_caching( server->fd );
+                    fd_copy_completion( server->ioctl_fd, server->fd );
+                    if (server->state == ps_wait_open)
+                        fd_async_wake_up( server->ioctl_fd, ASYNC_TYPE_WAIT, STATUS_SUCCESS );
+                    set_server_state( server, ps_connected_server );
+                    server->client = client;
+                    client->server = server;
+                }
+                else
+                {
+                    release_object( client );
+                    client = NULL;
+                }
             }
             else
             {
+                sock_set_error();
                 release_object( client );
                 client = NULL;
             }
@@ -900,7 +960,7 @@ DECL_HANDLER(create_named_pipe)
         return;
     }
 
-    reply->flags = req->flags & ~(NAMED_PIPE_MESSAGE_STREAM_WRITE | NAMED_PIPE_MESSAGE_STREAM_READ);
+    reply->flags = messagemode_flags(req->flags);
 
     if (!name.len)  /* pipes need a root directory even without a name */
     {
@@ -1003,6 +1063,9 @@ DECL_HANDLER(set_named_pipe_info)
 {
     struct pipe_server *server;
     struct pipe_client *client = NULL;
+#ifdef __linux__
+    int unix_fd;
+#endif
 
     server = get_pipe_server_obj( current->process, req->handle, FILE_WRITE_ATTRIBUTES );
     if (!server)
@@ -1029,10 +1092,20 @@ DECL_HANDLER(set_named_pipe_info)
     else if (client)
     {
         client->pipe_flags = server->pipe->flags | req->flags;
+    #ifdef __linux__
+        if (client->fd && (unix_fd = get_unix_fd( client->fd )) != -1)
+            fcntl( unix_fd, F_SETSIG, messagemode_flags( client->pipe_flags ) );
+        clear_error();
+    #endif
     }
     else
     {
         server->pipe_flags = server->pipe->flags | req->flags;
+    #ifdef __linux__
+        if (server->fd && (unix_fd = get_unix_fd( server->fd )) != -1)
+            fcntl( unix_fd, F_SETSIG, messagemode_flags( server->pipe_flags ) );
+        clear_error();
+    #endif
     }
 
     if (client)

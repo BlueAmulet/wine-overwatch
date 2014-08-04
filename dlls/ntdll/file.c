@@ -96,6 +96,10 @@
 # include <valgrind/memcheck.h>
 #endif
 
+#ifndef SO_PEEK_OFF
+#define SO_PEEK_OFF 42
+#endif
+
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
 #define NONAMELESSUNION
@@ -513,18 +517,57 @@ static NTSTATUS unix_fd_avail(int fd, int *avail)
            STATUS_PIPE_BROKEN : STATUS_SUCCESS;
 }
 
+/* returns the pipe flags for a file descriptor */
+static inline int get_pipe_flags(int fd)
+{
+#ifdef __linux__
+    return fcntl( fd, F_GETSIG );
+#else
+    return 0;
+#endif
+}
+
 /* helper function for NtReadFile and FILE_AsyncReadService */
 static NTSTATUS read_unix_fd(int fd, char *buf, ULONG *total, ULONG length,
                              enum server_fd_type type, BOOL avail_mode)
 {
-    int result;
+    struct msghdr msg;
+    struct iovec iov;
+    int pipe_flags = 0, result;
+
+    if (type == FD_TYPE_PIPE)
+        pipe_flags = get_pipe_flags( fd );
+
     for(;;)
     {
-        result = read( fd, buf + *total, length - *total );
+        if (pipe_flags & NAMED_PIPE_MESSAGE_STREAM_WRITE)
+        {
+            msg.msg_name        = NULL;
+            msg.msg_namelen     = 0;
+            msg.msg_iov         = &iov;
+            msg.msg_iovlen      = 1;
+            msg.msg_control     = NULL;
+            msg.msg_controllen  = 0;
+            msg.msg_flags       = 0;
+
+            iov.iov_base = buf    + *total;
+            iov.iov_len  = length - *total;
+
+            result = recvmsg( fd, &msg, MSG_PEEK | (*total ? MSG_DONTWAIT : 0) );
+            if (result >= 0 && !(msg.msg_flags & MSG_TRUNC))
+            {
+                int ret;
+                while (!(ret = recv( fd, NULL, 0, MSG_TRUNC)) && result > 0);
+                if (ret < 0) ERR("dequeue message failed reason: %s\n", strerror(errno));
+            }
+        }
+        else
+            result = read( fd, buf + *total, length - *total );
+
         if (result >= 0)
         {
             *total += result;
-            if (!result || *total >= length || avail_mode)
+            if (!result || *total >= length || (avail_mode && !(pipe_flags & NAMED_PIPE_MESSAGE_STREAM_WRITE)))
             {
                 if (*total)
                     return STATUS_SUCCESS;
@@ -540,16 +583,17 @@ static NTSTATUS read_unix_fd(int fd, char *buf, ULONG *total, ULONG length,
                     return STATUS_PIPE_BROKEN;
                 }
             }
+            else if (pipe_flags & NAMED_PIPE_MESSAGE_STREAM_WRITE)
+                continue;
             else if (type != FD_TYPE_FILE) /* no async I/O on regular files */
                 return STATUS_PENDING;
         }
+        else if (errno == EAGAIN)
+            return (avail_mode && *total) ? STATUS_SUCCESS : STATUS_PENDING;
         else if (errno != EINTR)
-        {
-            if (errno == EAGAIN) break;
             return FILE_GetNtStatus();
-        }
     }
-    return STATUS_PENDING;
+    return STATUS_UNSUCCESSFUL; /* never reached */
 }
 
 /***********************************************************************
@@ -1131,13 +1175,14 @@ NTSTATUS WINAPI NtReadFileScatter( HANDLE file, HANDLE event, PIO_APC_ROUTINE ap
 /* helper function for NtWriteFile and FILE_AsyncWriteService */
 static NTSTATUS write_unix_fd(int fd, const char *buf, ULONG *total, ULONG length, enum server_fd_type type)
 {
+    ULONG msgsize = (ULONG)-1;
     int result;
     for(;;)
     {
         if (!length && (type == FD_TYPE_MAILSLOT || type == FD_TYPE_PIPE || type == FD_TYPE_SOCKET))
             result = send( fd, buf, 0, 0 );
         else
-            result = write( fd, buf + *total, length - *total );
+            result = write( fd, buf + *total, min(length - *total, msgsize) );
         if (result >= 0)
         {
             *total += result;
@@ -1145,6 +1190,17 @@ static NTSTATUS write_unix_fd(int fd, const char *buf, ULONG *total, ULONG lengt
                 return STATUS_SUCCESS;
             else if (type != FD_TYPE_FILE) /* no async I/O on regular files */
                 return STATUS_PENDING;
+        }
+        else if (errno == EMSGSIZE && type == FD_TYPE_PIPE && msgsize > 4096)
+        {
+            static ULONG warn_msgsize;
+            if (msgsize == (ULONG)-1) msgsize = (length + 32 + 4095) & ~4095;
+            if (msgsize > warn_msgsize)
+            {
+                FIXME("Message is too big, try to increase /proc/sys/net/core/wmem_default to at least %d\n", msgsize);
+                warn_msgsize = msgsize;
+            }
+            msgsize -= 4096; /* FIXME: use more intelligent algorithm to discover msgsize */
         }
         else if (errno != EINTR)
         {
@@ -1738,19 +1794,39 @@ NTSTATUS WINAPI NtFsControlFile(HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc
             status = unix_fd_avail( fd, &avail );
             if (!status)
             {
+                ULONG data_size = out_size - FIELD_OFFSET( FILE_PIPE_PEEK_BUFFER, Data );
+                int pipe_flags = get_pipe_flags( fd );
+
                 buffer->NamedPipeState    = 0;  /* FIXME */
                 buffer->ReadDataAvailable = avail;
-                buffer->NumberOfMessages  = 0;  /* FIXME */
-                buffer->MessageLength     = 0;  /* FIXME */
+                buffer->NumberOfMessages  = 0;
+                buffer->MessageLength     = 0;
                 io->Information = FIELD_OFFSET( FILE_PIPE_PEEK_BUFFER, Data );
-                if (avail)
+
+                if (pipe_flags & NAMED_PIPE_MESSAGE_STREAM_WRITE)
                 {
-                    ULONG data_size = out_size - FIELD_OFFSET( FILE_PIPE_PEEK_BUFFER, Data );
-                    if (data_size)
+                    int peek_offset;
+                    socklen_t sock_opt_len = sizeof(peek_offset);
+                    if (getsockopt( fd, SOL_SOCKET, SO_PEEK_OFF, &peek_offset, &sock_opt_len ))
+                        ERR("getsockopt(SO_PEEK_OFF) failed reason: %s\n", strerror(errno));
+                    else
                     {
-                        int res = recv( fd, buffer->Data, data_size, MSG_PEEK );
-                        if (res >= 0) io->Information += res;
+                        char *data = data_size ? buffer->Data : NULL;
+                        int res = recv( fd, data, data_size, MSG_PEEK | MSG_TRUNC | MSG_DONTWAIT );
+                        if (res >= 0) io->Information += min(res, data_size);
+
+                        if (setsockopt( fd, SOL_SOCKET, SO_PEEK_OFF, &peek_offset, sizeof(peek_offset) ))
+                            ERR("setsockopt(SO_PEEK_OFF) failed reason: %s\n", strerror(errno));
+
+                        buffer->ReadDataAvailable = avail - peek_offset;
+                        buffer->NumberOfMessages  = avail > peek_offset; /* FIXME */
+                        buffer->MessageLength     = max(0, res);
                     }
+                }
+                else if (avail && data_size)
+                {
+                    int res = recv( fd, buffer->Data, data_size, MSG_PEEK | MSG_DONTWAIT );
+                    if (res >= 0) io->Information += res;
                 }
             }
             if (needs_close) close( fd );
