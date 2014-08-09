@@ -1608,7 +1608,7 @@ static const char *get_make_variable( const struct makefile *make, const char *n
 static char *get_expanded_make_variable( const struct makefile *make, const char *name )
 {
     const char *var;
-    char *p, *end, *expand, *tmp;
+    char *p, *end, *expand, *tmp = NULL;
 
     var = get_make_variable( make, name );
     if (!var) return NULL;
