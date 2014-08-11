@@ -2654,6 +2654,10 @@ static HRESULT WINAPI TextFont_SetDuplicate(ITextFont *iface, ITextFont *pFont)
 {
     ITextFontImpl *This = impl_from_ITextFont(iface);
     FIXME("(%p)->(%p): stub\n", This, pFont);
+
+    if (This->range && !get_range_reole(This->range))
+        return CO_E_RELEASED;
+
     return E_NOTIMPL;
 }
 
@@ -2661,6 +2665,10 @@ static HRESULT WINAPI TextFont_CanChange(ITextFont *iface, LONG *ret)
 {
     ITextFontImpl *This = impl_from_ITextFont(iface);
     FIXME("(%p)->(%p): stub\n", This, ret);
+
+    if (This->range && !get_range_reole(This->range))
+        return CO_E_RELEASED;
+
     return E_NOTIMPL;
 }
 
@@ -2668,6 +2676,10 @@ static HRESULT WINAPI TextFont_IsEqual(ITextFont *iface, ITextFont *font, LONG *
 {
     ITextFontImpl *This = impl_from_ITextFont(iface);
     FIXME("(%p)->(%p %p): stub\n", This, font, ret);
+
+    if (This->range && !get_range_reole(This->range))
+        return CO_E_RELEASED;
+
     return E_NOTIMPL;
 }
 
@@ -2841,6 +2853,10 @@ static HRESULT WINAPI TextFont_GetStyle(ITextFont *iface, LONG *value)
 {
     ITextFontImpl *This = impl_from_ITextFont(iface);
     FIXME("(%p)->(%p): stub\n", This, value);
+
+    if (This->range && !get_range_reole(This->range))
+        return CO_E_RELEASED;
+
     return E_NOTIMPL;
 }
 
@@ -2848,6 +2864,10 @@ static HRESULT WINAPI TextFont_SetStyle(ITextFont *iface, LONG value)
 {
     ITextFontImpl *This = impl_from_ITextFont(iface);
     FIXME("(%p)->(%d): stub\n", This, value);
+
+    if (This->range && !get_range_reole(This->range))
+        return CO_E_RELEASED;
+
     return E_NOTIMPL;
 }
 
