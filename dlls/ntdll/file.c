@@ -572,6 +572,8 @@ static NTSTATUS read_unix_fd(int fd, char *buf, ULONG *total, ULONG length,
                 if (ret < 0) ERR("dequeue message failed reason: %s\n", strerror(errno));
             }
         }
+        else if (pipe_flags & NAMED_PIPE_NONBLOCKING_MODE)
+            result = recv( fd, buf + *total, length - *total, MSG_DONTWAIT );
         else
             result = read( fd, buf + *total, length - *total );
 
