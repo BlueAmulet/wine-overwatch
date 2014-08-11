@@ -492,7 +492,7 @@ NTSTATUS FILE_GetNtStatus(void)
     }
 }
 
-/* helper function for FSCTL_PIPE_PEEK */
+/* helper function for FSCTL_PIPE_PEEK and read_unix_fd */
 static NTSTATUS unix_fd_avail(int fd, int *avail)
 {
     struct pollfd pollfd;
@@ -521,7 +521,14 @@ static NTSTATUS unix_fd_avail(int fd, int *avail)
 static inline int get_pipe_flags(int fd)
 {
 #ifdef __linux__
-    return fcntl( fd, F_GETSIG );
+    int flags = fcntl( fd, F_GETSIG );
+
+    /* NAMED_PIPE_MESSAGE_STREAM_READ only allowed in
+     * combination with NAMED_PIPE_MESSAGE_STREAM_WRITE. */
+    if (!(flags & NAMED_PIPE_MESSAGE_STREAM_WRITE))
+        flags &= ~NAMED_PIPE_MESSAGE_STREAM_READ;
+
+    return flags;
 #else
     return 0;
 #endif
@@ -567,10 +574,12 @@ static NTSTATUS read_unix_fd(int fd, char *buf, ULONG *total, ULONG length,
         if (result >= 0)
         {
             *total += result;
-            if (!result || *total >= length || (avail_mode && !(pipe_flags & NAMED_PIPE_MESSAGE_STREAM_WRITE)))
+            if (!result || *total >= length || (avail_mode && !(pipe_flags & NAMED_PIPE_MESSAGE_STREAM_WRITE)) ||
+                ((pipe_flags & NAMED_PIPE_MESSAGE_STREAM_READ) && !(msg.msg_flags & MSG_TRUNC)))
             {
                 if (*total)
-                    return STATUS_SUCCESS;
+                    return ((pipe_flags & NAMED_PIPE_MESSAGE_STREAM_READ) && (msg.msg_flags & MSG_TRUNC)) ?
+                           STATUS_BUFFER_OVERFLOW : STATUS_SUCCESS;
                 switch (type)
                 {
                 case FD_TYPE_FILE:
@@ -579,11 +588,18 @@ static NTSTATUS read_unix_fd(int fd, char *buf, ULONG *total, ULONG length,
                     return length ? STATUS_END_OF_FILE : STATUS_SUCCESS;
                 case FD_TYPE_SERIAL:
                     return length ? STATUS_PENDING : STATUS_SUCCESS;
+                case FD_TYPE_PIPE:
+                    {
+                        NTSTATUS status = unix_fd_avail( fd, &result );
+                        if (!status && !result && !length) status = STATUS_PENDING;
+                        return status;
+                    }
                 default:
                     return STATUS_PIPE_BROKEN;
                 }
             }
-            else if (pipe_flags & NAMED_PIPE_MESSAGE_STREAM_WRITE)
+            else if ((pipe_flags & (NAMED_PIPE_MESSAGE_STREAM_WRITE | NAMED_PIPE_MESSAGE_STREAM_READ)) ==
+                     NAMED_PIPE_MESSAGE_STREAM_WRITE)
                 continue;
             else if (type != FD_TYPE_FILE) /* no async I/O on regular files */
                 return STATUS_PENDING;
@@ -1065,7 +1081,7 @@ done:
 
 err:
     if (needs_close) close( unix_handle );
-    if (status == STATUS_SUCCESS || (status == STATUS_END_OF_FILE && !async_read))
+    if (status == STATUS_SUCCESS || status == STATUS_BUFFER_OVERFLOW || (status == STATUS_END_OF_FILE && !async_read))
     {
         io_status->u.Status = status;
         io_status->Information = total;
