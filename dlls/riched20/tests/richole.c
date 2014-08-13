@@ -3701,6 +3701,40 @@ static void test_ITextRange_GetText(void)
   TEST_TXTRGE_GETTEXT(1, 1, NULL)
 }
 
+static void test_ITextRange_SetRange(void)
+{
+  HWND w;
+  IRichEditOle *reOle = NULL;
+  ITextDocument *txtDoc = NULL;
+  ITextRange *txtRge = NULL;
+  HRESULT hres;
+  int start, end;
+  static const CHAR test_text1[] = "TestSomeText";
+
+  create_interfaces(&w, &reOle, &txtDoc, NULL);
+  SendMessageA(w, WM_SETTEXT, 0, (LPARAM)test_text1);
+  ITextDocument_Range(txtDoc, 0, 0, &txtRge);
+
+#define TEST_TXTRGE_SETRANGE(first, lim, expected_start, expected_end, expected_return) \
+  hres = ITextRange_SetRange(txtRge, first, lim);                       \
+  ok(hres == expected_return, "ITextRange_SetRange\n");                 \
+  ITextRange_GetStart(txtRge, &start);                                  \
+  ITextRange_GetEnd(txtRge, &end);                                      \
+  ok(start == expected_start, "got wrong start value: %d\n", start);    \
+  ok(end == expected_end, "got wrong end value: %d\n", end);
+
+  TEST_TXTRGE_SETRANGE(2, 4, 2, 4, S_OK)
+  TEST_TXTRGE_SETRANGE(2, 4, 2, 4, S_FALSE)
+  TEST_TXTRGE_SETRANGE(4, 2, 2, 4, S_FALSE)
+  TEST_TXTRGE_SETRANGE(14, 14, 12, 12, S_OK)
+  TEST_TXTRGE_SETRANGE(15, 15, 12, 12, S_FALSE)
+  TEST_TXTRGE_SETRANGE(14, 1, 1, 13, S_OK)
+  TEST_TXTRGE_SETRANGE(-1, 4, 0, 4, S_OK)
+
+  ITextRange_Release(txtRge);
+  release_interfaces(&w, &reOle, &txtDoc, NULL);
+}
+
 START_TEST(richole)
 {
   /* Must explicitly LoadLibrary(). The test has no references to functions in
@@ -3728,6 +3762,7 @@ START_TEST(richole)
   test_ITextRange_GetFont();
   test_ITextRange_GetPara();
   test_ITextRange_GetText();
+  test_ITextRange_SetRange();
   test_GetClientSite();
   test_IOleWindow_GetWindow();
   test_IOleInPlaceSite_GetWindow();
