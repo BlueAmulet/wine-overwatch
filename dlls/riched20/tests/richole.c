@@ -3664,6 +3664,43 @@ static void test_ITextRange_GetPara(void)
   ITextPara_Release(txtPara);
 }
 
+static void test_ITextRange_GetText(void)
+{
+  HWND w;
+  IRichEditOle *reOle = NULL;
+  ITextDocument *txtDoc = NULL;
+  ITextRange *txtRge = NULL;
+  HRESULT hres;
+  BSTR bstr = NULL;
+  static const CHAR test_text1[] = "TestSomeText";
+  static const WCHAR bufW1[] = {'T', 'e', 's', 't', 0};
+  static const WCHAR bufW2[] = {'T', 'e', 'x', 't', '\r', 0};
+  static const WCHAR bufW3[] = {'T', 'e', 'x', 't', 0};
+  static const WCHAR bufW4[] = {'T', 'e', 's', 't', 'S', 'o', 'm',
+                                'e', 'T', 'e', 'x', 't', '\r', 0};
+  static const WCHAR bufW5[] = {'\r', 0};
+
+
+#define TEST_TXTRGE_GETTEXT(first, lim, expected_string)                \
+  create_interfaces(&w, &reOle, &txtDoc, NULL);                         \
+  SendMessageA(w, WM_SETTEXT, 0, (LPARAM)test_text1);                   \
+  ITextDocument_Range(txtDoc, first, lim, &txtRge);                     \
+  hres = ITextRange_GetText(txtRge, &bstr);                             \
+  ok(hres == S_OK, "ITextRange_GetText\n");                             \
+  ok(!lstrcmpW(bstr, expected_string), "got wrong text: %s\n", wine_dbgstr_w(bstr)); \
+  SysFreeString(bstr);                                                  \
+  ITextRange_Release(txtRge);                                           \
+  release_interfaces(&w, &reOle, &txtDoc, NULL);
+
+  TEST_TXTRGE_GETTEXT(0, 4, bufW1)
+  TEST_TXTRGE_GETTEXT(4, 0, bufW1)
+  TEST_TXTRGE_GETTEXT(8, 12, bufW3)
+  TEST_TXTRGE_GETTEXT(8, 13, bufW2)
+  TEST_TXTRGE_GETTEXT(12, 13, bufW5)
+  TEST_TXTRGE_GETTEXT(0, 13, bufW4)
+  TEST_TXTRGE_GETTEXT(1, 1, NULL)
+}
+
 START_TEST(richole)
 {
   /* Must explicitly LoadLibrary(). The test has no references to functions in
@@ -3690,6 +3727,7 @@ START_TEST(richole)
   test_ITextRange_Collapse();
   test_ITextRange_GetFont();
   test_ITextRange_GetPara();
+  test_ITextRange_GetText();
   test_GetClientSite();
   test_IOleWindow_GetWindow();
   test_IOleInPlaceSite_GetWindow();
