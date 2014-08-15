@@ -488,6 +488,31 @@ NTSTATUS FILE_GetNtStatus(void)
     }
 }
 
+/* helper function for FSCTL_PIPE_PEEK */
+static NTSTATUS unix_fd_avail(int fd, int *avail)
+{
+    struct pollfd pollfd;
+    int ret;
+    *avail = 0;
+
+#ifdef FIONREAD
+    if (ioctl( fd, FIONREAD, avail ) != 0)
+    {
+        TRACE("FIONREAD failed reason: %s\n", strerror(errno));
+        return FILE_GetNtStatus();
+    }
+    if (*avail)
+        return STATUS_SUCCESS;
+#endif
+
+    pollfd.fd = fd;
+    pollfd.events = POLLIN;
+    pollfd.revents = 0;
+    ret = poll( &pollfd, 1, 0 );
+    return (ret == -1 || (ret == 1 && (pollfd.revents & (POLLHUP|POLLERR)))) ?
+           STATUS_PIPE_BROKEN : STATUS_SUCCESS;
+}
+
 /* helper function for NtReadFile and FILE_AsyncReadService */
 static NTSTATUS read_unix_fd(int fd, char *buf, ULONG *total, ULONG length,
                              enum server_fd_type type, BOOL avail_mode)
@@ -1718,44 +1743,22 @@ NTSTATUS WINAPI NtFsControlFile(HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc
             if ((status = server_get_unix_fd( handle, FILE_READ_DATA, &fd, &needs_close, NULL, NULL )))
                 break;
 
-#ifdef FIONREAD
-            if (ioctl( fd, FIONREAD, &avail ) != 0)
+            status = unix_fd_avail( fd, &avail );
+            if (!status)
             {
-                TRACE("FIONREAD failed reason: %s\n",strerror(errno));
-                if (needs_close) close( fd );
-                status = FILE_GetNtStatus();
-                break;
-            }
-#endif
-            if (!avail)  /* check for closed pipe */
-            {
-                struct pollfd pollfd;
-                int ret;
-
-                pollfd.fd = fd;
-                pollfd.events = POLLIN;
-                pollfd.revents = 0;
-                ret = poll( &pollfd, 1, 0 );
-                if (ret == -1 || (ret == 1 && (pollfd.revents & (POLLHUP|POLLERR))))
+                buffer->NamedPipeState    = 0;  /* FIXME */
+                buffer->ReadDataAvailable = avail;
+                buffer->NumberOfMessages  = 0;  /* FIXME */
+                buffer->MessageLength     = 0;  /* FIXME */
+                io->Information = FIELD_OFFSET( FILE_PIPE_PEEK_BUFFER, Data );
+                if (avail)
                 {
-                    if (needs_close) close( fd );
-                    status = STATUS_PIPE_BROKEN;
-                    break;
-                }
-            }
-            buffer->NamedPipeState    = 0;  /* FIXME */
-            buffer->ReadDataAvailable = avail;
-            buffer->NumberOfMessages  = 0;  /* FIXME */
-            buffer->MessageLength     = 0;  /* FIXME */
-            io->Information = FIELD_OFFSET( FILE_PIPE_PEEK_BUFFER, Data );
-            status = STATUS_SUCCESS;
-            if (avail)
-            {
-                ULONG data_size = out_size - FIELD_OFFSET( FILE_PIPE_PEEK_BUFFER, Data );
-                if (data_size)
-                {
-                    int res = recv( fd, buffer->Data, data_size, MSG_PEEK );
-                    if (res >= 0) io->Information += res;
+                    ULONG data_size = out_size - FIELD_OFFSET( FILE_PIPE_PEEK_BUFFER, Data );
+                    if (data_size)
+                    {
+                        int res = recv( fd, buffer->Data, data_size, MSG_PEEK );
+                        if (res >= 0) io->Information += res;
+                    }
                 }
             }
             if (needs_close) close( fd );
