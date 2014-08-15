@@ -3735,6 +3735,52 @@ static void test_ITextRange_SetRange(void)
   release_interfaces(&w, &reOle, &txtDoc, NULL);
 }
 
+static void test_ITextRange_IsEqual2(void)
+{
+  HWND w;
+  IRichEditOle *reOle = NULL;
+  ITextDocument *txtDoc = NULL;
+  ITextRange *txtRge1 = NULL, *txtRge2 = NULL;
+  HRESULT hres;
+  static const CHAR test_text1[] = "TestSomeText";
+  LONG res;
+
+  create_interfaces(&w, &reOle, &txtDoc, NULL);
+  SendMessageA(w, WM_SETTEXT, 0, (LPARAM)test_text1);
+  ITextDocument_Range(txtDoc, 2, 4, &txtRge1);
+  ITextDocument_Range(txtDoc, 2, 4, &txtRge2);
+
+#define TEST_TXTRGE_ISEQUAL(expected_hres, expected_res)                \
+  hres = ITextRange_IsEqual(txtRge1, txtRge2, &res);                    \
+  ok(hres == expected_hres, "ITextRange_IsEqual\n");                    \
+  ok(res == expected_res, "got wrong return value: %d\n", res);
+
+  TEST_TXTRGE_ISEQUAL(S_OK, tomTrue)
+  ITextRange_SetRange(txtRge2, 1, 2);
+  TEST_TXTRGE_ISEQUAL(S_FALSE, tomFalse)
+
+  ITextRange_SetRange(txtRge1, 1, 1);
+  ITextRange_SetRange(txtRge2, 2, 2);
+  TEST_TXTRGE_ISEQUAL(S_FALSE, tomFalse)
+
+  ITextRange_SetRange(txtRge2, 1, 1);
+  TEST_TXTRGE_ISEQUAL(S_OK, tomTrue)
+
+  hres = ITextRange_IsEqual(txtRge1, txtRge1, &res);
+  ok(hres == S_OK, "ITextRange_IsEqual\n");
+  ok(res == tomTrue, "got wrong return value: %d\n", res);
+
+  hres = ITextRange_IsEqual(txtRge1, txtRge2, NULL);
+  ok(hres == S_OK, "ITextRange_IsEqual\n");
+
+  hres = ITextRange_IsEqual(txtRge1, NULL, NULL);
+  ok(hres == S_FALSE, "ITextRange_IsEqual\n");
+
+  ITextRange_Release(txtRge1);
+  ITextRange_Release(txtRge2);
+  release_interfaces(&w, &reOle, &txtDoc, NULL);
+}
+
 START_TEST(richole)
 {
   /* Must explicitly LoadLibrary(). The test has no references to functions in
@@ -3763,6 +3809,7 @@ START_TEST(richole)
   test_ITextRange_GetPara();
   test_ITextRange_GetText();
   test_ITextRange_SetRange();
+  test_ITextRange_IsEqual2();
   test_GetClientSite();
   test_IOleWindow_GetWindow();
   test_IOleInPlaceSite_GetWindow();
