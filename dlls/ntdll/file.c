@@ -488,6 +488,45 @@ NTSTATUS FILE_GetNtStatus(void)
     }
 }
 
+/* helper function for NtReadFile and FILE_AsyncReadService */
+static NTSTATUS read_unix_fd(int fd, char *buf, ULONG *total, ULONG length,
+                             enum server_fd_type type, BOOL avail_mode)
+{
+    int result;
+    for(;;)
+    {
+        result = read( fd, buf + *total, length - *total );
+        if (result >= 0)
+        {
+            *total += result;
+            if (!result || *total >= length || avail_mode)
+            {
+                if (*total)
+                    return STATUS_SUCCESS;
+                switch (type)
+                {
+                case FD_TYPE_FILE:
+                case FD_TYPE_CHAR:
+                case FD_TYPE_DEVICE:
+                    return length ? STATUS_END_OF_FILE : STATUS_SUCCESS;
+                case FD_TYPE_SERIAL:
+                    return length ? STATUS_PENDING : STATUS_SUCCESS;
+                default:
+                    return STATUS_PIPE_BROKEN;
+                }
+            }
+            else if (type != FD_TYPE_FILE) /* no async I/O on regular files */
+                return STATUS_PENDING;
+        }
+        else if (errno != EINTR)
+        {
+            if (errno == EAGAIN) break;
+            return FILE_GetNtStatus();
+        }
+    }
+    return STATUS_PENDING;
+}
+
 /***********************************************************************
  *             FILE_AsyncReadService      (INTERNAL)
  */
@@ -495,38 +534,19 @@ static NTSTATUS FILE_AsyncReadService( void *user, IO_STATUS_BLOCK *iosb,
                                        NTSTATUS status, void **apc, void **arg )
 {
     struct async_fileio_read *fileio = user;
-    int fd, needs_close, result;
+    int fd, needs_close;
+    enum server_fd_type type;
 
     switch (status)
     {
     case STATUS_ALERTED: /* got some new data */
         /* check to see if the data is ready (non-blocking) */
         if ((status = server_get_unix_fd( fileio->io.handle, FILE_READ_DATA, &fd,
-                                          &needs_close, NULL, NULL )))
+                                          &needs_close, &type, NULL )))
             break;
-
-        result = read(fd, &fileio->buffer[fileio->already], fileio->count - fileio->already);
+        status = read_unix_fd( fd, fileio->buffer, &fileio->already, fileio->count,
+                               type, fileio->avail_mode );
         if (needs_close) close( fd );
-
-        if (result < 0)
-        {
-            if (errno == EAGAIN || errno == EINTR)
-                status = STATUS_PENDING;
-            else /* check to see if the transfer is complete */
-                status = FILE_GetNtStatus();
-        }
-        else if (result == 0)
-        {
-            status = fileio->already ? STATUS_SUCCESS : STATUS_PIPE_BROKEN;
-        }
-        else
-        {
-            fileio->already += result;
-            if (fileio->already >= fileio->count || fileio->avail_mode)
-                status = STATUS_SUCCESS;
-            else
-                status = STATUS_PENDING;
-        }
         break;
 
     case STATUS_TIMEOUT:
@@ -809,7 +829,6 @@ static NTSTATUS register_async_file_read( HANDLE handle, HANDLE event,
     return status;
 }
 
-
 /******************************************************************************
  *  NtReadFile					[NTDLL.@]
  *  ZwReadFile					[NTDLL.@]
@@ -919,43 +938,9 @@ NTSTATUS WINAPI NtReadFile(HANDLE hFile, HANDLE hEvent,
 
     for (;;)
     {
-        if ((result = read( unix_handle, (char *)buffer + total, length - total )) >= 0)
-        {
-            total += result;
-            if (!result || total == length)
-            {
-                if (total)
-                {
-                    status = STATUS_SUCCESS;
-                    goto done;
-                }
-                switch (type)
-                {
-                case FD_TYPE_FILE:
-                case FD_TYPE_CHAR:
-                case FD_TYPE_DEVICE:
-                    status = length ? STATUS_END_OF_FILE : STATUS_SUCCESS;
-                    goto done;
-                case FD_TYPE_SERIAL:
-                    if (!length)
-                    {
-                        status = STATUS_SUCCESS;
-                        goto done;
-                    }
-                    break;
-                default:
-                    status = STATUS_PIPE_BROKEN;
-                    goto done;
-                }
-            }
-            else if (type == FD_TYPE_FILE) continue;  /* no async I/O on regular files */
-        }
-        else if (errno != EAGAIN)
-        {
-            if (errno == EINTR) continue;
-            if (!total) status = FILE_GetNtStatus();
+        status = read_unix_fd( unix_handle, buffer, &total, length, type, FALSE );
+        if (status != STATUS_PENDING)
             goto done;
-        }
 
         if (async_read)
         {
