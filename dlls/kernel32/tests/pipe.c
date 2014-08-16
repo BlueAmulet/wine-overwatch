@@ -2751,7 +2751,6 @@ todo_wine
     ok(wait == WAIT_IO_COMPLETION || wait == WAIT_OBJECT_0, "WaitForSingleObjectEx returned %x\n", wait);
 
     ok(completion_called == 1, "completion not called after writing pipe\n");
-    todo_wine
     ok(completion_errorcode == 0, "completion called with error %x\n", completion_errorcode);
     ok(completion_num_bytes == 4, "ReadFileEx returned only %d bytes\n", completion_num_bytes);
     ok(completion_lpoverlapped == &overlapped, "completion called with wrong overlapped pointer\n");
@@ -2775,15 +2774,11 @@ todo_wine
     completion_called = 0;
     ResetEvent(event);
     ret = ReadFileEx(server, read_buf, 4, &overlapped, completion_routine);
-    todo_wine
     ok(ret == TRUE, "ReadFileEx failed, err=%i\n", GetLastError());
     ok(completion_called == 0, "completion routine called before ReadFileEx returned\n");
     wait = WaitForSingleObjectEx(event, 0, TRUE);
-    todo_wine
     ok(wait == WAIT_IO_COMPLETION || wait == WAIT_OBJECT_0, "WaitForSingleObjectEx returned %x\n", wait);
-    todo_wine
     ok(completion_called == 1, "completion not called after writing pipe\n");
-    todo_wine
     ok(completion_errorcode == 0, "completion called with error %x\n", completion_errorcode);
     ok(completion_num_bytes == 4, "ReadFileEx returned only %d bytes\n", completion_num_bytes);
     ok(completion_lpoverlapped == &overlapped, "completion called with wrong overlapped pointer\n");

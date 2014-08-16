@@ -325,8 +325,9 @@ BOOL WINAPI AreFileApisANSI(void)
 static void WINAPI FILE_ReadWriteApc(void* apc_user, PIO_STATUS_BLOCK io_status, ULONG reserved)
 {
     LPOVERLAPPED_COMPLETION_ROUTINE  cr = apc_user;
-
-    cr(RtlNtStatusToDosError(io_status->u.Status), io_status->Information, (LPOVERLAPPED)io_status);
+    NTSTATUS status = io_status->u.Status;
+    if (status == STATUS_BUFFER_OVERFLOW) status = STATUS_SUCCESS;
+    cr(RtlNtStatusToDosError(status), io_status->Information, (LPOVERLAPPED)io_status);
 }
 
 
@@ -358,7 +359,7 @@ BOOL WINAPI ReadFileEx(HANDLE hFile, LPVOID buffer, DWORD bytesToRead,
     status = NtReadFile(hFile, NULL, FILE_ReadWriteApc, lpCompletionRoutine,
                         io_status, buffer, bytesToRead, &offset, NULL);
 
-    if (status && status != STATUS_PENDING)
+    if (status && status != STATUS_PENDING && status != STATUS_BUFFER_OVERFLOW)
     {
         SetLastError( RtlNtStatusToDosError(status) );
         return FALSE;

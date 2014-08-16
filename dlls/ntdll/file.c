@@ -1087,8 +1087,8 @@ err:
         io_status->Information = total;
         TRACE("= SUCCESS (%u)\n", total);
         if (hEvent) NtSetEvent( hEvent, NULL );
-        if (apc && !status) NtQueueApcThread( GetCurrentThread(), (PNTAPCFUNC)apc,
-                                              (ULONG_PTR)apc_user, (ULONG_PTR)io_status, 0 );
+        if (apc && status != STATUS_END_OF_FILE) NtQueueApcThread( GetCurrentThread(), (PNTAPCFUNC)apc,
+                                                                   (ULONG_PTR)apc_user, (ULONG_PTR)io_status, 0 );
     }
     else
     {
