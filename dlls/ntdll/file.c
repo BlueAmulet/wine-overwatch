@@ -549,6 +549,10 @@ static NTSTATUS read_unix_fd(int fd, char *buf, ULONG *total, ULONG length,
     {
         if (pipe_flags & NAMED_PIPE_MESSAGE_STREAM_WRITE)
         {
+            int recvmsg_flags = MSG_PEEK;
+            if (*total || (pipe_flags & NAMED_PIPE_NONBLOCKING_MODE))
+                recvmsg_flags |= MSG_DONTWAIT;
+
             msg.msg_name        = NULL;
             msg.msg_namelen     = 0;
             msg.msg_iov         = &iov;
@@ -560,7 +564,7 @@ static NTSTATUS read_unix_fd(int fd, char *buf, ULONG *total, ULONG length,
             iov.iov_base = buf    + *total;
             iov.iov_len  = length - *total;
 
-            result = recvmsg( fd, &msg, MSG_PEEK | (*total ? MSG_DONTWAIT : 0) );
+            result = recvmsg( fd, &msg, recvmsg_flags );
             if (result >= 0 && !(msg.msg_flags & MSG_TRUNC))
             {
                 int ret;
@@ -605,7 +609,14 @@ static NTSTATUS read_unix_fd(int fd, char *buf, ULONG *total, ULONG length,
                 return STATUS_PENDING;
         }
         else if (errno == EAGAIN)
-            return (avail_mode && *total) ? STATUS_SUCCESS : STATUS_PENDING;
+        {
+            if (avail_mode && *total)
+                return STATUS_SUCCESS;
+            else if (pipe_flags & NAMED_PIPE_NONBLOCKING_MODE)
+                return *total ? STATUS_SUCCESS : STATUS_PIPE_EMPTY;
+            else
+                return STATUS_PENDING;
+        }
         else if (errno != EINTR)
             return FILE_GetNtStatus();
     }
