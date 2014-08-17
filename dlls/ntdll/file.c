@@ -1128,6 +1128,37 @@ NTSTATUS WINAPI NtReadFileScatter( HANDLE file, HANDLE event, PIO_APC_ROUTINE ap
     return status;
 }
 
+/* helper function for NtWriteFile and FILE_AsyncWriteService */
+static NTSTATUS write_unix_fd(int fd, const char *buf, ULONG *total, ULONG length, enum server_fd_type type)
+{
+    int result;
+    for(;;)
+    {
+        if (!length && (type == FD_TYPE_MAILSLOT || type == FD_TYPE_PIPE || type == FD_TYPE_SOCKET))
+            result = send( fd, buf, 0, 0 );
+        else
+            result = write( fd, buf + *total, length - *total );
+        if (result >= 0)
+        {
+            *total += result;
+            if (*total >= length)
+                return STATUS_SUCCESS;
+            else if (type != FD_TYPE_FILE) /* no async I/O on regular files */
+                return STATUS_PENDING;
+        }
+        else if (errno != EINTR)
+        {
+            if (errno == EAGAIN)
+                break;
+            else if (*total)
+                return STATUS_SUCCESS;
+            else if (errno == EFAULT)
+                return STATUS_INVALID_USER_BUFFER;
+            return FILE_GetNtStatus();
+        }
+    }
+    return STATUS_PENDING;
+}
 
 /***********************************************************************
  *             FILE_AsyncWriteService      (INTERNAL)
@@ -1136,7 +1167,7 @@ static NTSTATUS FILE_AsyncWriteService( void *user, IO_STATUS_BLOCK *iosb,
                                         NTSTATUS status, void **apc, void **arg )
 {
     struct async_fileio_write *fileio = user;
-    int result, fd, needs_close;
+    int fd, needs_close;
     enum server_fd_type type;
 
     switch (status)
@@ -1146,24 +1177,8 @@ static NTSTATUS FILE_AsyncWriteService( void *user, IO_STATUS_BLOCK *iosb,
         if ((status = server_get_unix_fd( fileio->io.handle, FILE_WRITE_DATA, &fd,
                                           &needs_close, &type, NULL )))
             break;
-
-        if (!fileio->count && (type == FD_TYPE_MAILSLOT || type == FD_TYPE_PIPE || type == FD_TYPE_SOCKET))
-            result = send( fd, fileio->buffer, 0, 0 );
-        else
-            result = write( fd, &fileio->buffer[fileio->already], fileio->count - fileio->already );
-
+        status = write_unix_fd( fd, fileio->buffer, &fileio->already, fileio->count, type );
         if (needs_close) close( fd );
-
-        if (result < 0)
-        {
-            if (errno == EAGAIN || errno == EINTR) status = STATUS_PENDING;
-            else status = FILE_GetNtStatus();
-        }
-        else
-        {
-            fileio->already += result;
-            status = (fileio->already < fileio->count) ? STATUS_PENDING : STATUS_SUCCESS;
-        }
         break;
 
     case STATUS_TIMEOUT:
@@ -1328,32 +1343,9 @@ NTSTATUS WINAPI NtWriteFile(HANDLE hFile, HANDLE hEvent,
 
     for (;;)
     {
-        /* zero-length writes on sockets may not work with plain write(2) */
-        if (!length && (type == FD_TYPE_MAILSLOT || type == FD_TYPE_PIPE || type == FD_TYPE_SOCKET))
-            result = send( unix_handle, buffer, 0, 0 );
-        else
-            result = write( unix_handle, (const char *)buffer + total, length - total );
-
-        if (result >= 0)
-        {
-            total += result;
-            if (total == length)
-            {
-                status = STATUS_SUCCESS;
-                goto done;
-            }
-            if (type == FD_TYPE_FILE) continue;  /* no async I/O on regular files */
-        }
-        else if (errno != EAGAIN)
-        {
-            if (errno == EINTR) continue;
-            if (!total)
-            {
-                if (errno == EFAULT) status = STATUS_INVALID_USER_BUFFER;
-                else status = FILE_GetNtStatus();
-            }
+        status = write_unix_fd( unix_handle, buffer, &total, length, type );
+        if (status != STATUS_PENDING)
             goto done;
-        }
 
         if (async_write)
         {
