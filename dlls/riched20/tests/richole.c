@@ -3812,6 +3812,35 @@ static void test_ITextRange_GetStoryLength(void)
   release_interfaces(&w, &reOle, &txtDoc, NULL);
 }
 
+static void test_ITextSelection_GetStoryLength(void)
+{
+  HWND w;
+  IRichEditOle *reOle = NULL;
+  ITextDocument *txtDoc = NULL;
+  ITextSelection *txtSel = NULL;
+  HRESULT hres;
+  LONG count;
+  static const CHAR test_text1[] = "TestSomeText";
+  int len = strlen(test_text1) + 1;
+
+  create_interfaces(&w, &reOle, &txtDoc, &txtSel);
+  SendMessageA(w, WM_SETTEXT, 0, (LPARAM)test_text1);
+
+  hres = ITextSelection_GetStoryLength(txtSel, &count);
+  ok(hres == S_OK, "ITextSelection_GetStoryLength\n");
+  ok(count == len, "got wrong length: %d\n", count);
+
+  SendMessageA(w, EM_SETSEL, 1, 2);
+  hres = ITextSelection_GetStoryLength(txtSel, &count);
+  ok(hres == S_OK, "ITextSelection_GetStoryLength\n");
+  ok(count == len, "got wrong length: %d\n", count);
+
+  hres = ITextSelection_GetStoryLength(txtSel, NULL);
+  ok(hres == E_INVALIDARG, "ITextSelection_GetStoryLength\n");
+
+  release_interfaces(&w, &reOle, &txtDoc, &txtSel);
+}
+
 START_TEST(richole)
 {
   /* Must explicitly LoadLibrary(). The test has no references to functions in
@@ -3828,6 +3857,7 @@ START_TEST(richole)
   test_ITextSelection_SetEnd();
   test_ITextSelection_Collapse();
   test_ITextSelection_GetFont();
+  test_ITextSelection_GetStoryLength();
   test_ITextDocument_Range();
   test_ITextRange_GetChar();
   test_ITextRange_ScrollIntoView();
