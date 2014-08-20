@@ -38,6 +38,26 @@ int xattr_fget( int filedes, const char *name, void *value, size_t size )
 #endif
 }
 
+int xattr_fremove( int filedes, const char *name )
+{
+#if defined(HAVE_ATTR_XATTR_H)
+    return fremovexattr( filedes, name );
+#else
+    errno = ENOSYS;
+    return -1;
+#endif
+}
+
+int xattr_fset( int filedes, const char *name, void *value, size_t size )
+{
+#if defined(HAVE_ATTR_XATTR_H)
+    return fsetxattr( filedes, name, value, size, 0 );
+#else
+    errno = ENOSYS;
+    return -1;
+#endif
+}
+
 int xattr_get( const char *path, const char *name, void *value, size_t size )
 {
 #if defined(HAVE_ATTR_XATTR_H)
