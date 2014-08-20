@@ -228,6 +228,21 @@ int get_file_info( const char *path, struct stat *st, ULONG *attr )
     return ret;
 }
 
+NTSTATUS set_file_info( const char *path, ULONG attr )
+{
+    char hexattr[11];
+    int len;
+
+    /* Note: unix mode already set when called this way */
+    attr &= ~FILE_ATTRIBUTE_NORMAL; /* do not store everything, but keep everything Samba can use */
+    len = sprintf( hexattr, "0x%x", attr );
+    if (attr != 0)
+        xattr_set( path, SAMBA_XATTR_DOS_ATTRIB, hexattr, len );
+    else
+        xattr_remove( path, SAMBA_XATTR_DOS_ATTRIB );
+    return STATUS_SUCCESS;
+}
+
 /**************************************************************************
  *                 FILE_CreateFile                    (internal)
  * Open a file.
@@ -239,6 +254,10 @@ static NTSTATUS FILE_CreateFile( PHANDLE handle, ACCESS_MASK access, POBJECT_ATT
                                  ULONG attributes, ULONG sharing, ULONG disposition,
                                  ULONG options, PVOID ea_buffer, ULONG ea_length )
 {
+    static UNICODE_STRING empty_string;
+    OBJECT_ATTRIBUTES unix_attr;
+    data_size_t len;
+    struct object_attributes *objattr;
     ANSI_STRING unix_name;
     BOOL created = FALSE;
 
@@ -292,37 +311,34 @@ static NTSTATUS FILE_CreateFile( PHANDLE handle, ACCESS_MASK access, POBJECT_ATT
         io->u.Status = STATUS_SUCCESS;
     }
 
-    if (io->u.Status == STATUS_SUCCESS)
+    if (io->u.Status != STATUS_SUCCESS)
     {
-        static UNICODE_STRING empty_string;
-        OBJECT_ATTRIBUTES unix_attr = *attr;
-        data_size_t len;
-        struct object_attributes *objattr;
-
-        unix_attr.ObjectName = &empty_string;  /* we send the unix name instead */
-        if ((io->u.Status = alloc_object_attributes( &unix_attr, &objattr, &len )))
-        {
-            RtlFreeAnsiString( &unix_name );
-            return io->u.Status;
-        }
-
-        SERVER_START_REQ( create_file )
-        {
-            req->access     = access;
-            req->sharing    = sharing;
-            req->create     = disposition;
-            req->options    = options;
-            req->attrs      = attributes;
-            wine_server_add_data( req, objattr, len );
-            wine_server_add_data( req, unix_name.Buffer, unix_name.Length );
-            io->u.Status = wine_server_call( req );
-            *handle = wine_server_ptr_handle( reply->handle );
-        }
-        SERVER_END_REQ;
-        RtlFreeHeap( GetProcessHeap(), 0, objattr );
-        RtlFreeAnsiString( &unix_name );
+        WARN("%s not found (%x)\n", debugstr_us(attr->ObjectName), io->u.Status );
+        return io->u.Status;
     }
-    else WARN("%s not found (%x)\n", debugstr_us(attr->ObjectName), io->u.Status );
+
+    unix_attr = *attr;
+    unix_attr.ObjectName = &empty_string;  /* we send the unix name instead */
+    if ((io->u.Status = alloc_object_attributes( &unix_attr, &objattr, &len )))
+    {
+        RtlFreeAnsiString( &unix_name );
+        return io->u.Status;
+    }
+
+    SERVER_START_REQ( create_file )
+    {
+        req->access     = access;
+        req->sharing    = sharing;
+        req->create     = disposition;
+        req->options    = options;
+        req->attrs      = attributes;
+        wine_server_add_data( req, objattr, len );
+        wine_server_add_data( req, unix_name.Buffer, unix_name.Length );
+        io->u.Status = wine_server_call( req );
+        *handle = wine_server_ptr_handle( reply->handle );
+    }
+    SERVER_END_REQ;
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
 
     if (io->u.Status == STATUS_SUCCESS)
     {
@@ -344,6 +360,11 @@ static NTSTATUS FILE_CreateFile( PHANDLE handle, ACCESS_MASK access, POBJECT_ATT
             io->Information = FILE_OVERWRITTEN;
             break;
         }
+        if (io->Information == FILE_CREATED)
+        {
+            /* set any DOS extended attributes */
+            set_file_info( unix_name.Buffer, attributes );
+        }
     }
     else if (io->u.Status == STATUS_TOO_MANY_OPENED_FILES)
     {
@@ -351,6 +372,7 @@ static NTSTATUS FILE_CreateFile( PHANDLE handle, ACCESS_MASK access, POBJECT_ATT
         if (!once++) ERR_(winediag)( "Too many open files, ulimit -n probably needs to be increased\n" );
     }
 
+    RtlFreeAnsiString( &unix_name );
     return io->u.Status;
 }
 

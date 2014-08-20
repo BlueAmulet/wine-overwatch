@@ -67,3 +67,23 @@ int xattr_get( const char *path, const char *name, void *value, size_t size )
     return -1;
 #endif
 }
+
+int xattr_remove( const char *path, const char *name )
+{
+#if defined(HAVE_ATTR_XATTR_H)
+    return removexattr( path, name );
+#else
+    errno = ENOSYS;
+    return -1;
+#endif
+}
+
+int xattr_set( const char *path, const char *name, void *value, size_t size )
+{
+#if defined(HAVE_ATTR_XATTR_H)
+    return setxattr( path, name, value, size, 0 );
+#else
+    errno = ENOSYS;
+    return -1;
+#endif
+}
