@@ -37,3 +37,13 @@ int xattr_fget( int filedes, const char *name, void *value, size_t size )
     return -1;
 #endif
 }
+
+int xattr_get( const char *path, const char *name, void *value, size_t size )
+{
+#if defined(HAVE_ATTR_XATTR_H)
+    return getxattr( path, name, value, size );
+#else
+    errno = ENOSYS;
+    return -1;
+#endif
+}
