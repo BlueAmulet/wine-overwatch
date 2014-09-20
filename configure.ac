@@ -1635,6 +1635,9 @@ fi
 WINE_NOTICE_WITH(tiff,[test "x$ac_cv_lib_soname_tiff" = "x"],
                  [libtiff ${notice_platform}development files not found, TIFF won't be supported.])
 
+dnl **** Check for libtxc_dxtn ****
+WINE_CHECK_SONAME(txc_dxtn,tx_compress_dxtn,,,,[[libtxc_dxtn\\(_s2tc\\)\\{0,1\\}]])
+
 dnl **** Check for mpg123 ****
 if test "x$with_mpg123" != "xno"
 then
