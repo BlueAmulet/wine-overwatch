@@ -51,6 +51,7 @@ static NTSTATUS  (WINAPI *pNtTerminateProcess)(HANDLE handle, LONG exit_code);
 static NTSTATUS  (WINAPI *pNtQueryInformationProcess)(HANDLE, PROCESSINFOCLASS, PVOID, ULONG, PULONG);
 static NTSTATUS  (WINAPI *pNtSetInformationProcess)(HANDLE, PROCESSINFOCLASS, PVOID, ULONG);
 static BOOL      (WINAPI *pIsWow64Process)(HANDLE, PBOOL);
+static NTSTATUS  (WINAPI *pNtClose)(HANDLE);
 
 #if defined(__x86_64__)
 typedef struct
@@ -1023,6 +1024,16 @@ static void test_debugger(void)
                        "expected Eip = %p, got 0x%x\n", (char *)code_mem_address + 2, ctx.Eip);
 
                     if (stage == 10) continuestatus = DBG_EXCEPTION_NOT_HANDLED;
+                }
+                else if (stage == 11 || stage == 12)
+                {
+                    ok(de.u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_INVALID_HANDLE,
+                       "unexpected exception code %08x, expected %08x\n", de.u.Exception.ExceptionRecord.ExceptionCode,
+                       EXCEPTION_INVALID_HANDLE);
+                    ok(de.u.Exception.ExceptionRecord.NumberParameters == 0,
+                       "unexpected number of parameters %d, expected 0\n", de.u.Exception.ExceptionRecord.NumberParameters);
+
+                    if (stage == 12) continuestatus = DBG_EXCEPTION_NOT_HANDLED;
                 }
                 else
                     ok(FALSE, "unexpected stage %x\n", stage);
@@ -2354,6 +2365,53 @@ static void test_breakpoint(DWORD numexc)
     pRtlRemoveVectoredExceptionHandler(vectored_handler);
 }
 
+static DWORD invalid_handle_exceptions;
+
+static LONG CALLBACK invalid_handle_vectored_handler(EXCEPTION_POINTERS *ExceptionInfo)
+{
+    PEXCEPTION_RECORD rec = ExceptionInfo->ExceptionRecord;
+    trace("vect. handler %08x addr:%p\n", rec->ExceptionCode, rec->ExceptionAddress);
+
+    ok(rec->ExceptionCode == EXCEPTION_INVALID_HANDLE, "ExceptionCode is %08x instead of %08x\n",
+       rec->ExceptionCode, EXCEPTION_INVALID_HANDLE);
+    ok(rec->NumberParameters == 0, "ExceptionParameters is %d instead of 0\n", rec->NumberParameters);
+
+    invalid_handle_exceptions++;
+    return (rec->ExceptionCode == EXCEPTION_INVALID_HANDLE) ? EXCEPTION_CONTINUE_EXECUTION : EXCEPTION_CONTINUE_SEARCH;
+}
+
+static void test_closehandle(DWORD numexc)
+{
+    PVOID vectored_handler;
+    NTSTATUS status;
+    DWORD res;
+
+    if (!pRtlAddVectoredExceptionHandler || !pRtlRemoveVectoredExceptionHandler || !pRtlRaiseException)
+    {
+        skip("RtlAddVectoredExceptionHandler or RtlRemoveVectoredExceptionHandler or RtlRaiseException not found\n");
+        return;
+    }
+
+    vectored_handler = pRtlAddVectoredExceptionHandler(TRUE, &invalid_handle_vectored_handler);
+    ok(vectored_handler != 0, "RtlAddVectoredExceptionHandler failed\n");
+
+    invalid_handle_exceptions = 0;
+    res = CloseHandle((HANDLE)0xdeadbeef);
+    ok(!res, "CloseHandle(0xdeadbeef) unexpectedly succeeded\n");
+    ok(GetLastError() == ERROR_INVALID_HANDLE, "wrong error code %d instead of %d\n",
+       GetLastError(), ERROR_INVALID_HANDLE);
+    ok(invalid_handle_exceptions == numexc, "CloseHandle generated %d exceptions, expected %d\n",
+       invalid_handle_exceptions, numexc);
+
+    invalid_handle_exceptions = 0;
+    status = pNtClose((HANDLE)0xdeadbeef);
+    ok(status == STATUS_INVALID_HANDLE, "NtClose(0xdeadbeef) returned status %08x\n", status);
+    ok(invalid_handle_exceptions == numexc, "NtClose generated %d exceptions, expected %d\n",
+       invalid_handle_exceptions, numexc);
+
+    pRtlRemoveVectoredExceptionHandler(vectored_handler);
+}
+
 static void test_vectored_continue_handler(void)
 {
     PVOID handler1, handler2;
@@ -2408,6 +2466,7 @@ START_TEST(exception)
     pNtGetContextThread  = (void *)GetProcAddress( hntdll, "NtGetContextThread" );
     pNtSetContextThread  = (void *)GetProcAddress( hntdll, "NtSetContextThread" );
     pNtReadVirtualMemory = (void *)GetProcAddress( hntdll, "NtReadVirtualMemory" );
+    pNtClose             = (void *)GetProcAddress( hntdll, "NtClose" );
     pRtlUnwind           = (void *)GetProcAddress( hntdll, "RtlUnwind" );
     pRtlRaiseException   = (void *)GetProcAddress( hntdll, "RtlRaiseException" );
     pNtTerminateProcess  = (void *)GetProcAddress( hntdll, "NtTerminateProcess" );
@@ -2478,6 +2537,10 @@ START_TEST(exception)
             test_breakpoint(0);
             test_stage = 10;
             test_breakpoint(1);
+            test_stage = 11;
+            test_closehandle(0);
+            test_stage = 12;
+            test_closehandle(1);
         }
         else
             skip( "RtlRaiseException not found\n" );
@@ -2494,6 +2557,7 @@ START_TEST(exception)
     test_ripevent(1);
     test_debug_service(1);
     test_breakpoint(1);
+    test_closehandle(0);
     test_vectored_continue_handler();
     test_debugger();
     test_simd_exceptions();
@@ -2526,6 +2590,7 @@ START_TEST(exception)
     test_ripevent(1);
     test_debug_service(1);
     test_breakpoint(1);
+    test_closehandle(0);
     test_vectored_continue_handler();
     test_virtual_unwind();
     test___C_specific_handler();
