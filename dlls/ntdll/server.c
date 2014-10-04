@@ -305,6 +305,14 @@ unsigned int wine_server_call( void *req_ptr )
     sigset_t old_set;
     unsigned int ret;
 
+    /* trigger write watches, otherwise read() might return EFAULT */
+    if (req->u.req.request_header.reply_size &&
+        !virtual_check_buffer_for_write( req->reply_data, req->u.req.request_header.reply_size ))
+    {
+        ret = STATUS_ACCESS_VIOLATION;
+        return ret;
+    }
+
     pthread_sigmask( SIG_BLOCK, &server_block_set, &old_set );
     ret = send_request( req );
     if (!ret) ret = wait_reply( req );

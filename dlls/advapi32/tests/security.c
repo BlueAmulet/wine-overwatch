@@ -1557,7 +1557,6 @@ todo_wine
        "failed with ERROR_INSUFFICIENT_BUFFER, instead of %d\n", err);
 todo_wine
     ok(PrivSetLen == sizeof(PRIVILEGE_SET), "PrivSetLen returns %d\n", PrivSetLen);
-todo_wine
     ok(Access == 0x1abe11ed && AccessStatus == 0x1abe11ed,
        "Access and/or AccessStatus were changed!\n");
 
