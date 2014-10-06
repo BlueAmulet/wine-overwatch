@@ -22,7 +22,10 @@
 #include "wine/port.h"
 
 #if defined(HAVE_ATTR_XATTR_H)
+# undef XATTR_ADDITIONAL_OPTIONS
 # include <attr/xattr.h>
+#elif defined(HAVE_SYS_XATTR_H)
+# include <sys/xattr.h>
 #endif
 
 #include <ctype.h>
@@ -30,7 +33,9 @@
 
 int xattr_fget( int filedes, const char *name, void *value, size_t size )
 {
-#if defined(HAVE_ATTR_XATTR_H)
+#if defined(XATTR_ADDITIONAL_OPTIONS)
+    return fgetxattr( filedes, name, value, size, 0, 0 );
+#elif defined(HAVE_SYS_XATTR_H) || defined(HAVE_ATTR_XATTR_H)
     return fgetxattr( filedes, name, value, size );
 #else
     errno = ENOSYS;
@@ -40,7 +45,9 @@ int xattr_fget( int filedes, const char *name, void *value, size_t size )
 
 int xattr_fremove( int filedes, const char *name )
 {
-#if defined(HAVE_ATTR_XATTR_H)
+#if defined(XATTR_ADDITIONAL_OPTIONS)
+    return fremovexattr( filedes, name, 0 );
+#elif defined(HAVE_SYS_XATTR_H) || defined(HAVE_ATTR_XATTR_H)
     return fremovexattr( filedes, name );
 #else
     errno = ENOSYS;
@@ -50,7 +57,9 @@ int xattr_fremove( int filedes, const char *name )
 
 int xattr_fset( int filedes, const char *name, void *value, size_t size )
 {
-#if defined(HAVE_ATTR_XATTR_H)
+#if defined(XATTR_ADDITIONAL_OPTIONS)
+    return fsetxattr( filedes, name, value, size, 0, 0 );
+#elif defined(HAVE_SYS_XATTR_H) || defined(HAVE_ATTR_XATTR_H)
     return fsetxattr( filedes, name, value, size, 0 );
 #else
     errno = ENOSYS;
@@ -60,7 +69,9 @@ int xattr_fset( int filedes, const char *name, void *value, size_t size )
 
 int xattr_get( const char *path, const char *name, void *value, size_t size )
 {
-#if defined(HAVE_ATTR_XATTR_H)
+#if defined(XATTR_ADDITIONAL_OPTIONS)
+    return getxattr( path, name, value, size, 0, 0 );
+#elif defined(HAVE_SYS_XATTR_H) || defined(HAVE_ATTR_XATTR_H)
     return getxattr( path, name, value, size );
 #else
     errno = ENOSYS;
@@ -70,7 +81,9 @@ int xattr_get( const char *path, const char *name, void *value, size_t size )
 
 int xattr_remove( const char *path, const char *name )
 {
-#if defined(HAVE_ATTR_XATTR_H)
+#if defined(XATTR_ADDITIONAL_OPTIONS)
+    return removexattr( path, name, 0 );
+#elif defined(HAVE_SYS_XATTR_H) || defined(HAVE_ATTR_XATTR_H)
     return removexattr( path, name );
 #else
     errno = ENOSYS;
@@ -80,7 +93,9 @@ int xattr_remove( const char *path, const char *name )
 
 int xattr_set( const char *path, const char *name, void *value, size_t size )
 {
-#if defined(HAVE_ATTR_XATTR_H)
+#if defined(XATTR_ADDITIONAL_OPTIONS)
+    return setxattr( path, name, value, size, 0, 0 );
+#elif defined(HAVE_SYS_XATTR_H) || defined(HAVE_ATTR_XATTR_H)
     return setxattr( path, name, value, size, 0 );
 #else
     errno = ENOSYS;
