@@ -675,7 +675,7 @@ AC_CHECK_HEADERS([libprocstat.h],,,
 
 if test "x$with_xattr" != "xno"
 then
-    AC_CHECK_HEADERS(attr/xattr.h, [HAVE_XATTR=1])
+    AC_CHECK_HEADERS(attr/xattr.h sys/extattr.h, [HAVE_XATTR=1])
     AC_CHECK_HEADERS(sys/xattr.h, [HAVE_XATTR=1]
         [AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <sys/xattr.h>]], [[getxattr("", "", "", 0, 0, 0);]])],
             [AC_DEFINE(XATTR_ADDITIONAL_OPTIONS, 1, [Define if xattr functions take additional arguments (Mac OS X)])])])
