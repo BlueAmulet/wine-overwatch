@@ -1090,6 +1090,7 @@ DECL_HANDLER(new_process)
     struct process *process;
     struct process *parent = current->process;
     int socket_fd = thread_get_inflight_fd( current, req->socket_fd );
+    const struct security_descriptor *process_sd = NULL, *thread_sd = NULL;
 
     if (socket_fd == -1)
     {
@@ -1145,7 +1146,7 @@ DECL_HANDLER(new_process)
         goto done;
     }
 
-    info->data_size = get_req_data_size();
+    info->data_size = min( get_req_data_size(), req->info_size + req->env_size );
     info->info_size = min( req->info_size, info->data_size );
 
     if (req->info_size < sizeof(*info->data))
@@ -1184,6 +1185,34 @@ DECL_HANDLER(new_process)
         FIXUP_LEN( info->data->shellinfo_len );
         FIXUP_LEN( info->data->runtime_len );
 #undef FIXUP_LEN
+    }
+
+    if (get_req_data_size() > req->info_size + req->env_size)
+    {
+        data_size_t sd_size, pos = req->info_size + req->env_size;
+
+        /* verify process sd */
+        if ((sd_size = min( get_req_data_size() - pos, req->process_sd_size )))
+        {
+            process_sd = (const struct security_descriptor *)((const char *)get_req_data() + pos);
+            if (!sd_is_valid( process_sd, sd_size ))
+            {
+                set_error( STATUS_INVALID_SECURITY_DESCR );
+                goto done;
+            }
+            pos += sd_size;
+        }
+
+        /* verify thread sd */
+        if ((sd_size = get_req_data_size() - pos))
+        {
+            thread_sd = (const struct security_descriptor *)((const char *)get_req_data() + pos);
+            if (!sd_is_valid( thread_sd, sd_size ))
+            {
+                set_error( STATUS_INVALID_SECURITY_DESCR );
+                goto done;
+            }
+        }
     }
 
     if (!(thread = create_process( socket_fd, current, req->inherit_all ))) goto done;
@@ -1247,6 +1276,25 @@ DECL_HANDLER(new_process)
     reply->tid = get_thread_id( thread );
     reply->phandle = alloc_handle( parent, process, req->process_access, req->process_attr );
     reply->thandle = alloc_handle( parent, thread, req->thread_access, req->thread_attr );
+
+    if (process_sd)
+    {
+        default_set_sd( &process->obj, process_sd,
+                        OWNER_SECURITY_INFORMATION |
+                        GROUP_SECURITY_INFORMATION |
+                        DACL_SECURITY_INFORMATION |
+                        SACL_SECURITY_INFORMATION );
+    }
+
+    if (thread_sd)
+    {
+        set_sd_defaults_from_token( &thread->obj, thread_sd,
+                                    OWNER_SECURITY_INFORMATION |
+                                    GROUP_SECURITY_INFORMATION |
+                                    DACL_SECURITY_INFORMATION |
+                                    SACL_SECURITY_INFORMATION,
+                                    process->token );
+    }
 
  done:
     release_object( info );

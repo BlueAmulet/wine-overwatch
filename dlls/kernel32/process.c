@@ -2081,6 +2081,8 @@ static BOOL create_process( HANDLE hFile, LPCWSTR filename, LPWSTR cmd_line, LPW
         req->thread_attr    = (tsa && (tsa->nLength >= sizeof(*tsa)) && tsa->bInheritHandle) ? OBJ_INHERIT : 0;
         req->cpu            = cpu;
         req->info_size      = startup_info_size;
+        req->env_size       = (env_end - env) * sizeof(WCHAR);
+        req->process_sd_size = 0;
 
         wine_server_add_data( req, startup_info, startup_info_size );
         wine_server_add_data( req, env, (env_end - env) * sizeof(WCHAR) );
