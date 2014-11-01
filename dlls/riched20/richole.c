@@ -956,6 +956,14 @@ static HRESULT WINAPI IRichEditOleImpl_inner_fnQueryInterface(IUnknown *iface, R
         IUnknown_AddRef((IUnknown *)*ppvObj);
         return S_OK;
     }
+
+    if (IsEqualGUID(riid, &IID_ITextServices))
+    {
+        static int once;
+        if (!once++) FIXME("%p: unhandled interface IID_ITextServices\n", This);
+        return E_NOINTERFACE;
+    }
+
     FIXME("%p: unhandled interface %s\n", This, debugstr_guid(riid));
  
     return E_NOINTERFACE;   
@@ -3550,7 +3558,9 @@ static HRESULT WINAPI TextPara_SetStyle(ITextPara *iface, LONG value)
 static HRESULT WINAPI TextPara_GetAlignment(ITextPara *iface, LONG *value)
 {
     ITextParaImpl *This = impl_from_ITextPara(iface);
-    FIXME("(%p)->(%p)\n", This, value);
+    static int once;
+
+    if (!once++) FIXME("(%p)->(%p)\n", This, value);
 
     if (!para_get_reole(This))
         return CO_E_RELEASED;
