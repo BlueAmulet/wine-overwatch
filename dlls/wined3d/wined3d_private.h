@@ -3872,17 +3872,7 @@ static inline struct wined3d_surface *context_get_rt_surface(const struct wined3
     return texture->sub_resources[context->current_rt.sub_resource_idx].u.surface;
 }
 
-BOOL wined3d_dxt1_decode(const BYTE *src, BYTE *dst, DWORD pitch_in, DWORD pitch_out,
-                         enum wined3d_format_id format, unsigned int w, unsigned int h) DECLSPEC_HIDDEN;
-BOOL wined3d_dxt1_encode(const BYTE *src, BYTE *dst, DWORD pitch_in, DWORD pitch_out,
-                         enum wined3d_format_id format, unsigned int w, unsigned int h) DECLSPEC_HIDDEN;
-BOOL wined3d_dxt3_encode(const BYTE *src, BYTE *dst, DWORD pitch_in, DWORD pitch_out,
-                         enum wined3d_format_id format, unsigned int w, unsigned int h) DECLSPEC_HIDDEN;
-BOOL wined3d_dxt5_encode(const BYTE *src, BYTE *dst, DWORD pitch_in, DWORD pitch_out,
-                         enum wined3d_format_id format, unsigned int w, unsigned int h) DECLSPEC_HIDDEN;
-
 BOOL wined3d_dxtn_init(void) DECLSPEC_HIDDEN;
-BOOL wined3d_dxtn_supported(void) DECLSPEC_HIDDEN;
 void wined3d_dxtn_free(void) DECLSPEC_HIDDEN;
 
 /* The WNDCLASS-Name for the fake window which we use to retrieve the GL capabilities */

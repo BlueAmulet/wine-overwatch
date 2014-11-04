@@ -1488,6 +1488,30 @@ static void convert_dxt1_x8r8g8b8(const BYTE *src, BYTE *dst,
     wined3d_dxt1_decode(src, dst, pitch_in, pitch_out, WINED3DFMT_B8G8R8X8_UNORM, w, h);
 }
 
+static void convert_dxt3_a8r8g8b8(const BYTE *src, BYTE *dst,
+        DWORD pitch_in, DWORD pitch_out, unsigned int w, unsigned int h)
+{
+    wined3d_dxt3_decode(src, dst, pitch_in, pitch_out, WINED3DFMT_B8G8R8A8_UNORM, w, h);
+}
+
+static void convert_dxt3_x8r8g8b8(const BYTE *src, BYTE *dst,
+        DWORD pitch_in, DWORD pitch_out, unsigned int w, unsigned int h)
+{
+    wined3d_dxt3_decode(src, dst, pitch_in, pitch_out, WINED3DFMT_B8G8R8X8_UNORM, w, h);
+}
+
+static void convert_dxt5_a8r8g8b8(const BYTE *src, BYTE *dst,
+        DWORD pitch_in, DWORD pitch_out, unsigned int w, unsigned int h)
+{
+    wined3d_dxt5_decode(src, dst, pitch_in, pitch_out, WINED3DFMT_B8G8R8A8_UNORM, w, h);
+}
+
+static void convert_dxt5_x8r8g8b8(const BYTE *src, BYTE *dst,
+        DWORD pitch_in, DWORD pitch_out, unsigned int w, unsigned int h)
+{
+    wined3d_dxt5_decode(src, dst, pitch_in, pitch_out, WINED3DFMT_B8G8R8X8_UNORM, w, h);
+}
+
 static void convert_a8r8g8b8_dxt1(const BYTE *src, BYTE *dst,
         DWORD pitch_in, DWORD pitch_out, unsigned int w, unsigned int h)
 {
@@ -1554,8 +1578,15 @@ static const struct d3dfmt_converter_desc converters[] =
 
 static const struct d3dfmt_converter_desc dxtn_converters[] =
 {
+    /* decode DXT */
     {WINED3DFMT_DXT1,           WINED3DFMT_B8G8R8A8_UNORM,  convert_dxt1_a8r8g8b8},
     {WINED3DFMT_DXT1,           WINED3DFMT_B8G8R8X8_UNORM,  convert_dxt1_x8r8g8b8},
+    {WINED3DFMT_DXT3,           WINED3DFMT_B8G8R8A8_UNORM,  convert_dxt3_a8r8g8b8},
+    {WINED3DFMT_DXT3,           WINED3DFMT_B8G8R8X8_UNORM,  convert_dxt3_x8r8g8b8},
+    {WINED3DFMT_DXT5,           WINED3DFMT_B8G8R8A8_UNORM,  convert_dxt5_a8r8g8b8},
+    {WINED3DFMT_DXT5,           WINED3DFMT_B8G8R8X8_UNORM,  convert_dxt5_x8r8g8b8},
+
+    /* encode DXT */
     {WINED3DFMT_B8G8R8A8_UNORM, WINED3DFMT_DXT1,            convert_a8r8g8b8_dxt1},
     {WINED3DFMT_B8G8R8X8_UNORM, WINED3DFMT_DXT1,            convert_x8r8g8b8_dxt1},
     {WINED3DFMT_B5G5R5A1_UNORM, WINED3DFMT_DXT1,            convert_a1r5g5b5_dxt1},
