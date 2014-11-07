@@ -23,6 +23,8 @@
 
 #include <assert.h>
 #include <stdarg.h>
+#include <string.h>
+#include <stdio.h>
 #include <sys/types.h>
 #ifdef HAVE_SYS_MMAN_H
 #include <sys/mman.h>
@@ -976,7 +978,10 @@ NTSTATUS WINAPI NtQueryInformationThread( HANDLE handle, THREADINFOCLASS class,
     case ThreadTimes:
         {
             KERNEL_USER_TIMES   kusrt;
+            int unix_pid, unix_tid;
 
+            /* We need to do a server call to get the creation time, exit time, PID and TID */
+            /* This works on any thread */
             SERVER_START_REQ( get_thread_times )
             {
                 req->handle = wine_server_obj_handle( handle );
@@ -985,36 +990,79 @@ NTSTATUS WINAPI NtQueryInformationThread( HANDLE handle, THREADINFOCLASS class,
                 {
                     kusrt.CreateTime.QuadPart = reply->creation_time;
                     kusrt.ExitTime.QuadPart = reply->exit_time;
+                    unix_pid = reply->unix_pid;
+                    unix_tid = reply->unix_tid;
                 }
             }
             SERVER_END_REQ;
             if (status == STATUS_SUCCESS)
             {
-                /* We call times(2) for kernel time or user time */
-                /* We can only (portably) do this for the current thread */
-                if (handle == GetCurrentThread())
-                {
-                    struct tms time_buf;
-                    long clocks_per_sec = sysconf(_SC_CLK_TCK);
+                unsigned long clk_tck = sysconf(_SC_CLK_TCK);
+                BOOL filled_times = FALSE;
 
-                    times(&time_buf);
-                    kusrt.KernelTime.QuadPart = (ULONGLONG)time_buf.tms_stime * 10000000 / clocks_per_sec;
-                    kusrt.UserTime.QuadPart = (ULONGLONG)time_buf.tms_utime * 10000000 / clocks_per_sec;
-                }
-                else
+#ifdef __linux__
+                /* only /proc provides exact values for a specific thread */
+                if (unix_pid != -1 && unix_tid != -1)
                 {
-                    static BOOL reported = FALSE;
+                    unsigned long usr, sys;
+                    char buf[512], *pos;
+                    FILE *fp;
+                    int i;
 
-                    kusrt.KernelTime.QuadPart = 0;
-                    kusrt.UserTime.QuadPart = 0;
-                    if (reported)
-                        TRACE("Cannot get kerneltime or usertime of other threads\n");
-                    else
+                    /* based on https://github.com/torvalds/linux/blob/master/fs/proc/array.c */
+                    sprintf( buf, "/proc/%u/task/%u/stat", unix_pid, unix_tid );
+                    if ((fp = fopen( buf, "r" )))
                     {
-                        FIXME("Cannot get kerneltime or usertime of other threads\n");
-                        reported = TRUE;
+                        pos = fgets( buf, sizeof(buf), fp );
+                        fclose( fp );
+
+                        /* format of first chunk is "%d (%s) %c" - we have to skip to the last ')'
+                         * to avoid misinterpreting the string. */
+                        if (pos) pos = strrchr( pos, ')' );
+                        if (pos) pos = strchr( pos + 1, ' ' );
+                        if (pos) pos++;
+
+                        /* skip over the following fields: state, ppid, pgid, sid, tty_nr, tty_pgrp,
+                         * task->flags, min_flt, cmin_flt, maj_flt, cmaj_flt */
+                        for (i = 0; (i < 11) && pos; i++)
+                        {
+                            pos = strchr( pos + 1, ' ' );
+                            if (pos) pos++;
+                        }
+
+                        /* the next two values are user and system time */
+                        if (pos && (sscanf( pos, "%lu %lu", &usr, &sys ) == 2))
+                        {
+                            kusrt.KernelTime.QuadPart = (ULONGLONG)sys * 10000000 / clk_tck;
+                            kusrt.UserTime.QuadPart   = (ULONGLONG)usr * 10000000 / clk_tck;
+                            filled_times = TRUE;
+                        }
                     }
                 }
+#endif
+
+                /* get values for current process instead */
+                if (!filled_times && handle == GetCurrentThread())
+                {
+                    struct tms time_buf;
+                    times(&time_buf);
+
+                    kusrt.KernelTime.QuadPart = (ULONGLONG)time_buf.tms_stime * 10000000 / clk_tck;
+                    kusrt.UserTime.QuadPart   = (ULONGLONG)time_buf.tms_utime * 10000000 / clk_tck;
+                    filled_times = TRUE;
+                }
+
+                /* unable to determine exact values, fill with zero */
+                if (!filled_times)
+                {
+                    static int once;
+                    if (!once++)
+                        FIXME("Cannot get kerneltime or usertime of other threads\n");
+
+                    kusrt.KernelTime.QuadPart = 0;
+                    kusrt.UserTime.QuadPart   = 0;
+                }
+
                 if (data) memcpy( data, &kusrt, min( length, sizeof(kusrt) ));
                 if (ret_len) *ret_len = min( length, sizeof(kusrt) );
             }
