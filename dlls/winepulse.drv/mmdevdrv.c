@@ -853,6 +853,7 @@ static void pulse_rd_loop(ACImpl *This, size_t bytes)
         size_t src_len, copy, rem = This->capture_period;
         if (!(p = (ACPacket*)list_head(&This->packet_free_head))) {
             p = (ACPacket*)list_head(&This->packet_filled_head);
+            if (!p) return;
             if (!p->discont) {
                 next = (ACPacket*)p->entry.next;
                 next->discont = 1;
