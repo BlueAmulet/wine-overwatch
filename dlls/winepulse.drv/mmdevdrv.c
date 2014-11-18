@@ -1525,6 +1525,7 @@ static HRESULT WINAPI AudioClient_Initialize(IAudioClient *iface,
         const GUID *sessionguid)
 {
     ACImpl *This = impl_from_IAudioClient(iface);
+    REFERENCE_TIME def, min;
     HRESULT hr = S_OK;
     UINT period_bytes;
 
@@ -1536,8 +1537,6 @@ static HRESULT WINAPI AudioClient_Initialize(IAudioClient *iface,
 
     if (mode != AUDCLNT_SHAREMODE_SHARED && mode != AUDCLNT_SHAREMODE_EXCLUSIVE)
         return AUDCLNT_E_NOT_INITIALIZED;
-    if (mode == AUDCLNT_SHAREMODE_EXCLUSIVE)
-        return AUDCLNT_E_EXCLUSIVE_MODE_NOT_ALLOWED;
 
     if (flags & ~(AUDCLNT_STREAMFLAGS_CROSSPROCESS |
                 AUDCLNT_STREAMFLAGS_LOOPBACK |
@@ -1571,27 +1570,26 @@ static HRESULT WINAPI AudioClient_Initialize(IAudioClient *iface,
     if (FAILED(hr))
         goto exit;
 
-    if (mode == AUDCLNT_SHAREMODE_SHARED) {
-        REFERENCE_TIME def = pulse_def_period[This->dataflow == eCapture];
-        REFERENCE_TIME min = pulse_min_period[This->dataflow == eCapture];
+    def = pulse_def_period[This->dataflow == eCapture];
+    min = pulse_min_period[This->dataflow == eCapture];
 
-        /* Switch to low latency mode if below 2 default periods,
-         * which is 20 ms by default, this will increase the amount
-         * of interrupts but allows very low latency. In dsound I
-         * managed to get a total latency of ~8ms, which is well below
-         * default
-         */
-        if (duration < 2 * def)
-            period = min;
-        else
-            period = def;
-        if (duration < 2 * period)
-            duration = 2 * period;
+    /* Switch to low latency mode if below 2 default periods,
+     * which is 20 ms by default, this will increase the amount
+     * of interrupts but allows very low latency. In dsound I
+     * managed to get a total latency of ~8ms, which is well below
+     * default
+     */
+    if (duration < 2 * def)
+        period = min;
+    else
+        period = def;
+    if (duration < 2 * period)
+        duration = 2 * period;
 
-        /* Uh oh, really low latency requested.. */
-        if (duration <= 2 * period)
-            period /= 2;
-    }
+    /* Uh oh, really low latency requested.. */
+    if (duration <= 2 * period)
+        period /= 2;
+
     period_bytes = pa_frame_size(&This->ss) * MulDiv(period, This->ss.rate, 10000000);
 
     if (duration < 20000000)
@@ -1905,12 +1903,6 @@ static HRESULT WINAPI AudioClient_IsFormatSupported(IAudioClient *iface,
         CoTaskMemFree(closest);
     else
         *out = closest;
-
-    /* Winepulse does not currently support exclusive mode, if you know of an
-     * application that uses it, I will correct this..
-     */
-    if (hr == S_OK && exclusive)
-        return This->dataflow == eCapture ? AUDCLNT_E_UNSUPPORTED_FORMAT : AUDCLNT_E_EXCLUSIVE_MODE_NOT_ALLOWED;
 
     TRACE("returning: %08x %p\n", hr, out ? *out : NULL);
     return hr;
