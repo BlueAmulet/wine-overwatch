@@ -5192,6 +5192,8 @@ static void test_send(void)
     OVERLAPPED ov;
     BOOL bret;
     DWORD id, bytes_sent, dwRet;
+    DWORD expected_time, connect_time;
+    socklen_t optlen;
 
     memset(&ov, 0, sizeof(ov));
 
@@ -5200,6 +5202,7 @@ static void test_send(void)
         ok(0, "creating socket pair failed, skipping test\n");
         return;
     }
+    expected_time = GetTickCount();
 
     set_blocking(dst, FALSE);
     /* force disable buffering so we can get a pending overlapped request */
@@ -5285,6 +5288,22 @@ static void test_send(void)
     ret = WSASend(dst, &buf, 1, NULL, 0, &ov, NULL);
     ok(ret == SOCKET_ERROR && WSAGetLastError() == ERROR_IO_PENDING,
        "Failed to start overlapped send %d - %d\n", ret, WSAGetLastError());
+
+    expected_time = (GetTickCount() - expected_time) / 1000;
+
+    connect_time = 0xdeadbeef;
+    optlen = sizeof(connect_time);
+    ret = getsockopt(dst, SOL_SOCKET, SO_CONNECT_TIME, (char *)&connect_time, &optlen);
+    ok(!ret, "getsockopt failed %d\n", WSAGetLastError());
+    ok(connect_time >= expected_time && connect_time <= expected_time + 1,
+       "unexpected connect time %u, expected %u\n", connect_time, expected_time);
+
+    connect_time = 0xdeadbeef;
+    optlen = sizeof(connect_time);
+    ret = getsockopt(src, SOL_SOCKET, SO_CONNECT_TIME, (char *)&connect_time, &optlen);
+    ok(!ret, "getsockopt failed %d\n", WSAGetLastError());
+    ok(connect_time >= expected_time && connect_time <= expected_time + 1,
+       "unexpected connect time %u, expected %u\n", connect_time, expected_time);
 
 end:
     if (src != INVALID_SOCKET)

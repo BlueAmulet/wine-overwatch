@@ -1360,6 +1360,7 @@ enum server_fd_type
     int family;                 /* family, see socket manpage */
     int type;                   /* type, see socket manpage */
     int protocol;               /* protocol, see socket manpage */
+    timeout_t connect_time;     /* time the socket was connected (relative) */
 @END
 
 
