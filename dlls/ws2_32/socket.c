@@ -2328,7 +2328,17 @@ static int WS2_recv( int fd, struct ws2_async *wsa, int flags )
 
     while ((n = recvmsg(fd, &hdr, flags)) == -1)
     {
-        if (errno != EINTR)
+        if (errno == EFAULT)
+        {
+            unsigned int i;
+            for (i = wsa->first_iovec; i < wsa->n_iovecs; i++)
+            {
+                struct iovec *iov = &wsa->iovec[i];
+                if (wine_uninterrupted_write_memory( iov->iov_base, NULL, iov->iov_len ) < iov->iov_len)
+                    return -1;
+            }
+        }
+        else if (errno != EINTR)
             return -1;
     }
 
