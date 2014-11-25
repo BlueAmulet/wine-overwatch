@@ -2502,7 +2502,7 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
     }
     else
     {
-        msg->hwnd = WINPOS_WindowFromPoint( msg->hwnd, msg->pt, &hittest );
+        msg->hwnd = WINPOS_WindowFromPoint( 0, msg->pt, &hittest );
     }
 
     if (!msg->hwnd || !WIN_IsCurrentThread( msg->hwnd ))
