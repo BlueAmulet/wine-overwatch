@@ -62,6 +62,70 @@ static inline BOOL dxt1_to_x8r8g8b8(const BYTE *src, BYTE *dst, DWORD pitch_in,
     return TRUE;
 }
 
+static inline BOOL dxt1_to_x4r4g4b4(const BYTE *src, BYTE *dst, DWORD pitch_in,
+        DWORD pitch_out, unsigned int w, unsigned int h, BOOL alpha)
+{
+    unsigned int x, y;
+    DWORD color;
+
+    TRACE("Converting %ux%u pixels, pitches %u %u\n", w, h, pitch_in, pitch_out);
+
+    for (y = 0; y < h; ++y)
+    {
+        WORD *dst_line = (WORD *)(dst + y * pitch_out);
+        for (x = 0; x < w; ++x)
+        {
+            /* pfetch_2d_texel_rgba_dxt1 doesn't correctly handle pitch */
+            pfetch_2d_texel_rgba_dxt1(0, src + (y / 4) * pitch_in + (x / 4) * 16,
+                                      x & 3, y & 3, &color);
+            if (alpha)
+            {
+                dst_line[x] = ((color & 0xf0000000) >> 16) | ((color & 0xf00000) >> 20) |
+                              ((color & 0xf000) >> 8) | ((color & 0xf0) << 4);
+            }
+            else
+            {
+                dst_line[x] = 0xf000  | ((color & 0xf00000) >> 20) |
+                              ((color & 0xf000) >> 8) | ((color & 0xf0) << 4);
+            }
+        }
+    }
+
+    return TRUE;
+}
+
+static inline BOOL dxt1_to_x1r5g5b5(const BYTE *src, BYTE *dst, DWORD pitch_in,
+        DWORD pitch_out, unsigned int w, unsigned int h, BOOL alpha)
+{
+    unsigned int x, y;
+    DWORD color;
+
+    TRACE("Converting %ux%u pixels, pitches %u %u\n", w, h, pitch_in, pitch_out);
+
+    for (y = 0; y < h; ++y)
+    {
+        WORD *dst_line = (WORD *)(dst + y * pitch_out);
+        for (x = 0; x < w; ++x)
+        {
+            /* pfetch_2d_texel_rgba_dxt1 doesn't correctly handle pitch */
+            pfetch_2d_texel_rgba_dxt1(0, src + (y / 4) * pitch_in + (x / 4) * 16,
+                                      x & 3, y & 3, &color);
+            if (alpha)
+            {
+                dst_line[x] = ((color & 0x80000000) >> 16) | ((color & 0xf80000) >> 19) |
+                              ((color & 0xf800) >> 6) | ((color & 0xf8) << 7);
+            }
+            else
+            {
+                dst_line[x] = 0x8000 | ((color & 0xf80000) >> 19) |
+                              ((color & 0xf800) >> 6) | ((color & 0xf8) << 7);
+            }
+        }
+    }
+
+    return TRUE;
+}
+
 static inline BOOL dxt3_to_x8r8g8b8(const BYTE *src, BYTE *dst, DWORD pitch_in,
         DWORD pitch_out, unsigned int w, unsigned int h, BOOL alpha)
 {
@@ -87,6 +151,38 @@ static inline BOOL dxt3_to_x8r8g8b8(const BYTE *src, BYTE *dst, DWORD pitch_in,
             {
                 dst_line[x] = 0xff000000 | ((color & 0xff) << 16) |
                               (color & 0xff00) | ((color & 0xff0000) >> 16);
+            }
+        }
+    }
+
+    return TRUE;
+}
+
+static inline BOOL dxt3_to_x4r4g4b4(const BYTE *src, BYTE *dst, DWORD pitch_in,
+        DWORD pitch_out, unsigned int w, unsigned int h, BOOL alpha)
+{
+    unsigned int x, y;
+    DWORD color;
+
+    TRACE("Converting %ux%u pixels, pitches %u %u\n", w, h, pitch_in, pitch_out);
+
+    for (y = 0; y < h; ++y)
+    {
+        WORD *dst_line = (WORD *)(dst + y * pitch_out);
+        for (x = 0; x < w; ++x)
+        {
+            /* pfetch_2d_texel_rgba_dxt3 doesn't correctly handle pitch */
+            pfetch_2d_texel_rgba_dxt3(0, src + (y / 4) * pitch_in + (x / 4) * 16,
+                                      x & 3, y & 3, &color);
+            if (alpha)
+            {
+                dst_line[x] = ((color & 0xf0000000) >> 16) | ((color & 0xf00000) >> 20) |
+                              ((color & 0xf000) >> 8) | ((color & 0xf0) << 4);
+            }
+            else
+            {
+                dst_line[x] = 0xf000  | ((color & 0xf00000) >> 20) |
+                              ((color & 0xf000) >> 8) | ((color & 0xf0) << 4);
             }
         }
     }
@@ -230,6 +326,14 @@ BOOL wined3d_dxt1_decode(const BYTE *src, BYTE *dst, DWORD pitch_in, DWORD pitch
             return dxt1_to_x8r8g8b8(src, dst, pitch_in, pitch_out, w, h, TRUE);
         case WINED3DFMT_B8G8R8X8_UNORM:
             return dxt1_to_x8r8g8b8(src, dst, pitch_in, pitch_out, w, h, FALSE);
+        case WINED3DFMT_B4G4R4A4_UNORM:
+            return dxt1_to_x4r4g4b4(src, dst, pitch_in, pitch_out, w, h, TRUE);
+        case WINED3DFMT_B4G4R4X4_UNORM:
+            return dxt1_to_x4r4g4b4(src, dst, pitch_in, pitch_out, w, h, FALSE);
+        case WINED3DFMT_B5G5R5A1_UNORM:
+            return dxt1_to_x1r5g5b5(src, dst, pitch_in, pitch_out, w, h, TRUE);
+        case WINED3DFMT_B5G5R5X1_UNORM:
+            return dxt1_to_x1r5g5b5(src, dst, pitch_in, pitch_out, w, h, FALSE);
         default:
             break;
     }
@@ -250,6 +354,10 @@ BOOL wined3d_dxt3_decode(const BYTE *src, BYTE *dst, DWORD pitch_in, DWORD pitch
             return dxt3_to_x8r8g8b8(src, dst, pitch_in, pitch_out, w, h, TRUE);
         case WINED3DFMT_B8G8R8X8_UNORM:
             return dxt3_to_x8r8g8b8(src, dst, pitch_in, pitch_out, w, h, FALSE);
+        case WINED3DFMT_B4G4R4A4_UNORM:
+            return dxt3_to_x4r4g4b4(src, dst, pitch_in, pitch_out, w, h, TRUE);
+        case WINED3DFMT_B4G4R4X4_UNORM:
+            return dxt3_to_x4r4g4b4(src, dst, pitch_in, pitch_out, w, h, FALSE);
         default:
             break;
     }
