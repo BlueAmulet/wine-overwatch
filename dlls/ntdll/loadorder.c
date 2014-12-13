@@ -344,11 +344,11 @@ static HANDLE open_app_reg_key( const WCHAR *sub_key, const WCHAR *app_name )
 
 
 /***************************************************************************
- *	get_standard_key
+ *	get_override_standard_key
  *
  * Return a handle to the standard DllOverrides registry section.
  */
-static HANDLE get_standard_key(void)
+static HANDLE get_override_standard_key(void)
 {
     static const WCHAR DllOverridesW[] = {'S','o','f','t','w','a','r','e','\\','W','i','n','e','\\',
                                           'D','l','l','O','v','e','r','r','i','d','e','s',0};
@@ -362,17 +362,52 @@ static HANDLE get_standard_key(void)
 
 
 /***************************************************************************
- *	get_app_key
+ *	get_override_app_key
  *
  * Get the registry key for the app-specific DllOverrides list.
  */
-static HANDLE get_app_key( const WCHAR *app_name )
+static HANDLE get_override_app_key( const WCHAR *app_name )
 {
     static const WCHAR DllOverridesW[] = {'\\','D','l','l','O','v','e','r','r','i','d','e','s',0};
     static HANDLE app_key = (HANDLE)-1;
 
     if (app_key == (HANDLE)-1)
         app_key = open_app_reg_key( DllOverridesW, app_name );
+
+    return app_key;
+}
+
+
+/***************************************************************************
+ *	get_redirect_standard_key
+ *
+ * Return a handle to the standard DllRedirects registry section.
+ */
+static HANDLE get_redirect_standard_key(void)
+{
+    static const WCHAR DllRedirectsW[] = {'S','o','f','t','w','a','r','e','\\','W','i','n','e','\\',
+                                          'D','l','l','R','e','d','i','r','e','c','t','s',0};
+    static HANDLE std_key = (HANDLE)-1;
+
+    if (std_key == (HANDLE)-1)
+        std_key = open_user_reg_key( DllRedirectsW );
+
+    return std_key;
+}
+
+
+/***************************************************************************
+ *	get_redirect_app_key
+ *
+ * Get the registry key for the app-specific DllRedirects list.
+ */
+static HANDLE get_redirect_app_key( const WCHAR *app_name )
+{
+    static const WCHAR DllRedirectsW[] = {'\\','D','l','l','R','e','d','i','r','e','c','t','s',0};
+    static HANDLE app_key = (HANDLE)-1;
+
+    if (app_key == (HANDLE)-1)
+        app_key = open_app_reg_key( DllRedirectsW, app_name );
 
     return app_key;
 }
@@ -452,6 +487,34 @@ static enum loadorder get_load_order_value( HANDLE std_key, HANDLE app_key, cons
 
 
 /***************************************************************************
+ *	get_redirect_value
+ *
+ * Get the redirect value for the exact specified module string, looking in:
+ * 1. The per-application DllRedirects key
+ * 2. The standard DllRedirects key
+ */
+static WCHAR* get_redirect_value( HANDLE std_key, HANDLE app_key, const WCHAR *module,
+                                  BYTE *buffer, ULONG size )
+{
+    WCHAR *ret = NULL;
+
+    if (app_key && (ret = get_registry_string( app_key, module, buffer, size )))
+    {
+        TRACE( "got app defaults %s for %s\n", debugstr_w(ret), debugstr_w(module) );
+        return ret;
+    }
+
+    if (std_key && (ret = get_registry_string( std_key, module, buffer, size )))
+    {
+        TRACE( "got standard key %s for %s\n", debugstr_w(ret), debugstr_w(module) );
+        return ret;
+    }
+
+    return ret;
+}
+
+
+/***************************************************************************
  *	get_module_basename
  *
  * Determine the module basename. The caller is responsible for releasing
@@ -496,10 +559,10 @@ enum loadorder get_load_order( const WCHAR *app_name, const WCHAR *path )
     WCHAR *module, *basename;
 
     if (!init_done) init_load_order();
-    std_key = get_standard_key();
-    if (app_name) app_key = get_app_key( app_name );
+    std_key = get_override_standard_key();
+    if (app_name) app_key = get_override_app_key( app_name );
 
-    TRACE("looking for %s\n", debugstr_w(path));
+    TRACE("looking up loadorder for %s\n", debugstr_w(path));
 
     if (!(module = get_module_basename(path, &basename)))
         return ret;
@@ -528,6 +591,49 @@ enum loadorder get_load_order( const WCHAR *app_name, const WCHAR *path )
     /* and last the hard-coded default */
     ret = LO_DEFAULT;
     TRACE( "got hardcoded %s for %s\n", debugstr_loadorder(ret), debugstr_w(path) );
+
+ done:
+    RtlFreeHeap( GetProcessHeap(), 0, module );
+    return ret;
+}
+
+
+/***************************************************************************
+ *  get_redirect   (internal)
+ *
+ * Return the redirect value of a module.
+ * The system directory and '.dll' extension is stripped from the path.
+ */
+WCHAR* get_redirect( const WCHAR *app_name, const WCHAR *path, BYTE *buffer, ULONG size )
+{
+    WCHAR *ret = NULL;
+    HANDLE std_key, app_key = 0;
+    WCHAR *module, *basename;
+
+    std_key = get_redirect_standard_key();
+    if (app_name) app_key = get_redirect_app_key( app_name );
+
+    TRACE("looking up redirection for %s\n", debugstr_w(path));
+
+    if (!(module = get_module_basename(path, &basename)))
+        return ret;
+
+    /* first explicit module name */
+    if ((ret = get_redirect_value( std_key, app_key, module+1, buffer, size )))
+        goto done;
+
+    /* then module basename preceded by '*' */
+    basename[-1] = '*';
+    if ((ret = get_redirect_value( std_key, app_key, basename-1, buffer, size )))
+        goto done;
+
+    /* then module basename without '*' (only if explicit path) */
+    if (basename != module+1 && (ret = get_redirect_value( std_key, app_key, basename, buffer, size )))
+        goto done;
+
+    /* and last the hard-coded default */
+    ret = NULL;
+    TRACE( "no redirection found for %s\n", debugstr_w(path) );
 
  done:
     RtlFreeHeap( GetProcessHeap(), 0, module );
