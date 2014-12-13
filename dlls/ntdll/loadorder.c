@@ -452,24 +452,16 @@ static enum loadorder get_load_order_value( HANDLE std_key, HANDLE app_key, cons
 
 
 /***************************************************************************
- *	get_load_order   (internal)
+ *	get_module_basename
  *
- * Return the loadorder of a module.
- * The system directory and '.dll' extension is stripped from the path.
+ * Determine the module basename. The caller is responsible for releasing
+ * the memory.
  */
-enum loadorder get_load_order( const WCHAR *app_name, const WCHAR *path )
+static WCHAR* get_module_basename( const WCHAR *path, WCHAR **basename )
 {
-    enum loadorder ret = LO_INVALID;
-    HANDLE std_key, app_key = 0;
-    WCHAR *module, *basename;
     UNICODE_STRING path_str;
+    WCHAR *module;
     int len;
-
-    if (!init_done) init_load_order();
-    std_key = get_standard_key();
-    if (app_name) app_key = get_app_key( app_name );
-
-    TRACE("looking for %s\n", debugstr_w(path));
 
     /* Strip path information if the module resides in the system directory
      */
@@ -481,12 +473,36 @@ enum loadorder get_load_order( const WCHAR *app_name, const WCHAR *path )
         if (!strchrW( p, '\\' ) && !strchrW( p, '/' )) path = p;
     }
 
-    if (!(len = strlenW(path))) return ret;
-    if (!(module = RtlAllocateHeap( GetProcessHeap(), 0, (len + 2) * sizeof(WCHAR) ))) return ret;
+    if (!(len = strlenW(path))) return NULL;
+    if (!(module = RtlAllocateHeap( GetProcessHeap(), 0, (len + 2) * sizeof(WCHAR) ))) return NULL;
     strcpyW( module+1, path );  /* reserve module[0] for the wildcard char */
-    basename = (WCHAR *)get_basename( module+1 );
+    *basename = (WCHAR *)get_basename( module+1 );
 
     if (len >= 4) remove_dll_ext( module + 1 + len - 4 );
+    return module;
+}
+
+
+/***************************************************************************
+ *	get_load_order   (internal)
+ *
+ * Return the loadorder of a module.
+ * The system directory and '.dll' extension is stripped from the path.
+ */
+enum loadorder get_load_order( const WCHAR *app_name, const WCHAR *path )
+{
+    enum loadorder ret = LO_INVALID;
+    HANDLE std_key, app_key = 0;
+    WCHAR *module, *basename;
+
+    if (!init_done) init_load_order();
+    std_key = get_standard_key();
+    if (app_name) app_key = get_app_key( app_name );
+
+    TRACE("looking for %s\n", debugstr_w(path));
+
+    if (!(module = get_module_basename(path, &basename)))
+        return ret;
 
     /* first explicit module name */
     if ((ret = get_load_order_value( std_key, app_key, module+1 )) != LO_INVALID)
