@@ -58,11 +58,11 @@
 @ stub cuD3D11GetDevices
 @ stub cuD3D11GetDirect3DDevice
 @ stub cuD3D9Begin
-@ stub cuD3D9CtxCreate
+@ stdcall cuD3D9CtxCreate(ptr ptr long ptr) wine_cuD3D9CtxCreate
 @ stub cuD3D9CtxCreateOnDevice
 @ stub cuD3D9CtxCreate_v2
 @ stub cuD3D9End
-@ stub cuD3D9GetDevice
+@ stdcall cuD3D9GetDevice(ptr str) wine_cuD3D9GetDevice
 @ stub cuD3D9GetDevices
 @ stub cuD3D9GetDirect3DDevice
 @ stub cuD3D9MapResources

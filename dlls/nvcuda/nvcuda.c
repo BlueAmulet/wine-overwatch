@@ -29,6 +29,7 @@
 #include "wine/wgl.h"
 #include "cuda.h"
 #include "nvcuda.h"
+#include "d3d9.h"
 
 #if defined(__x86_64) || defined(AMD64) || defined(_M_AMD64)
 #define DEV_PTR "%llu"
@@ -2213,6 +2214,35 @@ CUresult WINAPI wine_cuOccupancyMaxPotentialBlockSize(int *minGridSize, int *blo
     return pcuOccupancyMaxPotentialBlockSize(minGridSize, blockSize, func, blockSizeToDynamicSMemSize, dynamicSMemSize, blockSizeLimit);
 }
 */
+
+/*
+ * Direct3D emulated functions
+ */
+
+CUresult WINAPI wine_cuD3D9CtxCreate(CUcontext *pCtx, CUdevice *pCudaDevice, unsigned int Flags, IDirect3DDevice9 *pD3DDevice)
+{
+    CUresult ret;
+    CUdevice dev;
+
+    FIXME("(%p, %p, %u, %p) - semi-stub\n", pCtx, pCudaDevice, Flags, pD3DDevice);
+
+    ret = pcuDeviceGet(&dev, 0);
+    if (ret) return ret;
+
+    ret = pcuCtxCreate(pCtx, Flags, dev);
+    if (ret) return ret;
+
+    if (pCudaDevice)
+        *pCudaDevice = dev;
+
+    return CUDA_SUCCESS;
+}
+
+CUresult WINAPI wine_cuD3D9GetDevice(CUdevice *pCudaDevice, const char *pszAdapterName)
+{
+    FIXME("(%p, %s) - semi-stub\n", pCudaDevice, pszAdapterName);
+    return pcuDeviceGet(pCudaDevice, 0);
+}
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
 {
