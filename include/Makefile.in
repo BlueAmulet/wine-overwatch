@@ -230,6 +230,7 @@ HEADER_SRCS = \
 	cpl.h \
 	cryptdlg.h \
 	cryptuiapi.h \
+	cuda.h \
 	custcntl.h \
 	cvconst.h \
 	d2dbasetypes.h \
