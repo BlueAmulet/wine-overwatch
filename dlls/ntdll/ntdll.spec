@@ -1491,6 +1491,10 @@
 # signal handling
 @ cdecl __wine_set_signal_handler(long ptr)
 
+# Virtual memory management
+@ cdecl wine_uninterrupted_read_memory(ptr ptr long)
+@ cdecl wine_uninterrupted_write_memory(ptr ptr long)
+
 # Filesystem
 @ cdecl wine_nt_to_unix_file_name(ptr ptr long long)
 @ cdecl wine_unix_to_nt_file_name(ptr ptr)

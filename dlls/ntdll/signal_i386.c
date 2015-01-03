@@ -1675,13 +1675,13 @@ static BOOL check_atl_thunk( EXCEPTION_RECORD *rec, CONTEXT *context )
     union atl_thunk thunk_copy;
     SIZE_T thunk_len;
 
-    thunk_len = virtual_uninterrupted_read_memory( thunk, &thunk_copy, sizeof(*thunk) );
+    thunk_len = wine_uninterrupted_read_memory( thunk, &thunk_copy, sizeof(*thunk) );
     if (!thunk_len) return FALSE;
 
     if (thunk_len >= sizeof(thunk_copy.t1) && thunk_copy.t1.movl == 0x042444c7 &&
                                               thunk_copy.t1.jmp == 0xe9)
     {
-        if (virtual_uninterrupted_write_memory( (DWORD *)context->Esp + 1,
+        if (wine_uninterrupted_write_memory( (DWORD *)context->Esp + 1,
             &thunk_copy.t1.this, sizeof(DWORD) ) == sizeof(DWORD))
         {
             context->Eip = (DWORD_PTR)(&thunk->t1.func + 1) + thunk_copy.t1.func;
@@ -1725,11 +1725,11 @@ static BOOL check_atl_thunk( EXCEPTION_RECORD *rec, CONTEXT *context )
                                                    thunk_copy.t5.inst2 == 0x0460)
     {
         DWORD func, stack[2];
-        if (virtual_uninterrupted_read_memory( (DWORD *)context->Esp,
+        if (wine_uninterrupted_read_memory( (DWORD *)context->Esp,
             stack, sizeof(stack) ) == sizeof(stack) &&
-            virtual_uninterrupted_read_memory( (DWORD *)stack[1] + 1,
+            wine_uninterrupted_read_memory( (DWORD *)stack[1] + 1,
             &func, sizeof(DWORD) ) == sizeof(DWORD) &&
-            virtual_uninterrupted_write_memory( (DWORD *)context->Esp + 1,
+            wine_uninterrupted_write_memory( (DWORD *)context->Esp + 1,
             &stack[0], sizeof(stack[0]) ) == sizeof(stack[0]))
         {
             context->Ecx = stack[0];
