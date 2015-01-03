@@ -1,6 +1,7 @@
 MODULE    = nvcuda.dll
 
 C_SRCS = \
+	internal.c \
 	nvcuda.c
 
 RC_SRCS = nvcuda.rc
