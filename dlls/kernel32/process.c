@@ -261,9 +261,17 @@ static HANDLE open_exe_file( const WCHAR *name, struct binary_info *binary_info 
 static BOOL find_exe_file( const WCHAR *name, WCHAR *buffer, int buflen,
                            HANDLE *handle, struct binary_info *binary_info )
 {
+    WCHAR cur_dir[MAX_PATH];
+
     TRACE("looking for %s\n", debugstr_w(name) );
 
-    if (!SearchPathW( NULL, name, exeW, buflen, buffer, NULL ) &&
+    /* The working directory takes precedence over other locations for CreateProcess unless the
+     * 'NoDefaultCurrentDirectoryInExePath' environment variable is set (and the executable name
+     * does not contain a backslash). */
+    if ((NeedCurrentDirectoryForExePathW( name ) && GetCurrentDirectoryW( MAX_PATH, cur_dir) &&
+         !SearchPathW( cur_dir, name, exeW, buflen, buffer, NULL )) &&
+        /* not found in the working directory, try the system search path */
+        !SearchPathW( NULL, name, exeW, buflen, buffer, NULL ) &&
         /* no builtin found, try native without extension in case it is a Unix app */
         !SearchPathW( NULL, name, NULL, buflen, buffer, NULL )) return FALSE;
 
