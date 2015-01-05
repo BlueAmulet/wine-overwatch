@@ -186,6 +186,12 @@ esac
 dnl enable_win16 defaults to yes on x86, to no on other CPUs
 enable_win16=${enable_win16:-no}
 enable_win64=${enable_win64:-no}
+if test "x$enable_win64" != "xyes"
+then
+  enable_win32="yes"
+else
+  enable_win32="no"
+fi
 
 dnl Disable winetest too if tests are disabled
 enable_winetest=${enable_winetest:-$enable_tests}
@@ -3304,6 +3310,9 @@ WINE_CONFIG_TEST(dlls/ntoskrnl.exe/tests)
 WINE_CONFIG_RESOURCE(dlls/ntoskrnl.exe/tests/driver.sys)
 WINE_CONFIG_DLL(ntprint)
 WINE_CONFIG_TEST(dlls/ntprint/tests)
+WINE_CONFIG_DLL(nvapi,enable_win32)
+WINE_CONFIG_TEST(dlls/nvapi/tests)
+WINE_CONFIG_DLL(nvapi64,enable_win64)
 WINE_CONFIG_DLL(nvcuda)
 WINE_CONFIG_TEST(dlls/nvcuda/tests)
 WINE_CONFIG_DLL(objsel,,[clean])
