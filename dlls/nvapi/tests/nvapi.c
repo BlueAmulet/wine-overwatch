@@ -35,6 +35,7 @@
 #define NvAPI_unknown3_Offset 0x5380ad1a
 #define NvAPI_EnumLogicalGPUs_unknown_Offset 0xfb9bc2ab
 #define NvAPI_EnumLogicalGPUs_Offset 0x48b3ea59
+#define NvAPI_GetPhysicalGPUsFromLogicalGPU_Offset 0xaea3fa32
 
 static void* (CDECL *pnvapi_QueryInterface)(unsigned int offset);
 static NvAPI_Status (CDECL *pNvAPI_Initialize)(void);
@@ -44,6 +45,7 @@ static NvAPI_Status (CDECL *pNvAPI_unknown2)(NvPhysicalGpuHandle gpuHandle, void
 static NvAPI_Status (CDECL *pNvAPI_unknown3)(void *param0, void *param1);
 static NvAPI_Status (CDECL *pNvAPI_EnumLogicalGPUs_unknown)(NvLogicalGpuHandle nvGPUHandle[NVAPI_MAX_LOGICAL_GPUS], NvU32 *pGpuCount);
 static NvAPI_Status (CDECL *pNvAPI_EnumLogicalGPUs)(NvLogicalGpuHandle nvGPUHandle[NVAPI_MAX_LOGICAL_GPUS], NvU32 *pGpuCount);
+static NvAPI_Status (CDECL *pNvAPI_GetPhysicalGPUsFromLogicalGPU)(NvLogicalGpuHandle hLogicalGPU, NvPhysicalGpuHandle hPhysicalGPU[NVAPI_MAX_PHYSICAL_GPUS], NvU32 *pGpuCount);
 
 static BOOL init(void)
 {
@@ -73,6 +75,7 @@ static BOOL init(void)
     pNvAPI_unknown3 = pnvapi_QueryInterface(NvAPI_unknown3_Offset);
     pNvAPI_EnumLogicalGPUs_unknown = pnvapi_QueryInterface(NvAPI_EnumLogicalGPUs_unknown_Offset);
     pNvAPI_EnumLogicalGPUs = pnvapi_QueryInterface(NvAPI_EnumLogicalGPUs_Offset);
+    pNvAPI_GetPhysicalGPUsFromLogicalGPU = pnvapi_QueryInterface(NvAPI_GetPhysicalGPUsFromLogicalGPU_Offset);
 
     if (!pNvAPI_Initialize)
     {
@@ -324,6 +327,56 @@ static void test_NvAPI_EnumLogicalGPUs(void)
         ok(gpuHandle1[i] == gpuHandle2[i], "Expected gpuHandle1[i] == gpuHandle2[i], got %p != %p\n", gpuHandle1[i], gpuHandle2[i]);
 }
 
+static void test_NvAPI_GetPhysicalGPUsFromLogicalGPU(void)
+{
+    NvLogicalGpuHandle gpus_logical[NVAPI_MAX_LOGICAL_GPUS];
+    NvPhysicalGpuHandle gpus_physical[NVAPI_MAX_PHYSICAL_GPUS];
+    NvAPI_Status status;
+    NvU32 count1, count2;
+    int i;
+
+    if (!pNvAPI_EnumLogicalGPUs)
+    {
+        win_skip("NvAPI_EnumLogicalGPUs export not found.\n");
+        return;
+    }
+
+    if (!pNvAPI_GetPhysicalGPUsFromLogicalGPU)
+    {
+        win_skip("NvAPI_GetPhysicalGPUsFromLogicalGPU export not found.\n");
+        return;
+    }
+
+    status = pNvAPI_EnumLogicalGPUs_unknown(gpus_logical, &count1);
+    ok(status == NVAPI_OK, "Expected status NVAPI_OK, got %d\n", status);
+    ok(count1 > 0, "Expected count1 > 0, got %d\n", count1);
+
+    status = pNvAPI_GetPhysicalGPUsFromLogicalGPU(NULL, NULL, NULL);
+    ok(status == NVAPI_INVALID_ARGUMENT, "Expected status NVAPI_INVALID_ARGUMENT, got %d\n", status);
+
+    status = pNvAPI_GetPhysicalGPUsFromLogicalGPU(gpus_logical[0], NULL, NULL);
+    ok(status == NVAPI_INVALID_ARGUMENT, "Expected status NVAPI_INVALID_ARGUMENT, got %d\n", status);
+
+    status = pNvAPI_GetPhysicalGPUsFromLogicalGPU(gpus_logical[0], gpus_physical, NULL);
+    ok(status == NVAPI_INVALID_POINTER, "Expected status NVAPI_INVALID_POINTER, got %d\n", status);
+
+    status = pNvAPI_GetPhysicalGPUsFromLogicalGPU(gpus_logical[0], NULL, &count2);
+    ok(status == NVAPI_INVALID_ARGUMENT, "Expected status NVAPI_INVALID_ARGUMENT, got %d\n", status);
+
+    status = pNvAPI_GetPhysicalGPUsFromLogicalGPU(NULL, gpus_physical, &count2);
+    ok(status == NVAPI_EXPECTED_LOGICAL_GPU_HANDLE, "Expected status NVAPI_EXPECTED_LOGICAL_GPU_HANDLE, got %d\n", status);
+
+    status = pNvAPI_GetPhysicalGPUsFromLogicalGPU((void*) 0xdeadbeef, gpus_physical, &count2);
+    ok(status == NVAPI_EXPECTED_LOGICAL_GPU_HANDLE, "Expected status NVAPI_EXPECTED_LOGICAL_GPU_HANDLE, got %d\n", status);
+
+    status = pNvAPI_GetPhysicalGPUsFromLogicalGPU(gpus_logical[0], gpus_physical, &count2);
+    ok(status == NVAPI_OK, "Expected status NVAPI_OK, got %d\n", status);
+    ok(count2 > 0, "Expected count1 > 0, got %d\n", count2);
+    for (i = 0; i < count2; i++)
+        ok(gpus_physical[i] != NULL, "Expected gpus_physical[%d] not be NULL, got %p\n", i, gpus_physical[i]);
+}
+
+
 START_TEST( nvapi )
 {
     if (!init())
@@ -334,4 +387,5 @@ START_TEST( nvapi )
     test_unknown2();
     test_unknown3();
     test_NvAPI_EnumLogicalGPUs();
+    test_NvAPI_GetPhysicalGPUsFromLogicalGPU();
 }
