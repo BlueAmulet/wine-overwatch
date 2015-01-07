@@ -33,6 +33,7 @@ WINE_DEFAULT_DEBUG_CHANNEL(nvapi);
 
 #define FAKE_PHYSICAL_GPU ((NvPhysicalGpuHandle)0xdead0001)
 #define FAKE_DISPLAY ((NvDisplayHandle)0xdead0002)
+#define FAKE_LOGICAL_GPU ((NvLogicalGpuHandle)0xdead0003)
 
 #if defined(__i386__) || defined(__x86_64__)
 
@@ -404,6 +405,28 @@ static NvAPI_Status CDECL NvAPI_D3D9_StretchRectEx(IDirect3DDevice9 *pDevice, ID
     return NVAPI_UNREGISTERED_RESOURCE;
 }
 
+static NvAPI_Status CDECL NvAPI_EnumLogicalGPUs(NvLogicalGpuHandle gpuHandle[NVAPI_MAX_LOGICAL_GPUS], NvU32 *count)
+{
+    TRACE("(%p, %p)\n", gpuHandle, count);
+
+    if (!gpuHandle)
+        return NVAPI_INVALID_ARGUMENT;
+
+    if (!count)
+        return NVAPI_INVALID_POINTER;
+
+    gpuHandle[0] = FAKE_LOGICAL_GPU;
+    *count = 1;
+
+    return NVAPI_OK;
+}
+
+static NvAPI_Status CDECL NvAPI_EnumLogicalGPUs_unknown(NvLogicalGpuHandle gpuHandle[NVAPI_MAX_LOGICAL_GPUS], NvU32 *count)
+{
+    TRACE("(%p, %p)\n", gpuHandle, count);
+    return NvAPI_EnumLogicalGPUs(gpuHandle, count);
+}
+
 void* CDECL nvapi_QueryInterface(unsigned int offset)
 {
     static const struct
@@ -430,7 +453,9 @@ void* CDECL nvapi_QueryInterface(unsigned int offset)
         {0x451f2134, NvAPI_Stereo_GetSeparation},
         {0x5c069fa3, NvAPI_Stereo_SetSeparation},
         {0x239c4545, NvAPI_Stereo_Enable},
-        {0xaeaecd41, NvAPI_D3D9_StretchRectEx}
+        {0xaeaecd41, NvAPI_D3D9_StretchRectEx},
+        {0x48b3ea59, NvAPI_EnumLogicalGPUs},
+        {0xfb9bc2ab, NvAPI_EnumLogicalGPUs_unknown}
     };
     unsigned int i;
     TRACE("(%x)\n", offset);

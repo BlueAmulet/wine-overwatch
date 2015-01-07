@@ -33,6 +33,8 @@
 #define NvAPI_unknown1_Offset 0x5786cc6e
 #define NvAPI_unknown2_Offset 0x6533ea3e
 #define NvAPI_unknown3_Offset 0x5380ad1a
+#define NvAPI_EnumLogicalGPUs_unknown_Offset 0xfb9bc2ab
+#define NvAPI_EnumLogicalGPUs_Offset 0x48b3ea59
 
 static void* (CDECL *pnvapi_QueryInterface)(unsigned int offset);
 static NvAPI_Status (CDECL *pNvAPI_Initialize)(void);
@@ -40,6 +42,8 @@ static NvAPI_Status (CDECL *pNvAPI_GetDisplayDriverVersion)(NvDisplayHandle hNvD
 static NvAPI_Status (CDECL *pNvAPI_unknown1)(void* param0);
 static NvAPI_Status (CDECL *pNvAPI_unknown2)(NvPhysicalGpuHandle gpuHandle, void *param1);
 static NvAPI_Status (CDECL *pNvAPI_unknown3)(void *param0, void *param1);
+static NvAPI_Status (CDECL *pNvAPI_EnumLogicalGPUs_unknown)(NvLogicalGpuHandle nvGPUHandle[NVAPI_MAX_LOGICAL_GPUS], NvU32 *pGpuCount);
+static NvAPI_Status (CDECL *pNvAPI_EnumLogicalGPUs)(NvLogicalGpuHandle nvGPUHandle[NVAPI_MAX_LOGICAL_GPUS], NvU32 *pGpuCount);
 
 static BOOL init(void)
 {
@@ -67,6 +71,8 @@ static BOOL init(void)
     pNvAPI_unknown1 = pnvapi_QueryInterface(NvAPI_unknown1_Offset);
     pNvAPI_unknown2 = pnvapi_QueryInterface(NvAPI_unknown2_Offset);
     pNvAPI_unknown3 = pnvapi_QueryInterface(NvAPI_unknown3_Offset);
+    pNvAPI_EnumLogicalGPUs_unknown = pnvapi_QueryInterface(NvAPI_EnumLogicalGPUs_unknown_Offset);
+    pNvAPI_EnumLogicalGPUs = pnvapi_QueryInterface(NvAPI_EnumLogicalGPUs_Offset);
 
     if (!pNvAPI_Initialize)
     {
@@ -264,6 +270,60 @@ static void test_unknown3(void)
     ok(test2 == test3, "Expected handle %p, got %p\n", test2, test3);
 }
 
+static void test_NvAPI_EnumLogicalGPUs(void)
+{
+    NvLogicalGpuHandle gpuHandle1[NVAPI_MAX_LOGICAL_GPUS];
+    NvLogicalGpuHandle gpuHandle2[NVAPI_MAX_LOGICAL_GPUS];
+    NvAPI_Status status;
+    NvU32 count1, count2;
+    int i;
+
+    if (!pNvAPI_EnumLogicalGPUs_unknown)
+    {
+        win_skip("NvAPI_EnumLogicalGPUs_unknown export not found.\n");
+        return;
+    }
+
+    if (!pNvAPI_EnumLogicalGPUs)
+    {
+        win_skip("NvAPI_EnumLogicalGPUs export not found.\n");
+        return;
+    }
+
+    status = pNvAPI_EnumLogicalGPUs_unknown(NULL, NULL);
+    ok(status == NVAPI_INVALID_ARGUMENT, "Expected status NVAPI_INVALID_ARGUMENT, got %d\n", status);
+
+    status = pNvAPI_EnumLogicalGPUs_unknown((void*)0xdeadbeef, NULL);
+    ok(status == NVAPI_INVALID_POINTER, "Expected status NVAPI_INVALID_POINTER, got %d\n", status);
+
+    status = pNvAPI_EnumLogicalGPUs_unknown(NULL, (void*)0xdeadbeef);
+    ok(status == NVAPI_INVALID_ARGUMENT, "Expected status NVAPI_INVALID_ARGUMENT, got %d\n", status);
+
+    status = pNvAPI_EnumLogicalGPUs(NULL, NULL);
+    ok(status == NVAPI_INVALID_ARGUMENT, "Expected status NVAPI_INVALID_ARGUMENT, got %d\n", status);
+
+    status = pNvAPI_EnumLogicalGPUs((void*)0xdeadbeef, NULL);
+    ok(status == NVAPI_INVALID_POINTER, "Expected status NVAPI_INVALID_POINTER, got %d\n", status);
+
+    status = pNvAPI_EnumLogicalGPUs(NULL, (void*)0xdeadbeef);
+    ok(status == NVAPI_INVALID_ARGUMENT, "Expected status NVAPI_INVALID_ARGUMENT, got %d\n", status);
+
+    memset(gpuHandle1, 0, sizeof(gpuHandle1));
+
+    status = pNvAPI_EnumLogicalGPUs_unknown(gpuHandle1, &count1);
+    ok(status == NVAPI_OK, "Expected status NVAPI_OK, got %d\n", status);
+    ok(count1 > 0, "Expected count1 > 0, got %d\n", count1);
+    for (i = 0; i < count1; i++)
+        ok(gpuHandle1[i] != NULL, "Expected gpuHandle1[%d] not be NULL, got %p\n", i, gpuHandle1[i]);
+
+    status = pNvAPI_EnumLogicalGPUs(gpuHandle2, &count2);
+    ok(status == NVAPI_OK, "Expected status NVAPI_OK, got %d\n", status);
+    ok(count2 > 0, "Expected count2 > 0, got %d\n", count2);
+    ok(count1 == count2, "Expected count1 == count2, got %d != %d\n", count1, count2);
+    for (i = 0; i < count2; i++)
+        ok(gpuHandle1[i] == gpuHandle2[i], "Expected gpuHandle1[i] == gpuHandle2[i], got %p != %p\n", gpuHandle1[i], gpuHandle2[i]);
+}
+
 START_TEST( nvapi )
 {
     if (!init())
@@ -273,4 +333,5 @@ START_TEST( nvapi )
     test_unknown1();
     test_unknown2();
     test_unknown3();
+    test_NvAPI_EnumLogicalGPUs();
 }
