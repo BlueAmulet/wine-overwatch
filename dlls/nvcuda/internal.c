@@ -88,7 +88,7 @@ static const CUuuid UUID_Unknown2                   = {{0xA0, 0x94, 0x79, 0x8C, 
                                                         0x93, 0xF2, 0x08, 0x00, 0x20, 0x0C, 0x0A, 0x66}};
 static const CUuuid UUID_Unknown3                   = {{0x42, 0xD8, 0x5A, 0x81, 0x23, 0xF6, 0xCB, 0x47,
                                                         0x82, 0x98, 0xF6, 0xE7, 0x8A, 0x3A, 0xEC, 0xDC}};
-static const CUuuid UUID_Unknown4                   = {{0xC6, 0x93, 0x33, 0x6E, 0x11, 0x21, 0xDF, 0x11,
+static const CUuuid UUID_ContextStorage             = {{0xC6, 0x93, 0x33, 0x6E, 0x11, 0x21, 0xDF, 0x11,
                                                         0xA8, 0xC3, 0x68, 0xF3, 0x55, 0xD8, 0x95, 0x93}};
 static const CUuuid UUID_Unknown5                   = {{0x0C, 0xA5, 0x0B, 0x8C, 0x10, 0x04, 0x92, 0x9A,
                                                         0x89, 0xA7, 0xD0, 0xDF, 0x10, 0xE7, 0x72, 0x86}};
@@ -164,20 +164,20 @@ static const struct
 } *Unknown3_orig = NULL;
 
 /*
- * Unknown4
+ * ContextStorage
  */
-struct Unknown4_table
+struct ContextStorage_table
 {
-    void* (WINAPI *func0)(void *param0, void *param1, void *param2, void *param3);
-    void* (WINAPI *func1)(void *param0, void *param1);
-    void* (WINAPI *func2)(void *param0, void *param1, void *param2);
+    CUresult (WINAPI *Set)(CUcontext ctx, void *key, void *value, void *callback);
+    CUresult (WINAPI *Remove)(CUcontext ctx, void *key);
+    CUresult (WINAPI *Get)(void **value, CUcontext ctx, void *key);
 };
 static const struct
 {
-    void* (*func0)(void *param0, void *param1, void *param2, void *param3);
-    void* (*func1)(void *param0, void *param1);
-    void* (*func2)(void *param0, void *param1, void *param2);
-} *Unknown4_orig = NULL;
+    CUresult (*Set)(CUcontext ctx, void *key, void *value, void *callback);
+    CUresult (*Remove)(CUcontext ctx, void *key);
+    CUresult (*Get)(void **value, CUcontext ctx, void *key);
+} *ContextStorage_orig = NULL;
 
 /*
  * TlsNotifyInterface
@@ -310,29 +310,80 @@ static struct Unknown3_table Unknown3_Impl =
     Unknown3_func1_relay,
 };
 
-static void* WINAPI Unknown4_func0_relay(void *param0, void *param1, void *param2, void *param3)
+struct context_storage
 {
-    TRACE("(%p, %p, %p, %p)\n", param0, param1, param2, param3);
-    return Unknown4_orig->func0(param0, param1, param2, param3);
+    void *value;
+    void (WINAPI *callback)(CUcontext ctx, void *key, void *value);
+};
+
+static void storage_destructor_callback(CUcontext ctx, void *key, void *value)
+{
+    struct context_storage *storage = value;
+
+    TRACE("(%p, %p, %p)\n", ctx, key, value);
+
+    if (storage->callback)
+    {
+        TRACE("calling destructor callback %p(%p, %p, %p)\n",
+              storage->callback, ctx, key, storage->value);
+        storage->callback(ctx, key, storage->value);
+        TRACE("destructor callback %p returned\n", storage->callback);
+    }
+
+    HeapFree( GetProcessHeap(), 0, storage );
 }
 
-static void* WINAPI Unknown4_func1_relay(void *param0, void *param1)
+static CUresult WINAPI ContextStorage_Set(CUcontext ctx, void *key, void *value, void *callback)
 {
-    TRACE("(%p, %p)\n", param0, param1);
-    return Unknown4_orig->func1(param0, param1);
+    struct context_storage *storage;
+    CUresult ret;
+
+    TRACE("(%p, %p, %p, %p)\n", ctx, key, value, callback);
+
+    storage = HeapAlloc( GetProcessHeap(), 0, sizeof(*storage) );
+    if (!storage)
+        return CUDA_ERROR_OUT_OF_MEMORY;
+
+    storage->callback = callback;
+    storage->value = value;
+
+    ret = ContextStorage_orig->Set(ctx, key, storage, storage_destructor_callback);
+    if (ret) HeapFree( GetProcessHeap(), 0, storage );
+    return ret;
 }
 
-static void* WINAPI Unknown4_func2_relay(void *param0, void *param1, void *param2)
+static CUresult WINAPI ContextStorage_Remove(CUcontext ctx, void *key)
 {
-    TRACE("(%p, %p, %p)\n", param0, param1, param2);
-    return Unknown4_orig->func2(param0, param1, param2);
+    struct context_storage *storage;
+
+    TRACE("(%p, %p)\n", ctx, key);
+
+    /* FIXME: This is not completely race-condition save, but using a mutex
+     * could have a relatively big overhead. Can still be added later when it
+     * turns out to be necessary. */
+    if (!ContextStorage_orig->Get((void **)&storage, ctx, key))
+        HeapFree( GetProcessHeap(), 0, storage );
+
+    return ContextStorage_orig->Remove(ctx, key);
 }
 
-struct Unknown4_table Unknown4_Impl =
+static CUresult WINAPI ContextStorage_Get(void **value, CUcontext ctx, void *key)
 {
-    Unknown4_func0_relay,
-    Unknown4_func1_relay,
-    Unknown4_func2_relay,
+    struct context_storage *storage;
+    CUresult ret;
+
+    TRACE("(%p, %p, %p)\n", value, ctx, key);
+
+    ret = ContextStorage_orig->Get((void **)&storage, ctx, key);
+    if (!ret) *value = storage->value;
+    return ret;
+}
+
+struct ContextStorage_table ContextStorage_Impl =
+{
+    ContextStorage_Set,
+    ContextStorage_Remove,
+    ContextStorage_Get,
 };
 
 static void* WINAPI Unknown5_func0_relay(void *param0, void *param1, void *param2)
@@ -480,15 +531,15 @@ CUresult cuda_get_table(const void **table, const CUuuid *uuid, const void *orig
         *table = (void *)&Unknown3_Impl;
         return CUDA_SUCCESS;
     }
-    else if (cuda_equal_uuid(uuid, &UUID_Unknown4))
+    else if (cuda_equal_uuid(uuid, &UUID_ContextStorage))
     {
         if (orig_result)
             return orig_result;
         if (!orig_table)
             return CUDA_ERROR_UNKNOWN;
 
-        Unknown4_orig = orig_table;
-        *table = (void *)&Unknown4_Impl;
+        ContextStorage_orig = orig_table;
+        *table = (void *)&ContextStorage_Impl;
         return CUDA_SUCCESS;
     }
     else if (cuda_equal_uuid(uuid, &UUID_Unknown5))

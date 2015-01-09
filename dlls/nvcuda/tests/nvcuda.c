@@ -27,9 +27,23 @@
 
 static CUresult (WINAPI *pcuInit)(unsigned int);
 static CUresult (WINAPI *pcuGetExportTable)(const void**, const CUuuid*);
+static CUresult (WINAPI *pcuCtxCreate)(CUcontext *pctx, unsigned int flags, CUdevice dev);
+static CUresult (WINAPI *pcuCtxAttach)(CUcontext *pctx, unsigned int flags);
+static CUresult (WINAPI *pcuCtxDetach)(CUcontext ctx);
 
+static const CUuuid UUID_ContextStorage     = {{0xC6, 0x93, 0x33, 0x6E, 0x11, 0x21, 0xDF, 0x11,
+                                                0xA8, 0xC3, 0x68, 0xF3, 0x55, 0xD8, 0x95, 0x93}};
 static const CUuuid UUID_TlsNotifyInterface = {{0x19, 0x5B, 0xCB, 0xF4, 0xD6, 0x7D, 0x02, 0x4A,
                                                 0xAC, 0xC5, 0x1D, 0x29, 0xCE, 0xA6, 0x31, 0xAE}};
+
+#define CHECK_FUNCPTR(f) if(!p##f){win_skip("Failed to get entry point for %s\n", #f); return;}
+
+struct ContextStorage_table
+{
+    CUresult (WINAPI *Set)(CUcontext ctx, void *key, void *value, void *callback);
+    CUresult (WINAPI *Remove)(CUcontext ctx, void *key);
+    CUresult (WINAPI *Get)(void **value, CUcontext ctx, void *key);
+};
 
 struct TlsNotifyInterface_table
 {
@@ -47,8 +61,13 @@ static BOOL init(void)
         return FALSE;
     }
 
-    pcuInit           = (void *)GetProcAddress(nvcuda, "cuInit");
-    pcuGetExportTable = (void *)GetProcAddress(nvcuda, "cuGetExportTable");
+    #define LOAD_FUNCPTR(f) p##f = (void*)GetProcAddress(nvcuda, #f)
+    LOAD_FUNCPTR(cuInit);
+    LOAD_FUNCPTR(cuGetExportTable);
+    LOAD_FUNCPTR(cuCtxCreate);
+    LOAD_FUNCPTR(cuCtxAttach);
+    LOAD_FUNCPTR(cuCtxDetach);
+    #undef LOAD_FUNCPTR
 
     if (!pcuInit)
     {
@@ -100,11 +119,7 @@ static void test_TlsNotifyInterface(void)
     HANDLE thread;
     CUresult res;
 
-    if (!pcuGetExportTable)
-    {
-        win_skip("cuGetExportTable export not found.\n");
-        return;
-    }
+    CHECK_FUNCPTR(cuGetExportTable);
 
     if (pcuGetExportTable((const void **)&iface, &UUID_TlsNotifyInterface))
     {
@@ -159,10 +174,228 @@ static void test_TlsNotifyInterface(void)
     }
 }
 
+struct storage_test_data
+{
+    int count;
+    CUcontext ctx;
+    void *key;
+};
+
+static void WINAPI storage_destructor_callback(CUcontext ctx, void *key, void *value)
+{
+    struct storage_test_data *test_data = value;
+    trace("(%p, %p, %p)\n", ctx, key, value);
+
+    test_data->count++;
+    test_data->ctx = ctx;
+    test_data->key = key;
+}
+
+#define STORAGE_KEY_1 (void *)0xdeadbeef
+#define STORAGE_KEY_2 (void *)0xcafebabe
+
+static void test_ContextStorage(void)
+{
+    const struct ContextStorage_table *iface;
+    struct storage_test_data test_data;
+    CUcontext ctx, ctx2;
+    CUresult res;
+    void *value;
+
+    CHECK_FUNCPTR(cuGetExportTable);
+    CHECK_FUNCPTR(cuCtxCreate);
+    CHECK_FUNCPTR(cuCtxAttach);
+    CHECK_FUNCPTR(cuCtxDetach);
+
+    if (pcuGetExportTable((const void **)&iface, &UUID_ContextStorage))
+    {
+        win_skip("Unknown4 interface not supported.\n");
+        return;
+    }
+
+    /* Call without current context */
+    res = iface->Set(NULL, STORAGE_KEY_1, (void *)42, NULL);
+    ok(res == CUDA_ERROR_INVALID_CONTEXT, "Expected CUDA_ERROR_INVALID_CONTEXT, got %d\n", res);
+
+    /* Create a context, then test Set/Get/Remove */
+    res = pcuCtxCreate(&ctx, 0, 0);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+
+    value = (void *)0x55555555;
+    res = iface->Get(&value, NULL, STORAGE_KEY_2);
+    ok(res == CUDA_ERROR_INVALID_HANDLE, "Expected CUDA_ERROR_INVALID_HANDLE, got %d\n", res);
+    ok(value == (void *)0x55555555, "Value was modified\n");
+
+    res = iface->Set(NULL, STORAGE_KEY_1, (void *)42, NULL);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+
+    value = (void *)0x55555555;
+    res = iface->Get(&value, NULL, STORAGE_KEY_1);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    ok(value == (void *)42, "Unexpected value %p\n", value);
+
+    value = (void *)0x55555555;
+    res = iface->Get(&value, NULL, STORAGE_KEY_2);
+    ok(res == CUDA_ERROR_INVALID_HANDLE, "Expected CUDA_ERROR_INVALID_HANDLE, got %d\n", res);
+    ok(value == (void *)0x55555555, "Value was modified\n");
+
+    res = iface->Set(NULL, STORAGE_KEY_2, (void *)43, NULL);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+
+    value = (void *)0x55555555;
+    res = iface->Get(&value, NULL, STORAGE_KEY_1);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    ok(value == (void *)42, "Unexpected value %p\n", value);
+
+    value = (void *)0x55555555;
+    res = iface->Get(&value, NULL, STORAGE_KEY_2);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    ok(value == (void *)43, "Unexpected value %p\n", value);
+
+    res = iface->Set(NULL, STORAGE_KEY_1, (void *)42, NULL);
+    ok(res == CUDA_ERROR_INVALID_HANDLE, "Expected CUDA_ERROR_INVALID_HANDLE, got %d\n", res);
+
+    res = iface->Set(NULL, STORAGE_KEY_1, (void *)44, NULL);
+    ok(res == CUDA_ERROR_INVALID_HANDLE, "Expected CUDA_ERROR_INVALID_HANDLE, got %d\n", res);
+
+    value = (void *)0x55555555;
+    res = iface->Get(&value, NULL, STORAGE_KEY_1);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    ok(value == (void *)42, "Unexpected value %p\n", value);
+
+    res = iface->Remove(NULL, STORAGE_KEY_1);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+
+    value = (void *)0x55555555;
+    res = iface->Get(&value, NULL, STORAGE_KEY_1);
+    ok(res == CUDA_ERROR_INVALID_HANDLE, "Expected CUDA_ERROR_INVALID_HANDLE, got %d\n", res);
+    ok(value == (void *)0x55555555, "Value was modified\n");
+
+    value = (void *)0x55555555;
+    res = iface->Get(&value, NULL, STORAGE_KEY_2);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    ok(value == (void *)43, "Unexpected value %p\n", value);
+
+    res = iface->Set(NULL, STORAGE_KEY_1, (void *)44, NULL);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+
+    value = (void *)0x55555555;
+    res = iface->Get(&value, NULL, STORAGE_KEY_1);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    ok(value == (void *)44, "Unexpected value %p\n", value);
+
+    res = pcuCtxDetach(ctx);
+    ok(!res, "Expected error code 0, got %d\n", res);
+
+    /* Now test with multiple contexts */
+    res = pcuCtxCreate(&ctx, 0, 0);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    res = pcuCtxCreate(&ctx2, 0, 0);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+
+    res = iface->Set(NULL, STORAGE_KEY_1, (void *)42, NULL);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+
+    value = (void *)0x55555555;
+    res = iface->Get(&value, NULL, STORAGE_KEY_1);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    ok(value == (void *)42, "Unexpected value %p\n", value);
+
+    value = (void *)0x55555555;
+    res = iface->Get(&value, ctx, STORAGE_KEY_1);
+    ok(res == CUDA_ERROR_INVALID_HANDLE, "Expected CUDA_ERROR_INVALID_HANDLE, got %d\n", res);
+    ok(value == (void *)0x55555555, "Value was modified\n");
+
+    value = (void *)0x55555555;
+    res = iface->Get(&value, ctx2, STORAGE_KEY_1);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    ok(value == (void *)42, "Unexpected value %p\n", value);
+
+    res = iface->Set(ctx, STORAGE_KEY_1, (void *)43, NULL);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+
+    value = (void *)0x55555555;
+    res = iface->Get(&value, ctx, STORAGE_KEY_1);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    ok(value == (void *)43, "Value was modified\n");
+
+    value = (void *)0x55555555;
+    res = iface->Get(&value, ctx2, STORAGE_KEY_1);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    ok(value == (void *)42, "Unexpected value %p\n", value);
+
+    res = iface->Remove(ctx, STORAGE_KEY_1);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+
+    value = (void *)0x55555555;
+    res = iface->Get(&value, ctx, STORAGE_KEY_1);
+    ok(res == CUDA_ERROR_INVALID_HANDLE, "Expected CUDA_ERROR_INVALID_HANDLE, got %d\n", res);
+    ok(value == (void *)0x55555555, "Value was modified\n");
+
+    value = (void *)0x55555555;
+    res = iface->Get(&value, ctx2, STORAGE_KEY_1);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    ok(value == (void *)42, "Unexpected value %p\n", value);
+
+    res = pcuCtxDetach(ctx2);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    res = pcuCtxDetach(ctx);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+
+    /* Test with destructor callback */
+    res = pcuCtxCreate(&ctx, 0, 0);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+
+    memset(&test_data, 0, sizeof(test_data));
+    res = iface->Set(NULL, STORAGE_KEY_1, &test_data, &storage_destructor_callback);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    ok(test_data.count == 0, "Expected count to be 0, got %d\n", test_data.count);
+
+    res = iface->Set(NULL, STORAGE_KEY_1, &test_data, NULL);
+    ok(res == CUDA_ERROR_INVALID_HANDLE, "Expected CUDA_ERROR_INVALID_HANDLE, got %d\n", res);
+
+    res = iface->Set(NULL, STORAGE_KEY_1, NULL, &storage_destructor_callback);
+    ok(res == CUDA_ERROR_INVALID_HANDLE, "Expected CUDA_ERROR_INVALID_HANDLE, got %d\n", res);
+
+    ctx2 = NULL;
+    res = pcuCtxAttach(&ctx2, 0);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    ok(test_data.count == 0, "Expected count to be 0, got %d\n", test_data.count);
+    ok(ctx2 == ctx, "Expected ctx2 and ctx to be identical\n");
+
+    res = pcuCtxDetach(ctx2);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    ok(test_data.count == 0, "Expected count to be 0, got %d\n", test_data.count);
+
+    res = pcuCtxDetach(ctx);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    ok(test_data.count == 1, "Expected count to be 1, got %d\n", test_data.count);
+    ok(test_data.ctx == ctx, "Expected ctx to be %p, got %p\n", ctx, test_data.ctx);
+    ok(test_data.key == STORAGE_KEY_1, "Expected key to be %p, got %p\n", STORAGE_KEY_1, test_data.key);
+
+    /* Test if destructor callback is called when removing an element */
+    res = pcuCtxCreate(&ctx, 0, 0);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+
+    memset(&test_data, 0, sizeof(test_data));
+    res = iface->Set(NULL, STORAGE_KEY_1, &test_data, &storage_destructor_callback);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    ok(test_data.count == 0, "Expected count to be 0, got %d\n", test_data.count);
+
+    res = iface->Remove(NULL, STORAGE_KEY_1);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    ok(test_data.count == 0, "Expected count to be 0, got %d\n", test_data.count);
+
+    res = pcuCtxDetach(ctx);
+    ok(!res, "Expected CUDA_SUCCESS, got %d\n", res);
+    ok(test_data.count == 0, "Expected count to be 0, got %d\n", test_data.count);
+}
+
 START_TEST( nvcuda )
 {
     if (!init())
         return;
 
     test_TlsNotifyInterface();
+    test_ContextStorage();
 }
