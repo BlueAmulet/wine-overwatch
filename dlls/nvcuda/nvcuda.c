@@ -293,6 +293,20 @@ static CUresult (*pcuTexRefSetMipmapLevelBias)(CUtexref hTexRef, float bias);
 static CUresult (*pcuTexRefSetMipmapLevelClamp)(CUtexref hTexRef, float minMipmapLevelClamp, float maxMipmapLevelClamp);
 static CUresult (*pcuTexRefSetMipmappedArray)(CUtexref hTexRef, CUmipmappedArray hMipmappedArray, unsigned int Flags);
 
+/* CUDA 6.5 */
+static CUresult (*pcuGLGetDevices_v2)(unsigned int *pCudaDeviceCount, CUdevice *pCudaDevices,
+                                      unsigned int cudaDeviceCount, CUGLDeviceList deviceList);
+static CUresult (*pcuGraphicsResourceSetMapFlags_v2)(CUgraphicsResource resource, unsigned int flags);
+static CUresult (*pcuLinkAddData_v2)(CUlinkState state, CUjitInputType type, void *data, size_t size, const char *name,
+                                     unsigned int numOptions, CUjit_option *options, void **optionValues);
+static CUresult (*pcuLinkCreate_v2)(unsigned int numOptions, CUjit_option *options, void **optionValues, CUlinkState *stateOut);
+static CUresult (*pcuMemHostRegister_v2)(void *p, size_t bytesize, unsigned int Flags);
+static CUresult (*pcuOccupancyMaxActiveBlocksPerMultiprocessor)(int *numBlocks, CUfunction func, int blockSize, size_t dynamicSMemSize);
+/*
+static CUresult (*pcuOccupancyMaxPotentialBlockSize)(int *minGridSize, int *blockSize, CUfunction func,
+                                                     void *blockSizeToDynamicSMemSize, size_t dynamicSMemSize, int blockSizeLimit);
+*/
+
 static void *cuda_handle = NULL;
 
 static BOOL load_functions(void)
@@ -306,6 +320,7 @@ static BOOL load_functions(void)
     }
 
     #define LOAD_FUNCPTR(f) if((p##f = wine_dlsym(cuda_handle, #f, NULL, 0)) == NULL){FIXME("Can't find symbol %s\n", #f); return FALSE;}
+    #define TRY_LOAD_FUNCPTR(f) p##f = wine_dlsym(cuda_handle, #f, NULL, 0)
 
     LOAD_FUNCPTR(cuArray3DCreate);
     LOAD_FUNCPTR(cuArray3DCreate_v2);
@@ -554,7 +569,18 @@ static BOOL load_functions(void)
     LOAD_FUNCPTR(cuTexRefSetMipmapLevelClamp);
     LOAD_FUNCPTR(cuTexRefSetMipmappedArray);
 
+    /* CUDA 6.5 */
+    TRY_LOAD_FUNCPTR(cuGLGetDevices_v2);
+    TRY_LOAD_FUNCPTR(cuGraphicsResourceSetMapFlags_v2);
+    TRY_LOAD_FUNCPTR(cuLinkAddData_v2);
+    TRY_LOAD_FUNCPTR(cuLinkCreate_v2);
+    TRY_LOAD_FUNCPTR(cuMemHostRegister_v2);
+    TRY_LOAD_FUNCPTR(cuOccupancyMaxActiveBlocksPerMultiprocessor);
+    /* TRY_LOAD_FUNCPTR(cuOccupancyMaxPotentialBlockSize); */
+
+
     #undef LOAD_FUNCPTR
+    #undef TRY_LOAD_FUNCPTR
 
     return TRUE;
 }
@@ -2100,6 +2126,93 @@ CUresult WINAPI wine_cuTexRefSetMipmappedArray(CUtexref hTexRef, CUmipmappedArra
     TRACE("(%p, %p, %u)\n", hTexRef, hMipmappedArray, Flags);
     return pcuTexRefSetMipmappedArray(hTexRef, hMipmappedArray, Flags);
 }
+
+/*
+ * Additions in CUDA 6.5
+ */
+
+CUresult WINAPI wine_cuGLGetDevices_v2(unsigned int *pCudaDeviceCount, CUdevice *pCudaDevices,
+                                       unsigned int cudaDeviceCount, CUGLDeviceList deviceList)
+{
+    TRACE("(%p, %p, %u, %d)\n", pCudaDeviceCount, pCudaDevices, cudaDeviceCount, deviceList);
+    if (!pcuGLGetDevices_v2)
+    {
+        FIXME("not supported\n");
+        return CUDA_ERROR_NOT_SUPPORTED;
+    }
+    return pcuGLGetDevices_v2(pCudaDeviceCount, pCudaDevices, cudaDeviceCount, deviceList);
+}
+
+CUresult WINAPI wine_cuGraphicsResourceSetMapFlags_v2(CUgraphicsResource resource, unsigned int flags)
+{
+    TRACE("(%p, %u)\n", resource, flags);
+    if (!pcuGraphicsResourceSetMapFlags_v2)
+    {
+        FIXME("not supported\n");
+        return CUDA_ERROR_NOT_SUPPORTED;
+    }
+    return pcuGraphicsResourceSetMapFlags_v2(resource, flags);
+}
+
+CUresult WINAPI wine_cuLinkAddData_v2(CUlinkState state, CUjitInputType type, void *data, size_t size, const char *name,
+                                      unsigned int numOptions, CUjit_option *options, void **optionValues)
+{
+    TRACE("(%p, %d, %p, %lu, %s, %u, %p, %p)\n", state, type, data, (SIZE_T)size, name, numOptions, options, optionValues);
+    if (!pcuLinkAddData_v2)
+    {
+        FIXME("not supported\n");
+        return CUDA_ERROR_NOT_SUPPORTED;
+    }
+    return pcuLinkAddData_v2(state, type, data, size, name, numOptions, options, optionValues);
+}
+
+CUresult WINAPI wine_cuLinkCreate_v2(unsigned int numOptions, CUjit_option *options,
+                                     void **optionValues, CUlinkState *stateOut)
+{
+    TRACE("(%u, %p, %p, %p)\n", numOptions, options, optionValues, stateOut);
+    if (!pcuLinkCreate_v2)
+    {
+        FIXME("not supported\n");
+        return CUDA_ERROR_NOT_SUPPORTED;
+    }
+    return pcuLinkCreate_v2(numOptions, options, optionValues, stateOut);
+}
+
+CUresult WINAPI wine_cuMemHostRegister_v2(void *p, size_t bytesize, unsigned int Flags)
+{
+    TRACE("(%p, %lu, %u)\n", p, (SIZE_T)bytesize, Flags);
+    if (!pcuMemHostRegister_v2)
+    {
+        FIXME("not supported\n");
+        return CUDA_ERROR_NOT_SUPPORTED;
+    }
+    return pcuMemHostRegister_v2(p, bytesize, Flags);
+}
+
+CUresult WINAPI wine_cuOccupancyMaxActiveBlocksPerMultiprocessor(int *numBlocks, CUfunction func, int blockSize, size_t dynamicSMemSize)
+{
+    TRACE("(%p, %p, %d, %lu)\n", numBlocks, func, blockSize, (SIZE_T)dynamicSMemSize);
+    if (!pcuOccupancyMaxActiveBlocksPerMultiprocessor)
+    {
+        FIXME("not supported\n");
+        return CUDA_ERROR_NOT_SUPPORTED;
+    }
+    return pcuOccupancyMaxActiveBlocksPerMultiprocessor(numBlocks, func, blockSize, dynamicSMemSize);
+}
+
+/*
+CUresult WINAPI wine_cuOccupancyMaxPotentialBlockSize(int *minGridSize, int *blockSize, CUfunction func,
+                                                      void *blockSizeToDynamicSMemSize, size_t dynamicSMemSize, int blockSizeLimit)
+{
+    TRACE("(%p, %p, %p, %p, %lu, %d)\n", minGridSize, blockSize, func, blockSizeToDynamicSMemSize, (SIZE_T)dynamicSMemSize, blockSizeLimit);
+    if (!pcuOccupancyMaxPotentialBlockSize)
+    {
+        FIXME("not supported\n");
+        return CUDA_ERROR_NOT_SUPPORTED;
+    }
+    return pcuOccupancyMaxPotentialBlockSize(minGridSize, blockSize, func, blockSizeToDynamicSMemSize, dynamicSMemSize, blockSizeLimit);
+}
+*/
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
 {

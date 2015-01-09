@@ -306,3 +306,14 @@
 @ stdcall cuTexRefSetMipmapLevelClamp(ptr float float) wine_cuTexRefSetMipmapLevelClamp
 @ stdcall cuTexRefSetMipmappedArray(ptr ptr long) wine_cuTexRefSetMipmappedArray
 @ stub cuWGLGetDevice
+
+# CUDA 6.5
+@ stdcall cuGLGetDevices_v2(ptr ptr long long) wine_cuGLGetDevices_v2
+@ stdcall cuGraphicsResourceSetMapFlags_v2(ptr long) wine_cuGraphicsResourceSetMapFlags_v2
+@ stdcall cuLinkAddData_v2(ptr long ptr long str long ptr ptr) wine_cuLinkAddData_v2
+@ stub cuLinkAddFile_v2
+@ stdcall cuLinkCreate_v2(long ptr ptr ptr) wine_cuLinkCreate_v2
+@ stdcall cuMemHostRegister_v2(ptr long long) wine_cuMemHostRegister_v2
+@ stdcall cuOccupancyMaxActiveBlocksPerMultiprocessor(ptr ptr long long) wine_cuOccupancyMaxActiveBlocksPerMultiprocessor
+@ stub cuOccupancyMaxPotentialBlockSize
+#@ stdcall cuOccupancyMaxPotentialBlockSize(ptr ptr ptr ptr long long) wine_cuOccupancyMaxPotentialBlockSize
