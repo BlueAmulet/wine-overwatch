@@ -521,7 +521,9 @@ void* CDECL nvapi_QueryInterface(unsigned int offset)
         {0xfb9bc2ab, NvAPI_EnumLogicalGPUs_unknown},
         {0xaea3fa32, NvAPI_GetPhysicalGPUsFromLogicalGPU},
         {0xe5ac921f, NvAPI_EnumPhysicalGPUs},
-        {0xceee8e9f, NvAPI_GPU_GetFullName}
+        {0xceee8e9f, NvAPI_GPU_GetFullName},
+        {0x33c7358c, NULL}, /* This functions seems to be optional */
+        {0x593e8644, NULL}  /* This functions seems to be optional */
     };
     unsigned int i;
     TRACE("(%x)\n", offset);
