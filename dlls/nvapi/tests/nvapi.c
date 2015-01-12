@@ -36,6 +36,7 @@
 #define NvAPI_EnumLogicalGPUs_unknown_Offset 0xfb9bc2ab
 #define NvAPI_EnumLogicalGPUs_Offset 0x48b3ea59
 #define NvAPI_GetPhysicalGPUsFromLogicalGPU_Offset 0xaea3fa32
+#define NvAPI_EnumPhysicalGPUs_Offset 0xe5ac921f
 
 static void* (CDECL *pnvapi_QueryInterface)(unsigned int offset);
 static NvAPI_Status (CDECL *pNvAPI_Initialize)(void);
@@ -46,6 +47,7 @@ static NvAPI_Status (CDECL *pNvAPI_unknown3)(void *param0, void *param1);
 static NvAPI_Status (CDECL *pNvAPI_EnumLogicalGPUs_unknown)(NvLogicalGpuHandle nvGPUHandle[NVAPI_MAX_LOGICAL_GPUS], NvU32 *pGpuCount);
 static NvAPI_Status (CDECL *pNvAPI_EnumLogicalGPUs)(NvLogicalGpuHandle nvGPUHandle[NVAPI_MAX_LOGICAL_GPUS], NvU32 *pGpuCount);
 static NvAPI_Status (CDECL *pNvAPI_GetPhysicalGPUsFromLogicalGPU)(NvLogicalGpuHandle hLogicalGPU, NvPhysicalGpuHandle hPhysicalGPU[NVAPI_MAX_PHYSICAL_GPUS], NvU32 *pGpuCount);
+static NvAPI_Status (CDECL *pNvAPI_EnumPhysicalGPUs)(NvPhysicalGpuHandle nvGPUHandle[NVAPI_MAX_PHYSICAL_GPUS], NvU32 *pGpuCount);
 
 static BOOL init(void)
 {
@@ -76,6 +78,7 @@ static BOOL init(void)
     pNvAPI_EnumLogicalGPUs_unknown = pnvapi_QueryInterface(NvAPI_EnumLogicalGPUs_unknown_Offset);
     pNvAPI_EnumLogicalGPUs = pnvapi_QueryInterface(NvAPI_EnumLogicalGPUs_Offset);
     pNvAPI_GetPhysicalGPUsFromLogicalGPU = pnvapi_QueryInterface(NvAPI_GetPhysicalGPUsFromLogicalGPU_Offset);
+    pNvAPI_EnumPhysicalGPUs = pnvapi_QueryInterface(NvAPI_EnumPhysicalGPUs_Offset);
 
     if (!pNvAPI_Initialize)
     {
@@ -377,6 +380,38 @@ static void test_NvAPI_GetPhysicalGPUsFromLogicalGPU(void)
 }
 
 
+static void test_NvAPI_EnumPhysicalGPUs(void)
+{
+    NvLogicalGpuHandle gpuHandle[NVAPI_MAX_PHYSICAL_GPUS];
+    NvAPI_Status status;
+    NvU32 count;
+    int i;
+
+    if (!pNvAPI_EnumPhysicalGPUs)
+    {
+        win_skip("NvAPI_EnumLogicalGPUs export not found.\n");
+        return;
+    }
+
+    status = pNvAPI_EnumPhysicalGPUs(NULL, NULL);
+    ok(status == NVAPI_INVALID_ARGUMENT, "Expected status NVAPI_INVALID_ARGUMENT, got %d\n", status);
+
+    status = pNvAPI_EnumPhysicalGPUs((void*)0xdeadbeef, NULL);
+    ok(status == NVAPI_INVALID_POINTER, "Expected status NVAPI_INVALID_POINTER, got %d\n", status);
+
+    status = pNvAPI_EnumPhysicalGPUs(NULL, (void*)0xdeadbeef);
+    ok(status == NVAPI_INVALID_ARGUMENT, "Expected status NVAPI_INVALID_ARGUMENT, got %d\n", status);
+
+    memset(gpuHandle, 0, sizeof(gpuHandle));
+
+    status = pNvAPI_EnumPhysicalGPUs(gpuHandle, &count);
+    ok(status == NVAPI_OK, "Expected status NVAPI_OK, got %d\n", status);
+    ok(count > 0, "Expected count > 0, got %d\n", count);
+    for (i = 0; i < count; i++)
+        ok(gpuHandle[i] != NULL, "Expected gpuHandle[%d] != NULL\n", i);
+}
+
+
 START_TEST( nvapi )
 {
     if (!init())
@@ -388,4 +423,5 @@ START_TEST( nvapi )
     test_unknown3();
     test_NvAPI_EnumLogicalGPUs();
     test_NvAPI_GetPhysicalGPUsFromLogicalGPU();
+    test_NvAPI_EnumPhysicalGPUs();
 }
