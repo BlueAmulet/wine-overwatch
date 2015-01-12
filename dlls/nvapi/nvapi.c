@@ -502,6 +502,20 @@ static NvAPI_Status CDECL NvAPI_DISP_GetGDIPrimaryDisplayId(NvU32* displayId)
     return NVAPI_OK;
 }
 
+static NvAPI_Status CDECL NvAPI_EnumNvidiaDisplayHandle(NvU32 thisEnum, NvDisplayHandle *pNvDispHandle)
+{
+    TRACE("(%u, %p)\n", thisEnum, pNvDispHandle);
+
+    if (thisEnum >= NVAPI_MAX_DISPLAYS || !pNvDispHandle)
+        return NVAPI_INVALID_ARGUMENT;
+
+    if (thisEnum > 0)
+        return NVAPI_END_ENUMERATION;
+
+    *pNvDispHandle = FAKE_DISPLAY;
+    return NVAPI_OK;
+}
+
 void* CDECL nvapi_QueryInterface(unsigned int offset)
 {
     static const struct
@@ -536,7 +550,8 @@ void* CDECL nvapi_QueryInterface(unsigned int offset)
         {0xceee8e9f, NvAPI_GPU_GetFullName},
         {0x33c7358c, NULL}, /* This functions seems to be optional */
         {0x593e8644, NULL}, /* This functions seems to be optional */
-        {0x1e9d8a31, NvAPI_DISP_GetGDIPrimaryDisplayId}
+        {0x1e9d8a31, NvAPI_DISP_GetGDIPrimaryDisplayId},
+        {0x9abdd40d, NvAPI_EnumNvidiaDisplayHandle}
     };
     unsigned int i;
     TRACE("(%x)\n", offset);

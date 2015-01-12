@@ -39,6 +39,7 @@
 #define NvAPI_EnumPhysicalGPUs_Offset 0xe5ac921f
 #define NvAPI_GPU_GetFullName_Offset 0xceee8e9f
 #define NvAPI_DISP_GetGDIPrimaryDisplayId_Offset 0x1e9d8a31
+#define NvAPI_EnumNvidiaDisplayHandle_Offset 0x9abdd40d
 
 static void* (CDECL *pnvapi_QueryInterface)(unsigned int offset);
 static NvAPI_Status (CDECL *pNvAPI_Initialize)(void);
@@ -52,6 +53,7 @@ static NvAPI_Status (CDECL *pNvAPI_GetPhysicalGPUsFromLogicalGPU)(NvLogicalGpuHa
 static NvAPI_Status (CDECL *pNvAPI_EnumPhysicalGPUs)(NvPhysicalGpuHandle nvGPUHandle[NVAPI_MAX_PHYSICAL_GPUS], NvU32 *pGpuCount);
 static NvAPI_Status (CDECL* pNvAPI_GPU_GetFullName)(NvPhysicalGpuHandle hPhysicalGpu, NvAPI_ShortString szName);
 static NvAPI_Status (CDECL* pNvAPI_DISP_GetGDIPrimaryDisplayId)(NvU32* displayId);
+static NvAPI_Status (CDECL* pNvAPI_EnumNvidiaDisplayHandle)(NvU32 thisEnum, NvDisplayHandle *pNvDispHandle);
 
 static BOOL init(void)
 {
@@ -85,6 +87,7 @@ static BOOL init(void)
     pNvAPI_EnumPhysicalGPUs = pnvapi_QueryInterface(NvAPI_EnumPhysicalGPUs_Offset);
     pNvAPI_GPU_GetFullName = pnvapi_QueryInterface(NvAPI_GPU_GetFullName_Offset);
     pNvAPI_DISP_GetGDIPrimaryDisplayId = pnvapi_QueryInterface(NvAPI_DISP_GetGDIPrimaryDisplayId_Offset);
+    pNvAPI_EnumNvidiaDisplayHandle = pnvapi_QueryInterface(NvAPI_EnumNvidiaDisplayHandle_Offset);
 
     if (!pNvAPI_Initialize)
     {
@@ -484,6 +487,45 @@ static void test_NvAPI_DISP_GetGDIPrimaryDisplayId(void)
     ok(disp != 0, "Expected disp to be non null\n");
 }
 
+static void test_NvAPI_EnumNvidiaDisplayHandle(void)
+{
+    NvAPI_Status status;
+    NvDisplayHandle disp;
+    int i = 0;
+
+    if (!pNvAPI_EnumNvidiaDisplayHandle)
+    {
+        win_skip("NvAPI_EnumNvidiaDisplayHandle export not found.\n");
+        return;
+    }
+
+    status = pNvAPI_EnumNvidiaDisplayHandle(0, NULL);
+    ok(status == NVAPI_INVALID_ARGUMENT, "Expected status NVAPI_INVALID_ARGUMENT, got %d\n", status);
+
+    disp = NULL;
+    status = pNvAPI_EnumNvidiaDisplayHandle(i, &disp);
+    ok(status == NVAPI_OK, "Expected status NVAPI_OK, got %d\n", status);
+    ok(disp != NULL, "Expected disp to be non null\n");
+
+    while (!pNvAPI_EnumNvidiaDisplayHandle(i, &disp))
+        i++;
+
+    disp = NULL;
+    status = pNvAPI_EnumNvidiaDisplayHandle(i, &disp);
+    ok(status == NVAPI_END_ENUMERATION, "Expected status NVAPI_END_ENUMERATION, got %d\n", status);
+    ok(disp == NULL, "Expected disp to be null\n");
+
+    disp = NULL;
+    status = pNvAPI_EnumNvidiaDisplayHandle(NVAPI_MAX_DISPLAYS - 1, &disp);
+    ok(status == NVAPI_END_ENUMERATION, "Expected status NVAPI_END_ENUMERATION, got %d\n", status);
+    ok(disp == NULL, "Expected disp to be null\n");
+
+    disp = NULL;
+    status = pNvAPI_EnumNvidiaDisplayHandle(NVAPI_MAX_DISPLAYS, &disp);
+    ok(status == NVAPI_INVALID_ARGUMENT, "Expected status NVAPI_INVALID_ARGUMENT, got %d\n", status);
+    ok(disp == NULL, "Expected disp to be null\n");
+}
+
 START_TEST( nvapi )
 {
     if (!init())
@@ -498,4 +540,5 @@ START_TEST( nvapi )
     test_NvAPI_EnumPhysicalGPUs();
     test_NvAPI_GPU_GetFullName();
     test_NvAPI_DISP_GetGDIPrimaryDisplayId();
+    test_NvAPI_EnumNvidiaDisplayHandle();
 }
