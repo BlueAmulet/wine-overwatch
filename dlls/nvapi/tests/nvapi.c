@@ -38,6 +38,7 @@
 #define NvAPI_GetPhysicalGPUsFromLogicalGPU_Offset 0xaea3fa32
 #define NvAPI_EnumPhysicalGPUs_Offset 0xe5ac921f
 #define NvAPI_GPU_GetFullName_Offset 0xceee8e9f
+#define NvAPI_DISP_GetGDIPrimaryDisplayId_Offset 0x1e9d8a31
 
 static void* (CDECL *pnvapi_QueryInterface)(unsigned int offset);
 static NvAPI_Status (CDECL *pNvAPI_Initialize)(void);
@@ -50,6 +51,7 @@ static NvAPI_Status (CDECL *pNvAPI_EnumLogicalGPUs)(NvLogicalGpuHandle nvGPUHand
 static NvAPI_Status (CDECL *pNvAPI_GetPhysicalGPUsFromLogicalGPU)(NvLogicalGpuHandle hLogicalGPU, NvPhysicalGpuHandle hPhysicalGPU[NVAPI_MAX_PHYSICAL_GPUS], NvU32 *pGpuCount);
 static NvAPI_Status (CDECL *pNvAPI_EnumPhysicalGPUs)(NvPhysicalGpuHandle nvGPUHandle[NVAPI_MAX_PHYSICAL_GPUS], NvU32 *pGpuCount);
 static NvAPI_Status (CDECL* pNvAPI_GPU_GetFullName)(NvPhysicalGpuHandle hPhysicalGpu, NvAPI_ShortString szName);
+static NvAPI_Status (CDECL* pNvAPI_DISP_GetGDIPrimaryDisplayId)(NvU32* displayId);
 
 static BOOL init(void)
 {
@@ -82,6 +84,7 @@ static BOOL init(void)
     pNvAPI_GetPhysicalGPUsFromLogicalGPU = pnvapi_QueryInterface(NvAPI_GetPhysicalGPUsFromLogicalGPU_Offset);
     pNvAPI_EnumPhysicalGPUs = pnvapi_QueryInterface(NvAPI_EnumPhysicalGPUs_Offset);
     pNvAPI_GPU_GetFullName = pnvapi_QueryInterface(NvAPI_GPU_GetFullName_Offset);
+    pNvAPI_DISP_GetGDIPrimaryDisplayId = pnvapi_QueryInterface(NvAPI_DISP_GetGDIPrimaryDisplayId_Offset);
 
     if (!pNvAPI_Initialize)
     {
@@ -461,6 +464,26 @@ static void test_NvAPI_GPU_GetFullName(void)
     trace("GPU-0 name: %s\n", str);
 }
 
+static void test_NvAPI_DISP_GetGDIPrimaryDisplayId(void)
+{
+    NvAPI_Status status;
+    NvU32 disp;
+
+    if (!pNvAPI_DISP_GetGDIPrimaryDisplayId)
+    {
+        win_skip("NvAPI_DISP_GetGDIPrimaryDisplayId export not found.\n");
+        return;
+    }
+
+    status = pNvAPI_DISP_GetGDIPrimaryDisplayId(NULL);
+    ok(status == NVAPI_INVALID_ARGUMENT, "Expected status NVAPI_INVALID_ARGUMENT, got %d\n", status);
+
+    disp = 0;
+    status = pNvAPI_DISP_GetGDIPrimaryDisplayId(&disp);
+    ok(status == NVAPI_OK, "Expected status NVAPI_OK, got %d\n", status);
+    ok(disp != 0, "Expected disp to be non null\n");
+}
+
 START_TEST( nvapi )
 {
     if (!init())
@@ -474,4 +497,5 @@ START_TEST( nvapi )
     test_NvAPI_GetPhysicalGPUsFromLogicalGPU();
     test_NvAPI_EnumPhysicalGPUs();
     test_NvAPI_GPU_GetFullName();
+    test_NvAPI_DISP_GetGDIPrimaryDisplayId();
 }

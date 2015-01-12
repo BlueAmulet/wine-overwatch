@@ -34,6 +34,7 @@ WINE_DEFAULT_DEBUG_CHANNEL(nvapi);
 #define FAKE_PHYSICAL_GPU ((NvPhysicalGpuHandle)0xdead0001)
 #define FAKE_DISPLAY ((NvDisplayHandle)0xdead0002)
 #define FAKE_LOGICAL_GPU ((NvLogicalGpuHandle)0xdead0003)
+#define FAKE_DISPLAY_ID ((NvU32)0xdead0004)
 
 #if defined(__i386__) || defined(__x86_64__)
 
@@ -490,6 +491,17 @@ static NvAPI_Status CDECL NvAPI_GPU_GetFullName(NvPhysicalGpuHandle hPhysicalGpu
     return NVAPI_OK;
 }
 
+static NvAPI_Status CDECL NvAPI_DISP_GetGDIPrimaryDisplayId(NvU32* displayId)
+{
+    TRACE("(%p)\n", displayId);
+
+    if (!displayId)
+        return NVAPI_INVALID_ARGUMENT;
+
+    *displayId = FAKE_DISPLAY_ID;
+    return NVAPI_OK;
+}
+
 void* CDECL nvapi_QueryInterface(unsigned int offset)
 {
     static const struct
@@ -523,7 +535,8 @@ void* CDECL nvapi_QueryInterface(unsigned int offset)
         {0xe5ac921f, NvAPI_EnumPhysicalGPUs},
         {0xceee8e9f, NvAPI_GPU_GetFullName},
         {0x33c7358c, NULL}, /* This functions seems to be optional */
-        {0x593e8644, NULL}  /* This functions seems to be optional */
+        {0x593e8644, NULL}, /* This functions seems to be optional */
+        {0x1e9d8a31, NvAPI_DISP_GetGDIPrimaryDisplayId}
     };
     unsigned int i;
     TRACE("(%x)\n", offset);
