@@ -516,6 +516,21 @@ static NvAPI_Status CDECL NvAPI_EnumNvidiaDisplayHandle(NvU32 thisEnum, NvDispla
     return NVAPI_OK;
 }
 
+static NvAPI_Status CDECL NvAPI_SYS_GetDriverAndBranchVersion(NvU32* pDriverVersion, NvAPI_ShortString szBuildBranchString)
+{
+    NvAPI_ShortString build_str = {'r','3','3','7','_','0','0',0};
+
+    TRACE("(%p, %p)\n", pDriverVersion, szBuildBranchString);
+
+    if (!pDriverVersion || !szBuildBranchString)
+        return NVAPI_INVALID_POINTER;
+
+    memcpy(szBuildBranchString, build_str, sizeof(build_str));
+    *pDriverVersion = 33788;
+
+    return NVAPI_OK;
+}
+
 void* CDECL nvapi_QueryInterface(unsigned int offset)
 {
     static const struct
@@ -551,7 +566,8 @@ void* CDECL nvapi_QueryInterface(unsigned int offset)
         {0x33c7358c, NULL}, /* This functions seems to be optional */
         {0x593e8644, NULL}, /* This functions seems to be optional */
         {0x1e9d8a31, NvAPI_DISP_GetGDIPrimaryDisplayId},
-        {0x9abdd40d, NvAPI_EnumNvidiaDisplayHandle}
+        {0x9abdd40d, NvAPI_EnumNvidiaDisplayHandle},
+        {0x2926aaad, NvAPI_SYS_GetDriverAndBranchVersion}
     };
     unsigned int i;
     TRACE("(%x)\n", offset);
