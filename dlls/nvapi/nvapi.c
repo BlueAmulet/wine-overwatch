@@ -468,6 +468,28 @@ static NvAPI_Status CDECL NvAPI_EnumPhysicalGPUs(NvPhysicalGpuHandle gpuHandle[N
     return NVAPI_OK;
 }
 
+static NvAPI_Status CDECL NvAPI_GPU_GetFullName(NvPhysicalGpuHandle hPhysicalGpu, NvAPI_ShortString szName)
+{
+    NvAPI_ShortString adapter = {'G','e','F','o','r','c','e',' ','9','9','9',' ','G','T','X', 0};
+
+    TRACE("(%p, %p)\n", hPhysicalGpu, szName);
+
+    if (!hPhysicalGpu)
+        return NVAPI_EXPECTED_PHYSICAL_GPU_HANDLE;
+
+    if (hPhysicalGpu != FAKE_PHYSICAL_GPU)
+    {
+        FIXME("invalid handle: %p\n", hPhysicalGpu);
+        return NVAPI_INVALID_HANDLE;
+    }
+
+    if (!szName)
+        return NVAPI_INVALID_ARGUMENT;
+
+    memcpy(szName, adapter, sizeof(adapter));
+    return NVAPI_OK;
+}
+
 void* CDECL nvapi_QueryInterface(unsigned int offset)
 {
     static const struct
@@ -498,7 +520,8 @@ void* CDECL nvapi_QueryInterface(unsigned int offset)
         {0x48b3ea59, NvAPI_EnumLogicalGPUs},
         {0xfb9bc2ab, NvAPI_EnumLogicalGPUs_unknown},
         {0xaea3fa32, NvAPI_GetPhysicalGPUsFromLogicalGPU},
-        {0xe5ac921f, NvAPI_EnumPhysicalGPUs}
+        {0xe5ac921f, NvAPI_EnumPhysicalGPUs},
+        {0xceee8e9f, NvAPI_GPU_GetFullName}
     };
     unsigned int i;
     TRACE("(%x)\n", offset);
