@@ -537,6 +537,19 @@ static NvAPI_Status CDECL NvAPI_Unload(void)
     return NVAPI_OK;
 }
 
+static NvAPI_Status CDECL NvAPI_D3D_GetCurrentSLIState(IUnknown *pDevice, NV_GET_CURRENT_SLI_STATE *pSliState)
+{
+    TRACE("(%p, %p)\n", pDevice, pSliState);
+
+    if (!pDevice || !pSliState)
+        return NVAPI_INVALID_ARGUMENT;
+
+    if (pSliState->version != NV_GET_CURRENT_SLI_STATE_VER)
+        return NVAPI_INCOMPATIBLE_STRUCT_VERSION;
+
+    return NVAPI_NO_ACTIVE_SLI_TOPOLOGY;
+}
+
 void* CDECL nvapi_QueryInterface(unsigned int offset)
 {
     static const struct
@@ -574,7 +587,8 @@ void* CDECL nvapi_QueryInterface(unsigned int offset)
         {0x1e9d8a31, NvAPI_DISP_GetGDIPrimaryDisplayId},
         {0x9abdd40d, NvAPI_EnumNvidiaDisplayHandle},
         {0x2926aaad, NvAPI_SYS_GetDriverAndBranchVersion},
-        {0xd22bdd7e, NvAPI_Unload}
+        {0xd22bdd7e, NvAPI_Unload},
+        {0x4b708b54, NvAPI_D3D_GetCurrentSLIState}
     };
     unsigned int i;
     TRACE("(%x)\n", offset);

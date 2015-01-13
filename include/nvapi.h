@@ -35,6 +35,7 @@ typedef unsigned int NvU32;
 #define NVAPI_INVALID_POINTER -14
 #define NVAPI_EXPECTED_LOGICAL_GPU_HANDLE -100
 #define NVAPI_EXPECTED_PHYSICAL_GPU_HANDLE -101
+#define NVAPI_NO_ACTIVE_SLI_TOPOLOGY -113
 #define NVAPI_STEREO_NOT_INITIALIZED -140
 #define NVAPI_UNREGISTERED_RESOURCE -170
 
@@ -64,6 +65,19 @@ typedef struct
 } NV_DISPLAY_DRIVER_VERSION;
 
 #define NV_DISPLAY_DRIVER_VERSION_VER MAKE_NVAPI_VERSION(NV_DISPLAY_DRIVER_VERSION, 1)
+
+typedef struct
+{
+    NvU32 version;
+    NvU32 maxNumAFRGroups;
+    NvU32 numAFRGroups;
+    NvU32 currentAFRIndex;
+    NvU32 nextFrameAFRIndex;
+    NvU32 previousFrameAFRIndex;
+    NvU32 bIsCurAFRGroupNew;
+} NV_GET_CURRENT_SLI_STATE;
+
+#define NV_GET_CURRENT_SLI_STATE_VER  MAKE_NVAPI_VERSION(NV_GET_CURRENT_SLI_STATE, 1)
 
 /* undocumented stuff */
 typedef struct

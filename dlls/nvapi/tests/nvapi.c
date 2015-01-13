@@ -25,6 +25,7 @@
 #include "shlwapi.h"
 #include "winerror.h"
 #include "nvapi.h"
+#include <d3d9.h>
 
 #include "wine/test.h"
 
@@ -41,6 +42,7 @@
 #define NvAPI_DISP_GetGDIPrimaryDisplayId_Offset 0x1e9d8a31
 #define NvAPI_EnumNvidiaDisplayHandle_Offset 0x9abdd40d
 #define NvAPI_SYS_GetDriverAndBranchVersion_Offset 0x2926aaad
+#define NvAPI_D3D_GetCurrentSLIState_Offset 0x4b708b54
 
 static void* (CDECL *pnvapi_QueryInterface)(unsigned int offset);
 static NvAPI_Status (CDECL *pNvAPI_Initialize)(void);
@@ -56,6 +58,7 @@ static NvAPI_Status (CDECL* pNvAPI_GPU_GetFullName)(NvPhysicalGpuHandle hPhysica
 static NvAPI_Status (CDECL* pNvAPI_DISP_GetGDIPrimaryDisplayId)(NvU32* displayId);
 static NvAPI_Status (CDECL* pNvAPI_EnumNvidiaDisplayHandle)(NvU32 thisEnum, NvDisplayHandle *pNvDispHandle);
 static NvAPI_Status (CDECL* pNvAPI_SYS_GetDriverAndBranchVersion)(NvU32* pDriverVersion, NvAPI_ShortString szBuildBranchString);
+static NvAPI_Status (CDECL* pNvAPI_D3D_GetCurrentSLIState)(IUnknown *pDevice, NV_GET_CURRENT_SLI_STATE *pSliState);
 
 static BOOL init(void)
 {
@@ -91,6 +94,7 @@ static BOOL init(void)
     pNvAPI_DISP_GetGDIPrimaryDisplayId = pnvapi_QueryInterface(NvAPI_DISP_GetGDIPrimaryDisplayId_Offset);
     pNvAPI_EnumNvidiaDisplayHandle = pnvapi_QueryInterface(NvAPI_EnumNvidiaDisplayHandle_Offset);
     pNvAPI_SYS_GetDriverAndBranchVersion = pnvapi_QueryInterface(NvAPI_SYS_GetDriverAndBranchVersion_Offset);
+    pNvAPI_D3D_GetCurrentSLIState = pnvapi_QueryInterface(NvAPI_D3D_GetCurrentSLIState_Offset);
 
     if (!pNvAPI_Initialize)
     {
@@ -564,9 +568,105 @@ static void test_NvAPI_SYS_GetDriverAndBranchVersion(void)
     trace("Branch: %s\n", branch);
 }
 
+static IDirect3DDevice9 *create_device(IDirect3D9 *d3d9, HWND focus_window)
+{
+    D3DPRESENT_PARAMETERS present_parameters = {0};
+    IDirect3DDevice9 *device;
+    DWORD behavior_flags = D3DCREATE_HARDWARE_VERTEXPROCESSING;
+
+    if (!d3d9 || !focus_window)
+        return NULL;
+
+    present_parameters.BackBufferWidth = 640;
+    present_parameters.BackBufferHeight = 480;
+    present_parameters.BackBufferFormat = D3DFMT_A8R8G8B8;
+    present_parameters.SwapEffect = D3DSWAPEFFECT_DISCARD;
+    present_parameters.hDeviceWindow = focus_window;
+    present_parameters.Windowed = TRUE;
+    present_parameters.EnableAutoDepthStencil = FALSE;
+
+    if (SUCCEEDED(IDirect3D9_CreateDevice(d3d9, D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, focus_window,
+            behavior_flags, &present_parameters, &device)))
+        return device;
+
+    return NULL;
+}
+
+static void test_NvAPI_D3D_GetCurrentSLIState(void)
+{
+    HWND window;
+    IDirect3DDevice9 *device;
+    IDirect3D9 *d3d;
+    NV_GET_CURRENT_SLI_STATE sli_state;
+    NvAPI_Status status;
+
+    if (!pNvAPI_D3D_GetCurrentSLIState)
+    {
+        win_skip("NvAPI_D3D_GetCurrentSLIState export not found.\n");
+        return;
+    }
+
+    status = pNvAPI_D3D_GetCurrentSLIState(NULL, NULL);
+    ok(status == NVAPI_INVALID_ARGUMENT, "Expected status NVAPI_INVALID_ARGUMENT, got %d\n", status);
+
+    status = pNvAPI_D3D_GetCurrentSLIState(NULL, &sli_state);
+    ok(status == NVAPI_INVALID_ARGUMENT, "Expected status NVAPI_INVALID_ARGUMENT, got %d\n", status);
+
+    memset(&sli_state, 0, sizeof(sli_state));
+    sli_state.version = NV_GET_CURRENT_SLI_STATE_VER;
+    status = pNvAPI_D3D_GetCurrentSLIState(NULL, &sli_state);
+    ok(status == NVAPI_INVALID_ARGUMENT, "Expected status NVAPI_INVALID_ARGUMENT, got %d\n", status);
+
+    window = CreateWindowA("d3d9_nvapi_test_wc", "d3d9_nvapi_test", WS_OVERLAPPEDWINDOW,
+            0, 0, 640, 480, NULL, NULL, NULL, NULL);
+    ok(window != NULL, "Failed to create a window.\n");
+
+    d3d = Direct3DCreate9(D3D_SDK_VERSION);
+    ok(d3d != NULL, "Failed to create a D3D object.\n");
+
+    if (!(device = create_device(d3d, window)))
+    {
+        skip("Failed to create a 3D device, skipping test.\n");
+        goto cleanup;
+    }
+
+    status = pNvAPI_D3D_GetCurrentSLIState((IUnknown*)device, NULL);
+    ok(status == NVAPI_INVALID_ARGUMENT, "Expected status NVAPI_INVALID_ARGUMENT, got %d\n", status);
+
+    memset(&sli_state, 0, sizeof(sli_state));
+    status = pNvAPI_D3D_GetCurrentSLIState((IUnknown*)device, &sli_state);
+    ok(status == NVAPI_INCOMPATIBLE_STRUCT_VERSION, "Expected status NVAPI_INCOMPATIBLE_STRUCT_VERSION, got %d\n", status);
+
+    memset(&sli_state, 0, sizeof(sli_state));
+    sli_state.version = NV_GET_CURRENT_SLI_STATE_VER;
+    status = pNvAPI_D3D_GetCurrentSLIState((IUnknown*)device, &sli_state);
+    ok(status == NVAPI_OK || status == NVAPI_NO_ACTIVE_SLI_TOPOLOGY,
+       "Expected status NVAPI_OK or NVAPI_NO_ACTIVE_SLI_TOPOLOGY, got %d\n", status);
+
+    if (status == NVAPI_OK)
+    {
+        trace("maxNumAFRGroups: %u\n", sli_state.maxNumAFRGroups);
+        trace("numAFRGroups: %u\n", sli_state.numAFRGroups);
+        trace("currentAFRIndex: %u\n", sli_state.currentAFRIndex);
+        trace("nextFrameAFRIndex: %u\n", sli_state.nextFrameAFRIndex);
+        trace("previousFrameAFRIndex: %u\n", sli_state.previousFrameAFRIndex);
+        trace("bIsCurAFRGroupNew: %u\n", sli_state.bIsCurAFRGroupNew);
+    }
+
+cleanup:
+    if (device)
+    {
+        UINT refcount = IDirect3DDevice9_Release(device);
+        ok(!refcount, "Device has %u references left.\n", refcount);
+    }
+    if (d3d) IDirect3D9_Release(d3d);
+    if (window) DestroyWindow(window);
+}
 
 START_TEST( nvapi )
 {
+    WNDCLASSA wc = {0};
+
     if (!init())
         return;
 
@@ -581,4 +681,11 @@ START_TEST( nvapi )
     test_NvAPI_DISP_GetGDIPrimaryDisplayId();
     test_NvAPI_EnumNvidiaDisplayHandle();
     test_NvAPI_SYS_GetDriverAndBranchVersion();
+
+    /* d3d9 tests */
+    wc.lpfnWndProc = DefWindowProcA;
+    wc.lpszClassName = "d3d9_nvapi_test_wc";
+    RegisterClassA(&wc);
+
+    test_NvAPI_D3D_GetCurrentSLIState();
 }
