@@ -402,7 +402,7 @@ static NvAPI_Status CDECL NvAPI_D3D9_StretchRectEx(IDirect3DDevice9 *pDevice, ID
                                                    const RECT *pSourceRect, IDirect3DResource9 *pDestResource,
                                                    const RECT *pDestRect, D3DTEXTUREFILTERTYPE Filter)
 {
-    TRACE("(%p, %p, %p, %p, %p, %d)\n", pDevice, pSourceResource, pSourceRect, pDestResource, pDestRect, Filter);
+    FIXME("(%p, %p, %p, %p, %p, %d): stub\n", pDevice, pSourceResource, pSourceRect, pDestResource, pDestRect, Filter);
     return NVAPI_UNREGISTERED_RESOURCE;
 }
 
