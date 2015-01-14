@@ -570,6 +570,12 @@ static NvAPI_Status CDECL NvAPI_D3D_GetObjectHandleForResource(IUnknown *pDevice
     return NVAPI_ERROR;
 }
 
+static NvAPI_Status CDECL NvAPI_D3D9_RegisterResource(IDirect3DResource9* pResource)
+{
+    FIXME("(%p): stub\n", pResource);
+    return NVAPI_ERROR;
+}
+
 void* CDECL nvapi_QueryInterface(unsigned int offset)
 {
     static const struct
@@ -610,7 +616,8 @@ void* CDECL nvapi_QueryInterface(unsigned int offset)
         {0xd22bdd7e, NvAPI_Unload},
         {0x4b708b54, NvAPI_D3D_GetCurrentSLIState},
         {0xee1370cf, NvAPI_GetLogicalGPUFromDisplay},
-        {0xfceac864, NvAPI_D3D_GetObjectHandleForResource}
+        {0xfceac864, NvAPI_D3D_GetObjectHandleForResource},
+        {0xa064bdfc, NvAPI_D3D9_RegisterResource}
     };
     unsigned int i;
     TRACE("(%x)\n", offset);
