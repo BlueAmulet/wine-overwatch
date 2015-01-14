@@ -44,6 +44,7 @@ static NvAPI_Status (CDECL* pNvAPI_DISP_GetGDIPrimaryDisplayId)(NvU32* displayId
 static NvAPI_Status (CDECL* pNvAPI_EnumNvidiaDisplayHandle)(NvU32 thisEnum, NvDisplayHandle *pNvDispHandle);
 static NvAPI_Status (CDECL* pNvAPI_SYS_GetDriverAndBranchVersion)(NvU32* pDriverVersion, NvAPI_ShortString szBuildBranchString);
 static NvAPI_Status (CDECL* pNvAPI_D3D_GetCurrentSLIState)(IUnknown *pDevice, NV_GET_CURRENT_SLI_STATE *pSliState);
+static NvAPI_Status (CDECL* pNvAPI_GetLogicalGPUFromDisplay)(NvDisplayHandle hNvDisp, NvLogicalGpuHandle *pLogicalGPU);
 
 static const struct
 {
@@ -65,7 +66,8 @@ function_list[] =
     {0x1e9d8a31, (void**) &pNvAPI_DISP_GetGDIPrimaryDisplayId},
     {0x9abdd40d, (void**) &pNvAPI_EnumNvidiaDisplayHandle},
     {0x2926aaad, (void**) &pNvAPI_SYS_GetDriverAndBranchVersion},
-    {0x4b708b54, (void**) &pNvAPI_D3D_GetCurrentSLIState}
+    {0x4b708b54, (void**) &pNvAPI_D3D_GetCurrentSLIState},
+    {0xee1370cf, (void**) &pNvAPI_GetLogicalGPUFromDisplay}
 };
 
 static BOOL init(void)
@@ -565,6 +567,49 @@ static void test_NvAPI_SYS_GetDriverAndBranchVersion(void)
     trace("Branch: %s\n", branch);
 }
 
+static void test_NvAPI_GetLogicalGPUFromDisplay(void)
+{
+    NvAPI_Status status;
+    NvDisplayHandle disp;
+    NvLogicalGpuHandle gpuHandle;
+
+    if (!pNvAPI_GetLogicalGPUFromDisplay)
+    {
+        win_skip("NvAPI_SYS_GetDriverAndBranchVersion export not found.\n");
+        return;
+    }
+
+    if (!pNvAPI_EnumNvidiaDisplayHandle)
+    {
+        win_skip("NvAPI_EnumNvidiaDisplayHandle export not found.\n");
+        return;
+    }
+
+    disp = NULL;
+    status = pNvAPI_EnumNvidiaDisplayHandle(0, &disp);
+    ok(status == NVAPI_OK, "Expected status NVAPI_OK, got %d\n", status);
+    ok(disp != NULL, "Expected disp to be non null\n");
+
+    status = pNvAPI_GetLogicalGPUFromDisplay(NULL, NULL);
+    ok(status == NVAPI_INVALID_POINTER, "Expected status NVAPI_INVALID_POINTER, got %d\n", status);
+
+    status = pNvAPI_GetLogicalGPUFromDisplay(disp, NULL);
+    ok(status == NVAPI_INVALID_POINTER, "Expected status NVAPI_INVALID_POINTER, got %d\n", status);
+
+    status = pNvAPI_GetLogicalGPUFromDisplay((void*)0xdeadbeef, &gpuHandle);
+    ok(status == NVAPI_NVIDIA_DEVICE_NOT_FOUND, "Expected status NVAPI_NVIDIA_DEVICE_NOT_FOUND, got %d\n", status);
+
+    gpuHandle = NULL;
+    status = pNvAPI_GetLogicalGPUFromDisplay(NULL, &gpuHandle);
+    ok(status == NVAPI_OK, "Expected status NVAPI_OK, got %d\n", status);
+    ok(gpuHandle != NULL, "Expected gpuHandle to be non null\n");
+
+    gpuHandle = NULL;
+    status = pNvAPI_GetLogicalGPUFromDisplay(disp, &gpuHandle);
+    ok(status == NVAPI_OK, "Expected status NVAPI_OK, got %d\n", status);
+    ok(gpuHandle != NULL, "Expected gpuHandle to be non null\n");
+}
+
 static IDirect3DDevice9 *create_device(IDirect3D9 *d3d9, HWND focus_window)
 {
     D3DPRESENT_PARAMETERS present_parameters = {0};
@@ -678,6 +723,7 @@ START_TEST( nvapi )
     test_NvAPI_DISP_GetGDIPrimaryDisplayId();
     test_NvAPI_EnumNvidiaDisplayHandle();
     test_NvAPI_SYS_GetDriverAndBranchVersion();
+    test_NvAPI_GetLogicalGPUFromDisplay();
 
     /* d3d9 tests */
     wc.lpfnWndProc = DefWindowProcA;
