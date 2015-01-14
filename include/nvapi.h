@@ -55,6 +55,7 @@ typedef void *NvPhysicalGpuHandle;
 typedef void *NvLogicalGpuHandle;
 typedef void *NvDisplayHandle;
 typedef void *StereoHandle;
+typedef void *NVDX_ObjectHandle;
 
 typedef struct
 {

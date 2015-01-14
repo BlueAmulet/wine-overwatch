@@ -564,6 +564,12 @@ static NvAPI_Status CDECL NvAPI_GetLogicalGPUFromDisplay(NvDisplayHandle hNvDisp
     return NVAPI_OK;
 }
 
+static NvAPI_Status CDECL NvAPI_D3D_GetObjectHandleForResource(IUnknown *pDevice, IUnknown *pResource, NVDX_ObjectHandle *pHandle)
+{
+    FIXME("(%p, %p, %p): stub\n", pDevice, pResource, pHandle);
+    return NVAPI_ERROR;
+}
+
 void* CDECL nvapi_QueryInterface(unsigned int offset)
 {
     static const struct
@@ -603,7 +609,8 @@ void* CDECL nvapi_QueryInterface(unsigned int offset)
         {0x2926aaad, NvAPI_SYS_GetDriverAndBranchVersion},
         {0xd22bdd7e, NvAPI_Unload},
         {0x4b708b54, NvAPI_D3D_GetCurrentSLIState},
-        {0xee1370cf, NvAPI_GetLogicalGPUFromDisplay}
+        {0xee1370cf, NvAPI_GetLogicalGPUFromDisplay},
+        {0xfceac864, NvAPI_D3D_GetObjectHandleForResource}
     };
     unsigned int i;
     TRACE("(%x)\n", offset);
