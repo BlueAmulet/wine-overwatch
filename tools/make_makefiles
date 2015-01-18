@@ -224,7 +224,7 @@ sub parse_makefile($)
         {
             die "Configure substitution is not allowed in $file" unless $file eq "Makefile";
         }
-        if (/^\s*(MODULE|IMPORTLIB|TESTDLL|PARENTSRC|APPMODE)\s*=\s*(.*)/)
+        if (/^\s*(MODULE|IMPORTLIB|TESTDLL|RESOURCE|PARENTSRC|APPMODE)\s*=\s*(.*)/)
         {
             my $var = $1;
             $make{$var} = $2;
@@ -465,6 +465,13 @@ sub update_makefiles(@)
             die "STATICLIB should not be defined in $file" if defined $make{"STATICLIB"};
             (my $dir = $file) =~ s/^(.*)\/Makefile/$1/;
             push @lines, "WINE_CONFIG_TEST($dir$flag_args)\n";
+        }
+        elsif (defined($make{"RESOURCE"}))  # test resource
+        {
+            die "MODULE should not be defined in $file" if defined $make{"MODULE"};
+            die "STATICLIB should not be defined in $file" if defined $make{"STATICLIB"};
+            (my $dir = $file) =~ s/^(.*)\/Makefile/$1/;
+            push @lines, "WINE_CONFIG_RESOURCE($dir$flag_args)\n";
         }
         elsif (defined($make{"MODULE"}) && $make{"MODULE"} =~ /\.a$/)  # import lib
         {

@@ -1,0 +1,11 @@
+RESOURCE   = driver.sys
+IMPORTS    = ntoskrnl
+
+WINEFLAGS  = -Wb,--subsystem,native
+CROSSFLAGS = -nostartfiles -nostdlib -nodefaultlibs \
+             -Wl,--subsystem,native \
+             -Wl,--image-base,0x10000 \
+             -Wl,-entry,_DriverEntry@8
+
+C_SRCS = \
+	driver.c
