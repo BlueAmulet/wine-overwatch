@@ -2,8 +2,6 @@
  * ntoskrnl.exe testing framework
  *
  * Copyright 2015 Sebastian Lackner
- * Copyright 2015 Michael Müller
- * Copyright 2015 Christian Costa
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,19 +18,30 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "test.h"
+#include <stddef.h>
 
-#define WINE_IOCTL_PsGetCurrentProcessId WINE_TEST_IOCTL(0)
-#define WINE_IOCTL_PsGetCurrentThread    WINE_TEST_IOCTL(1)
-
-struct test_PsGetCurrentProcessId_state
+static inline const char* kernel_strrchr(const char *str, int character)
 {
-    struct kernel_test_state __state;
-    DWORD processid; /* output */
-};
+    const char *ret = NULL;
+    for (; *str; str++)
+    {
+        if (*str == character)
+            ret = str;
+    }
+    return ret;
+}
 
-struct test_PsGetCurrentThread_state
+static inline void* kernel_memcpy(void *destination, const void *source, size_t num)
 {
-    struct kernel_test_state __state;
-};
+    const char *src = source;
+    char *dst = destination;
+    while (num--) *dst++ = *src++;
+    return destination;
+}
 
+static inline void* kernel_memset(void *ptr, int value, size_t num)
+{
+    char *dst = ptr;
+    while (num--) *dst++ = value;
+    return ptr;
+}

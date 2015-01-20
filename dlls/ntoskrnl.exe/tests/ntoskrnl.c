@@ -25,6 +25,7 @@
 #include "winioctl.h"
 #include "wine/test.h"
 
+#include "driver.sys/test.h"
 #include "driver.sys/driver.h"
 
 static const char driver_name[] = "WineTestDriver";
@@ -184,29 +185,52 @@ err:
     return NULL;
 }
 
-static void test_basic_ioctl(void)
+static void test_PsGetCurrentProcessId(void)
 {
-    const char str[] = "Wine is not an emulator";
-    DWORD bytes_returned;
-    char buf[32];
-    HANDLE file;
+    struct test_PsGetCurrentProcessId_state state;
+    DWORD processid;
+    HANDLE device;
     BOOL res;
 
-    file = CreateFileA(device_path, GENERIC_READ | GENERIC_WRITE,
-                       0, NULL, OPEN_EXISTING, 0, NULL);
-    if (file == INVALID_HANDLE_VALUE)
+    trace("Running tests for PsGetCurrentProcessId\n");
+
+    device = CreateFileA(device_path, GENERIC_READ | GENERIC_WRITE,
+                         0, NULL, OPEN_EXISTING, 0, NULL);
+    if (device == INVALID_HANDLE_VALUE)
     {
         ok(0, "Connecting to driver failed with %x\n", GetLastError());
         return;
     }
 
-    res = DeviceIoControl(file, IOCTL_WINETEST_BASIC_IOCTL, NULL, 0, buf,
-                          sizeof(buf), &bytes_returned, NULL);
+    res = wine_run_kernel_test(device, WINE_IOCTL_PsGetCurrentProcessId, &state, sizeof(state), NULL);
     ok(res, "DeviceIoControl failed with %x\n", GetLastError());
-    ok(bytes_returned == sizeof(str)-1, "Unexpected number of bytes\n");
-    ok(!memcmp(buf, str, sizeof(str)-1), "Unexpected response data\n");
 
-    CloseHandle(file);
+    processid = GetCurrentProcessId();
+    ok(state.processid == processid, "Expected processid %u, got %u\n", processid, state.processid);
+
+    CloseHandle(device);
+}
+
+static void test_PsGetCurrentThread(void)
+{
+    struct test_PsGetCurrentThread_state state;
+    HANDLE device;
+    BOOL res;
+
+    trace("Running tests for PsGetCurrentThread\n");
+
+    device = CreateFileA(device_path, GENERIC_READ | GENERIC_WRITE,
+                         0, NULL, OPEN_EXISTING, 0, NULL);
+    if (device == INVALID_HANDLE_VALUE)
+    {
+        ok(0, "Connecting to driver failed with %x\n", GetLastError());
+        return;
+    }
+
+    res = wine_run_kernel_test(device, WINE_IOCTL_PsGetCurrentThread, &state, sizeof(state), NULL);
+    ok(res, "DeviceIoControl failed with %x\n", GetLastError());
+
+    CloseHandle(device);
 }
 
 START_TEST(ntoskrnl)
@@ -220,7 +244,8 @@ START_TEST(ntoskrnl)
         return;
     }
 
-    test_basic_ioctl();
+    test_PsGetCurrentProcessId();
+    test_PsGetCurrentThread();
 
     unload_driver(service, filename);
 }

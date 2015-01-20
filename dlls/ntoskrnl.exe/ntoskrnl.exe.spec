@@ -1425,7 +1425,7 @@
 @ cdecl -private _strrev(str) msvcrt._strrev
 @ cdecl -private _strset(str long) msvcrt._strset
 @ cdecl -private _strupr(str) msvcrt._strupr
-@ cdecl -private _vsnprintf(ptr long str ptr) msvcrt._vsnprintf
+@ cdecl _vsnprintf(ptr long str ptr) msvcrt._vsnprintf
 @ cdecl -private _vsnwprintf(ptr long wstr ptr) msvcrt._vsnwprintf
 @ cdecl -private _wcsicmp(wstr wstr) msvcrt._wcsicmp
 @ cdecl -private _wcslwr(wstr) msvcrt._wcslwr

@@ -8,4 +8,5 @@ CROSSFLAGS = -nostartfiles -nostdlib -nodefaultlibs \
              -Wl,-entry,_DriverEntry@8
 
 C_SRCS = \
-	driver.c
+	driver.c \
+	test.c

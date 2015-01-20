@@ -30,6 +30,9 @@
 #include "winioctl.h"
 #include "ddk/wdm.h"
 
+#define WINE_KERNEL
+#include "util.h"
+#include "test.h"
 #include "driver.h"
 
 const WCHAR driver_device[] = {'\\','D','e','v','i','c','e',
@@ -37,24 +40,17 @@ const WCHAR driver_device[] = {'\\','D','e','v','i','c','e',
 const WCHAR driver_link[] = {'\\','D','o','s','D','e','v','i','c','e','s',
                              '\\','W','i','n','e','T','e','s','t','D','r','i','v','e','r',0};
 
-
-static NTSTATUS test_basic_ioctl(IRP *irp, IO_STACK_LOCATION *stack, ULONG_PTR *info)
+KERNEL_TESTCASE(PsGetCurrentProcessId)
 {
-    const char str[] = "Wine is not an emulator";
-    ULONG length = stack->Parameters.DeviceIoControl.OutputBufferLength;
-    char *buffer = irp->AssociatedIrp.SystemBuffer;
-    int i;
+    test->processid = (DWORD)(ULONG_PTR)PsGetCurrentProcessId();
+    ok(test->processid, "Expected processid to be non zero\n");
+    return STATUS_SUCCESS;
+}
 
-    if (!buffer)
-        return STATUS_ACCESS_VIOLATION;
-
-    if (length < sizeof(str)-1)
-        return STATUS_BUFFER_TOO_SMALL;
-
-    for (i = 0; i < sizeof(str)-1; i++)
-        buffer[i] = str[i];
-
-    *info = sizeof(str)-1;
+KERNEL_TESTCASE(PsGetCurrentThread)
+{
+    PETHREAD thread = PsGetCurrentThread();
+    todo_wine ok(thread != NULL, "Expected thread to be non-NULL\n");
     return STATUS_SUCCESS;
 }
 
@@ -72,15 +68,19 @@ static NTSTATUS WINAPI driver_IoControl(DEVICE_OBJECT *device, IRP *irp)
     NTSTATUS status = STATUS_NOT_SUPPORTED;
     ULONG_PTR information = 0;
 
+#define DECLARE_TEST(name) \
+    case WINE_IOCTL_##name: status = RUN_TESTCASE(name, irp, stack, &information); break;
+
     switch (stack->Parameters.DeviceIoControl.IoControlCode)
     {
-        case IOCTL_WINETEST_BASIC_IOCTL:
-            status = test_basic_ioctl(irp, stack, &information);
-            break;
+        DECLARE_TEST(PsGetCurrentProcessId);
+        DECLARE_TEST(PsGetCurrentThread);
 
         default:
             break;
     }
+
+#undef DECLARE_TEST
 
     irp->IoStatus.Status = status;
     irp->IoStatus.Information = information;
