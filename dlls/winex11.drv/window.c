@@ -269,7 +269,7 @@ static unsigned long get_mwm_decorations( struct x11drv_win_data *data,
     if (data->shaped) return 0;
 
     if (ex_style & WS_EX_TOOLWINDOW) return 0;
-    if (ex_style & WS_EX_LAYERED) return 0;
+    if ((ex_style & (WS_EX_LAYERED | WS_EX_COMPOSITED)) == WS_EX_LAYERED) return 0;
 
     if ((style & WS_CAPTION) == WS_CAPTION)
     {
@@ -2421,7 +2421,8 @@ void CDECL X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags
             BOOL needs_map = TRUE;
 
             /* layered windows are mapped only once their attributes are set */
-            if (GetWindowLongW( hwnd, GWL_EXSTYLE ) & WS_EX_LAYERED) needs_map = data->layered;
+            if ((GetWindowLongW( hwnd, GWL_EXSTYLE ) & (WS_EX_LAYERED | WS_EX_COMPOSITED)) == WS_EX_LAYERED)
+                needs_map = data->layered;
             release_win_data( data );
             if (needs_icon) fetch_icon_data( hwnd, 0, 0 );
             if (needs_map) map_window( hwnd, new_style );
