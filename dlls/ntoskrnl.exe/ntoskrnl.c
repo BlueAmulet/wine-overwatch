@@ -1855,6 +1855,9 @@ LONG WINAPI KeReleaseMutex(PRKMUTEX Mutex, BOOLEAN Wait)
 void WINAPI KeInitializeSemaphore( PRKSEMAPHORE Semaphore, LONG Count, LONG Limit )
 {
     FIXME( "(%p %d %d) stub\n", Semaphore , Count, Limit );
+
+    RtlZeroMemory(Semaphore, sizeof(KSEMAPHORE));
+    Semaphore->Header.Type = 5;
 }
 
 
