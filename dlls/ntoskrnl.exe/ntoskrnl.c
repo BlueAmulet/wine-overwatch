@@ -1845,7 +1845,7 @@ NTSTATUS WINAPI KeWaitForMutexObject(PRKMUTEX Mutex, KWAIT_REASON WaitReason, KP
 LONG WINAPI KeReleaseMutex(PRKMUTEX Mutex, BOOLEAN Wait)
 {
     FIXME( "stub: %p, %d\n", Mutex, Wait );
-    return STATUS_NOT_IMPLEMENTED;
+    return STATUS_SUCCESS;
 }
 
 
