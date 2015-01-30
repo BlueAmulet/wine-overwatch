@@ -1824,7 +1824,13 @@ void WINAPI KeInitializeEvent( PRKEVENT Event, EVENT_TYPE Type, BOOLEAN State )
  */
 void WINAPI KeInitializeMutex(PRKMUTEX Mutex, ULONG Level)
 {
-    FIXME( "stub: %p, %u\n", Mutex, Level );
+    TRACE( "%p, %u\n", Mutex, Level );
+    RtlZeroMemory( Mutex, sizeof(KMUTEX) );
+    Mutex->Header.Type = 2;
+    Mutex->Header.Size = 8;
+    Mutex->Header.SignalState = 1;
+    InitializeListHead( &Mutex->Header.WaitListHead );
+    Mutex->ApcDisable = 1;
 }
 
 
