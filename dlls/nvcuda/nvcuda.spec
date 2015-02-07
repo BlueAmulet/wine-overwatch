@@ -317,3 +317,64 @@
 @ stdcall cuOccupancyMaxActiveBlocksPerMultiprocessor(ptr ptr long long) wine_cuOccupancyMaxActiveBlocksPerMultiprocessor
 @ stub cuOccupancyMaxPotentialBlockSize
 #@ stdcall cuOccupancyMaxPotentialBlockSize(ptr ptr ptr ptr long long) wine_cuOccupancyMaxPotentialBlockSize
+
+# CUDA 7.0
+@ stdcall cuCtxGetFlags(ptr) wine_cuCtxGetFlags
+@ stdcall cuDevicePrimaryCtxGetState(long ptr ptr) wine_cuDevicePrimaryCtxGetState
+@ stdcall cuDevicePrimaryCtxRelease(long) wine_cuDevicePrimaryCtxRelease
+@ stdcall cuDevicePrimaryCtxReset(long) wine_cuDevicePrimaryCtxReset
+@ stdcall cuDevicePrimaryCtxRetain(ptr long) wine_cuDevicePrimaryCtxRetain
+@ stdcall cuDevicePrimaryCtxSetFlags(long long) wine_cuDevicePrimaryCtxSetFlags
+@ stdcall cuEventRecord_ptsz(ptr ptr) wine_cuEventRecord_ptsz
+@ stdcall cuGLMapBufferObjectAsync_v2_ptsz(ptr ptr long ptr) wine_cuGLMapBufferObjectAsync_v2_ptsz
+@ stdcall cuGLMapBufferObject_v2_ptds(ptr ptr long) wine_cuGLMapBufferObject_v2_ptds
+@ stdcall cuGraphicsMapResources_ptsz(long ptr ptr) wine_cuGraphicsMapResources_ptsz
+@ stdcall cuGraphicsUnmapResources_ptsz(long ptr ptr) wine_cuGraphicsUnmapResources_ptsz
+@ stdcall cuLaunchKernel_ptsz(ptr long long long long long long long ptr ptr ptr) wine_cuLaunchKernel_ptsz
+@ stdcall cuMemcpy2DAsync_v2_ptsz(ptr ptr) wine_cuMemcpy2DAsync_v2_ptsz
+@ stdcall cuMemcpy2DUnaligned_v2_ptds(ptr) wine_cuMemcpy2DUnaligned_v2_ptds
+@ stdcall cuMemcpy2D_v2_ptds(ptr) wine_cuMemcpy2D_v2_ptds
+@ stdcall cuMemcpy3DAsync_v2_ptsz(ptr ptr) wine_cuMemcpy3DAsync_v2_ptsz
+@ stdcall cuMemcpy3DPeerAsync_ptsz(ptr ptr) wine_cuMemcpy3DPeerAsync_ptsz
+@ stdcall cuMemcpy3DPeer_ptds(ptr) wine_cuMemcpy3DPeer_ptds
+@ stdcall cuMemcpy3D_v2_ptds(ptr) wine_cuMemcpy3D_v2_ptds
+@ stdcall cuMemcpyAsync_ptsz(long long long ptr) wine_cuMemcpyAsync_ptsz
+@ stdcall cuMemcpyAtoA_v2_ptds(ptr long ptr long long) wine_cuMemcpyAtoA_v2_ptds
+@ stdcall cuMemcpyAtoD_v2_ptds(long ptr long long) wine_cuMemcpyAtoD_v2_ptds
+@ stdcall cuMemcpyAtoHAsync_v2_ptsz(ptr ptr long long ptr) wine_cuMemcpyAtoHAsync_v2_ptsz
+@ stdcall cuMemcpyAtoH_v2_ptds(ptr ptr long long) wine_cuMemcpyAtoH_v2_ptds
+@ stdcall cuMemcpyDtoA_v2_ptds(ptr long long long) wine_cuMemcpyDtoA_v2_ptds
+@ stdcall cuMemcpyDtoDAsync_v2_ptsz(long long long ptr) wine_cuMemcpyDtoDAsync_v2_ptsz
+@ stdcall cuMemcpyDtoD_v2_ptds(long long long) wine_cuMemcpyDtoD_v2_ptds
+@ stdcall cuMemcpyDtoHAsync_v2_ptsz(ptr long long ptr) wine_cuMemcpyDtoHAsync_v2_ptsz
+@ stdcall cuMemcpyDtoH_v2_ptds(ptr long long) wine_cuMemcpyDtoH_v2_ptds
+@ stdcall cuMemcpyHtoAAsync_v2_ptsz(ptr long ptr long ptr) wine_cuMemcpyHtoAAsync_v2_ptsz
+@ stdcall cuMemcpyHtoA_v2_ptds(ptr long ptr long) wine_cuMemcpyHtoA_v2_ptds
+@ stdcall cuMemcpyHtoDAsync_v2_ptsz(long ptr long ptr) wine_cuMemcpyHtoDAsync_v2_ptsz
+@ stdcall cuMemcpyHtoD_v2_ptds(long ptr long) wine_cuMemcpyHtoD_v2_ptds
+@ stdcall cuMemcpyPeerAsync_ptsz(long ptr long ptr long ptr) wine_cuMemcpyPeerAsync_ptsz
+@ stdcall cuMemcpyPeer_ptds(long ptr long ptr long) wine_cuMemcpyPeer_ptds
+@ stdcall cuMemcpy_ptds(long long long) wine_cuMemcpy_ptds
+@ stdcall cuMemsetD16Async_ptsz(long long long ptr) wine_cuMemsetD16Async_ptsz
+@ stdcall cuMemsetD16_v2_ptds(long long long) wine_cuMemsetD16_v2_ptds
+@ stdcall cuMemsetD2D16Async_ptsz(long long long long long ptr) wine_cuMemsetD2D16Async_ptsz
+@ stdcall cuMemsetD2D16_v2_ptds(long long long long long) wine_cuMemsetD2D16_v2_ptds
+@ stdcall cuMemsetD2D32Async_ptsz(long long long long long ptr) wine_cuMemsetD2D32Async_ptsz
+@ stdcall cuMemsetD2D32_v2_ptds(long long long long long) wine_cuMemsetD2D32_v2_ptds
+@ stdcall cuMemsetD2D8Async_ptsz(long long long long long ptr) wine_cuMemsetD2D8Async_ptsz
+@ stdcall cuMemsetD2D8_v2_ptds(long long long long long) wine_cuMemsetD2D8_v2_ptds
+@ stdcall cuMemsetD32Async_ptsz(long long long ptr) wine_cuMemsetD32Async_ptsz
+@ stdcall cuMemsetD32_v2_ptds(long long long) wine_cuMemsetD32_v2_ptds
+@ stdcall cuMemsetD8Async_ptsz(long long long ptr) wine_cuMemsetD8Async_ptsz
+@ stdcall cuMemsetD8_v2_ptds(long long long) wine_cuMemsetD8_v2_ptds
+@ stdcall cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(ptr ptr long long long) wine_cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags
+@ stub cuOccupancyMaxPotentialBlockSizeWithFlags
+#@ stdcall cuOccupancyMaxPotentialBlockSizeWithFlags(ptr ptr ptr ptr long long long) wine_cuOccupancyMaxPotentialBlockSizeWithFlags
+@ stdcall cuPointerGetAttributes(long ptr ptr long) wine_cuPointerGetAttributes
+@ stdcall cuStreamAddCallback_ptsz(ptr ptr ptr long) wine_cuStreamAddCallback_ptsz
+@ stdcall cuStreamAttachMemAsync_ptsz(ptr long long long) wine_cuStreamAttachMemAsync_ptsz
+@ stdcall cuStreamGetFlags_ptsz(ptr ptr) wine_cuStreamGetFlags_ptsz
+@ stdcall cuStreamGetPriority_ptsz(ptr ptr) wine_cuStreamGetPriority_ptsz
+@ stdcall cuStreamQuery_ptsz(ptr) wine_cuStreamQuery_ptsz
+@ stdcall cuStreamSynchronize_ptsz(ptr) wine_cuStreamSynchronize_ptsz
+@ stdcall cuStreamWaitEvent_ptsz(ptr ptr long) wine_cuStreamWaitEvent_ptsz
