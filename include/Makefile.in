@@ -531,6 +531,7 @@ HEADER_SRCS = \
 	ntstatus.h \
 	nvapi.h \
 	nvcuvid.h \
+	nvencodeapi.h \
 	objbase.h \
 	objsel.h \
 	odbcinst.h \
