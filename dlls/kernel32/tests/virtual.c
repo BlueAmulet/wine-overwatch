@@ -1739,16 +1739,16 @@ static void test_write_watch(void)
 
     num_bytes = 0;
     success = GetOverlappedResult( readpipe, &overlapped, &num_bytes, TRUE );
-    todo_wine ok( success, "GetOverlappedResult failed %u\n", GetLastError() );
-    todo_wine ok( num_bytes == sizeof(testdata), "wrong number of bytes read\n" );
-    todo_wine ok( !memcmp( base, testdata, sizeof(testdata)), "didn't receive expected data\n" );
+    ok( success, "GetOverlappedResult failed %u\n", GetLastError() );
+    ok( num_bytes == sizeof(testdata), "wrong number of bytes read\n" );
+    ok( !memcmp( base, testdata, sizeof(testdata)), "didn't receive expected data\n" );
 
     count = 64;
     memset( results, 0, sizeof(results) );
     ret = pGetWriteWatch( WRITE_WATCH_FLAG_RESET, base, size, results, &count, &pagesize );
     ok( !ret, "GetWriteWatch failed %u\n", GetLastError() );
     todo_wine ok( count == 1, "wrong count %lu\n", count );
-    todo_wine ok( results[0] == base, "wrong result %p\n", results[0] );
+    ok( results[0] == base, "wrong result %p\n", results[0] );
 
     CloseHandle( readpipe );
     CloseHandle( writepipe );

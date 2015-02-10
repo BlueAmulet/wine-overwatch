@@ -729,6 +729,8 @@ static NTSTATUS read_unix_fd(int fd, char *buf, ULONG *total, ULONG length,
             else
                 return STATUS_PENDING;
         }
+        else if (errno == EFAULT && wine_uninterrupted_write_memory( buf + *total, NULL, length - *total ) >= (length - *total))
+            continue;
         else if (errno != EINTR)
             return FILE_GetNtStatus();
     }
@@ -1106,6 +1108,9 @@ NTSTATUS WINAPI NtReadFile(HANDLE hFile, HANDLE hEvent,
             /* async I/O doesn't make sense on regular files */
             while ((result = pread( unix_handle, buffer, length, offset->QuadPart )) == -1)
             {
+                if (errno == EFAULT && virtual_check_buffer_for_write( buffer, length ))
+                    continue;
+
                 if (errno != EINTR)
                 {
                     status = FILE_GetNtStatus();
