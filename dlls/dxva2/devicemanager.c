@@ -169,9 +169,9 @@ static HRESULT WINAPI Direct3DDeviceManager9_GetVideoService( IDirect3DDeviceMan
 {
     Direct3DDeviceManager9Impl *This = impl_from_Direct3DDeviceManager9(iface);
 
-    FIXME("(%p)->(%p, %p, %p): stub\n", This, hDevice, riid, ppService);
+    FIXME("(%p)->(%p, %p, %p): semi-stub\n", This, hDevice, riid, ppService);
 
-    return E_NOTIMPL;
+    return videoservice_create( (IDirect3DDevice9 *)hDevice, riid, ppService );
 }
 
 static const IDirect3DDeviceManager9Vtbl Direct3DDeviceManager9_VTable =

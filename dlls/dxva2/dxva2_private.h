@@ -18,4 +18,5 @@
 
 #include "dxva2api.h"
 
+extern HRESULT videoservice_create( IDirect3DDevice9 *device, REFIID riid, void **ppv ) DECLSPEC_HIDDEN;
 extern HRESULT devicemanager_create( UINT *resetToken, void **ppv ) DECLSPEC_HIDDEN;

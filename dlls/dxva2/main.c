@@ -49,9 +49,9 @@ HRESULT WINAPI DXVA2CreateDirect3DDeviceManager9( UINT *resetToken, IDirect3DDev
 
 HRESULT WINAPI DXVA2CreateVideoService( IDirect3DDevice9 *device, REFIID riid, void **ppv )
 {
-    FIXME("(%p, %s, %p): stub\n", device, debugstr_guid(riid), ppv);
+    TRACE("(%p, %s, %p)\n", device, debugstr_guid(riid), ppv);
 
-    return E_NOTIMPL;
+    return videoservice_create( device, riid, ppv );
 }
 
 BOOL WINAPI DegaussMonitor( HMONITOR monitor )
