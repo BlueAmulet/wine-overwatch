@@ -19,8 +19,11 @@
 #include <stdarg.h>
 #include "windef.h"
 #include "winbase.h"
+
+#define INITGUID
 #include "d3d9.h"
 #include "dxva2api.h"
+#include "dxva2_private.h"
 #include "physicalmonitorenumerationapi.h"
 #include "lowlevelmonitorconfigurationapi.h"
 #include "highlevelmonitorconfigurationapi.h"
@@ -39,9 +42,9 @@ BOOL WINAPI CapabilitiesRequestAndCapabilitiesReply( HMONITOR monitor, LPSTR buf
 
 HRESULT WINAPI DXVA2CreateDirect3DDeviceManager9( UINT *resetToken, IDirect3DDeviceManager9 **dxvManager )
 {
-    FIXME("(%p, %p): stub\n", resetToken, dxvManager);
+    TRACE("(%p, %p)\n", resetToken, dxvManager);
 
-    return E_NOTIMPL;
+    return devicemanager_create( resetToken, (void **)dxvManager );
 }
 
 HRESULT WINAPI DXVA2CreateVideoService( IDirect3DDevice9 *device, REFIID riid, void **ppv )

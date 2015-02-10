@@ -1,4 +1,6 @@
 MODULE = dxva2.dll
+IMPORTS = ole32
 
 C_SRCS = \
+	devicemanager.c \
 	main.c
