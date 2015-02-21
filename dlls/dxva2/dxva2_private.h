@@ -20,3 +20,6 @@
 
 extern HRESULT videoservice_create( IDirect3DDevice9 *device, REFIID riid, void **ppv ) DECLSPEC_HIDDEN;
 extern HRESULT devicemanager_create( UINT *resetToken, void **ppv ) DECLSPEC_HIDDEN;
+extern HRESULT processor_software_create( IDirectXVideoProcessorService *processor_service, IDirect3DDevice9 *device,
+                                          const DXVA2_VideoDesc *pVideoDesc, D3DFORMAT RenderTargetFormat,
+                                          UINT MaxNumSubStreams, IDirectXVideoProcessor **processor ) DECLSPEC_HIDDEN;

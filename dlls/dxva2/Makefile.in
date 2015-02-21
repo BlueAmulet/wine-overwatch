@@ -4,4 +4,5 @@ IMPORTS = ole32
 C_SRCS = \
 	devicemanager.c \
 	main.c \
-	videoservices.c
+	videoservices.c \
+	softwareprocessor.c

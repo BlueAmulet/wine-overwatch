@@ -341,10 +341,20 @@ static HRESULT WINAPI DirectXVideoProcessorService_GetVideoProcessorDeviceGuids(
                                                                                  const DXVA2_VideoDesc *pVideoDesc, UINT *pCount, GUID **pGuids )
 {
     DirectXVideoAccelerationServiceImpl *This = impl_from_IDirectXVideoProcessorService(iface);
+    GUID *guids;
 
     FIXME("(%p/%p)->(%p, %p, %p): stub\n", iface, This, pVideoDesc, pCount, pGuids);
 
-    return E_NOTIMPL;
+    guids = CoTaskMemAlloc(sizeof(GUID));
+    if(!guids)
+        return E_OUTOFMEMORY;
+
+    memcpy(guids, &DXVA2_VideoProcSoftwareDevice, sizeof(GUID));
+
+    *pGuids = guids;
+    *pCount = 1;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI DirectXVideoProcessorService_GetVideoProcessorRenderTargets( IDirectXVideoProcessorService *iface,
@@ -407,8 +417,11 @@ static HRESULT WINAPI DirectXVideoProcessorService_CreateVideoProcessor( IDirect
 {
     DirectXVideoAccelerationServiceImpl *This = impl_from_IDirectXVideoProcessorService(iface);
 
-    FIXME("(%p/%p)->(%s, %#x, %u, %p): stub\n",
+    FIXME("(%p/%p)->(%s, %#x, %u, %p): semi-stub\n",
         iface, This, debugstr_guid(VideoProcDeviceGuid), RenderTargetFormat, MaxNumSubStreams, ppVidProcess);
+
+    if (IsEqualIID(VideoProcDeviceGuid, &DXVA2_VideoProcSoftwareDevice))
+        return processor_software_create(iface, This->device, pVideoDesc, RenderTargetFormat, MaxNumSubStreams, ppVidProcess);
 
     return E_NOTIMPL;
 }
