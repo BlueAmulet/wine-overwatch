@@ -655,6 +655,8 @@ static HRESULT WINAPI WineVideoService_CreateVideoDecoder( IWineVideoService *if
 
     if (IsEqualGUID(guid, &DXVA2_ModeMPEG2_VLD))
         return vaapi_mpeg2decoder_create(iface, videoDesc, config, numSurfaces, decoder);
+    if (IsEqualGUID(guid, &DXVA2_ModeH264_E))
+        return vaapi_h264decoder_create(iface, videoDesc, config, numSurfaces, decoder);
 
     return E_FAIL;
 }

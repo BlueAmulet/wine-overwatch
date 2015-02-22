@@ -134,5 +134,8 @@ extern BOOL vaapi_create_surfaces( VADisplay va_display, const struct vaapi_form
 extern HRESULT vaapi_mpeg2decoder_create( IWineVideoService *backend, const DXVA2_VideoDesc *videoDesc,
                                           DXVA2_ConfigPictureDecode *config, UINT numSurfaces,
                                           IWineVideoDecoder **decoder ) DECLSPEC_HIDDEN;
+extern HRESULT vaapi_h264decoder_create( IWineVideoService *service, const DXVA2_VideoDesc *videoDesc,
+                                         DXVA2_ConfigPictureDecode *config, UINT numSurfaces,
+                                         IWineVideoDecoder **decoder ) DECLSPEC_HIDDEN;
 
 #endif /* HAVE_VAAPI */
