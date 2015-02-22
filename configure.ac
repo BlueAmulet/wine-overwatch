@@ -101,6 +101,8 @@ AC_ARG_WITH(xxf86vm,   AS_HELP_STRING([--without-xxf86vm],[do not use XFree vide
             [if test "x$withval" = "xno"; then ac_cv_header_X11_extensions_xf86vmode_h=no; ac_cv_header_X11_extensions_xf86vmproto_h=no; fi])
 AC_ARG_WITH(zlib,      AS_HELP_STRING([--without-zlib],[do not use Zlib (data compression)]),
             [if test "x$withval" = "xno"; then ac_cv_header_zlib_h=no; fi])
+AC_ARG_WITH(va,        AS_HELP_STRING([--without-va],[do not use VA (GPU video acceleration)]),
+            [if test "x$withval" = "xno"; then ac_cv_header_va_va_x11_h=no; fi])
 
 AC_ARG_WITH(wine-tools,AS_HELP_STRING([--with-wine-tools=DIR],[use Wine tools from directory DIR]))
 AC_ARG_WITH(wine64,    AS_HELP_STRING([--with-wine64=DIR],[use the 64-bit Wine in DIR for a Wow64 build]))
@@ -1156,6 +1158,20 @@ This probably prevents linking to OpenGL. Try deleting the file and restarting c
     fi
     WINE_WARNING_WITH(opengl,[test -n "$opengl_msg"],[$opengl_msg
 OpenGL and Direct3D won't be supported.])
+
+    dnl **** Check for libva ****
+    AC_CHECK_HEADERS([va/va_x11.h])
+    if test "$ac_cv_header_va_va_x11_h" = "yes"
+    then
+        WINE_CHECK_SONAME(va,vaQuerySurfaceAttributes,,,[$X_LIBS])
+        WINE_CHECK_SONAME(va-x11,vaGetDisplay,,,[$X_LIBS -lva])
+        if test "x$ac_cv_lib_soname_va" != "x" -a "x$ac_cv_lib_soname_va_x11" != "x"
+        then
+            AC_DEFINE(HAVE_VAAPI, 1, [Define if you have the libva development files])
+        fi
+    fi
+    WINE_NOTICE_WITH(va,[test "x$ac_cv_lib_soname_va" = "x" -o "x$ac_cv_lib_soname_va_x11" = "x"],
+                     [libva ${notice_platform}development files not found, GPU video acceleration won't be supported.])
 
     CPPFLAGS="$ac_save_CPPFLAGS"
 else
@@ -3023,7 +3039,7 @@ WINE_CONFIG_LIB(dxerr9)
 WINE_CONFIG_DLL(dxgi,,[implib])
 WINE_CONFIG_TEST(dlls/dxgi/tests)
 WINE_CONFIG_LIB(dxguid)
-WINE_CONFIG_DLL(dxva2)
+WINE_CONFIG_DLL(dxva2,,[clean])
 WINE_CONFIG_TEST(dlls/dxva2/tests)
 WINE_CONFIG_DLL(esent)
 WINE_CONFIG_DLL(evr)

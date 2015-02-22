@@ -1,7 +1,7 @@
 /*
  * Unit tests for dxva2 functions
  *
- * Copyright 2015 Michael Müller
+ * Copyright (c) 2015 Michael Müller
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -85,9 +85,9 @@ struct decoder_test decoder_tests[] =
     {&DXVA2_ModeH264_E, 720, 576, 17, FALSE},
 };
 
-static const char* convert_decoderguid_to_str(const GUID *guid)
+static inline const char* convert_decoderguid_to_str(const GUID *guid)
 {
-    unsigned int i;
+    int i;
 
     for (i = 0; i < sizeof(decoder_names) / sizeof(decoder_names[0]); i++)
     {
@@ -192,7 +192,7 @@ static void test_decoder_resolution(IDirectXVideoDecoderService *service, REFGUI
     DXVA2_ConfigPictureDecode config;
     IDirect3DSurface9 **surfaces;
     IDirectXVideoDecoder *decoder;
-    unsigned int i;
+    UINT i;
 
     trace("Analysing buffer sizes for: %s (%u x %u)\n", convert_decoderguid_to_str(guid), width, height);
 
@@ -222,7 +222,7 @@ static void test_decoder_resolution(IDirectXVideoDecoderService *service, REFGUI
     ok(hr == D3DERR_INVALIDCALL, "Expected D3DERR_INVALIDCALL, got %x\n", hr);
 
     hr = IDirectXVideoDecoderService_GetDecoderConfigurations(service, guid, &desc, NULL, &count, &configs);
-    ok(!hr, "Failed to get decoder configuration for: %s\n", convert_decoderguid_to_str(guid));
+    ok(!hr, "Failed to get decoder congiruation for: %s\n", convert_decoderguid_to_str(guid));
     if (hr) return;
 
     if (!count)
@@ -308,10 +308,10 @@ static void test_decoder(IDirectXVideoDecoderService *service, REFGUID const gui
 static void test_decoder_service(HWND focus_window)
 {
     IDirectXVideoDecoderService *service;
-    unsigned int i, j;
     HRESULT hr;
     UINT count;
     GUID *guids;
+    int i, j;
 
     if (!create_video_service(focus_window, &IID_IDirectXVideoDecoderService, (void**)&service))
     {
@@ -320,11 +320,8 @@ static void test_decoder_service(HWND focus_window)
     }
 
     hr = IDirectXVideoDecoderService_GetDecoderDeviceGuids(service, &count, &guids);
-    if (hr)
-    {
-        skip("Failed to get decoder guids: %x\n", hr);
-        return;
-    }
+    ok(!hr, "Failed to get decoder guids: %x\n", hr);
+    if (hr) return;
 
     for (i = 0; i < count; i++)
     {
@@ -347,8 +344,8 @@ static void test_decoder_service(HWND focus_window)
             continue;
         }
 
-        test_decoder(service, decoder_tests[i].guid, decoder_tests[i].width,
-                     decoder_tests[i].height, decoder_tests[i].surface_count);
+        test_decoder(service, decoder_tests[i].guid, decoder_tests[i].width, decoder_tests[i].height,
+                     decoder_tests[i].surface_count);
     }
 
     IDirectXVideoDecoderService_Release(service);

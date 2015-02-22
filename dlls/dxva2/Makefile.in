@@ -1,8 +1,14 @@
 MODULE = dxva2.dll
-IMPORTS = ole32
+IMPORTS = ole32 advapi32
+
+IDL_SRCS = \
+	backend.idl
 
 C_SRCS = \
 	devicemanager.c \
+	genericdecoder.c \
 	main.c \
-	videoservices.c \
-	softwareprocessor.c
+	softwareprocessor.c \
+	vaapi-mpeg2.c \
+	vaapi.c \
+	videoservices.c

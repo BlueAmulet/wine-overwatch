@@ -32,6 +32,8 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(dxva2);
 
+BOOL config_vaapi_enabled = FALSE;
+
 BOOL WINAPI CapabilitiesRequestAndCapabilitiesReply( HMONITOR monitor, LPSTR buffer, DWORD length )
 {
     FIXME("(%p, %p, %d): stub\n", monitor, buffer, length);
@@ -322,15 +324,75 @@ BOOL WINAPI SetVCPFeature( HMONITOR monitor, BYTE vcpCode, DWORD value )
     return FALSE;
 }
 
-BOOL WINAPI DllMain (HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
+static BOOL get_app_key( HKEY *defkey, HKEY *appkey )
+{
+    char buffer[MAX_PATH+16];
+    DWORD len;
+
+    *appkey = 0;
+
+    /* @@ Wine registry key: HKCU\Software\Wine\DXVA2 */
+    if (RegOpenKeyA(HKEY_CURRENT_USER, "Software\\Wine\\DXVA2", defkey))
+        *defkey = 0;
+
+    len = GetModuleFileNameA(0, buffer, MAX_PATH);
+    if (len && len < MAX_PATH)
+    {
+        HKEY tmpkey;
+
+        /* @@ Wine registry key: HKCU\Software\Wine\AppDefaults\app.exe\DXVA2 */
+        if (!RegOpenKeyA(HKEY_CURRENT_USER, "Software\\Wine\\AppDefaults", &tmpkey))
+        {
+            char *p, *appname = buffer;
+            if ((p = strrchr(appname, '/'))) appname = p + 1;
+            if ((p = strrchr(appname, '\\'))) appname = p + 1;
+            strcat(appname, "\\DXVA2");
+
+            if (RegOpenKeyA(tmpkey, appname, appkey)) *appkey = 0;
+            RegCloseKey(tmpkey);
+        }
+    }
+
+    return *defkey || *appkey;
+}
+
+static BOOL get_config_key( HKEY defkey, HKEY appkey, const char *name, char *buffer, DWORD size )
+{
+    if (appkey && !RegQueryValueExA( appkey, name, 0, NULL, (LPBYTE)buffer, &size ))
+        return TRUE;
+
+    if (defkey && !RegQueryValueExA( defkey, name, 0, NULL, (LPBYTE)buffer, &size ))
+        return TRUE;
+
+    return FALSE;
+}
+
+static void dxva2_init( void )
+{
+    HKEY defkey, appkey;
+    char buffer[MAX_PATH];
+
+    if (!get_app_key(&defkey, &appkey))
+        return;
+
+    if (get_config_key(defkey, appkey, "backend", buffer, sizeof(buffer)))
+        config_vaapi_enabled = !strcmp(buffer, "va");
+
+    if (defkey) RegCloseKey(defkey);
+    if (appkey) RegCloseKey(appkey);
+}
+
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
     TRACE("%p,%x,%p\n", hinstDLL, fdwReason, lpvReserved);
 
-    switch (fdwReason) {
-        case DLL_WINE_PREATTACH:
-            return FALSE;  /* prefer native version */
+    switch (fdwReason)
+    {
         case DLL_PROCESS_ATTACH:
+            dxva2_init();
             DisableThreadLibraryCalls(hinstDLL);
+            break;
+        case DLL_PROCESS_DETACH:
             break;
     }
 

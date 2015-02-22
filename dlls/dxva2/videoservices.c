@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 Michael Müller for Pipelight
+ * Copyright 2014-2015 Michael Müller for Pipelight
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -37,17 +37,8 @@ typedef struct
 
     LONG refCount;
     IDirect3DDevice9 *device;
+    IWineVideoService *backend;
 } DirectXVideoAccelerationServiceImpl;
-
-static BOOL is_h264_codec( REFGUID guid )
-{
-    return (IsEqualGUID(guid, &DXVA2_ModeH264_A) ||
-            IsEqualGUID(guid, &DXVA2_ModeH264_B) ||
-            IsEqualGUID(guid, &DXVA2_ModeH264_C) ||
-            IsEqualGUID(guid, &DXVA2_ModeH264_D) ||
-            IsEqualGUID(guid, &DXVA2_ModeH264_E) ||
-            IsEqualGUID(guid, &DXVA2_ModeH264_F));
-}
 
 static inline DirectXVideoAccelerationServiceImpl *impl_from_IDirectXVideoAccelerationService( IDirectXVideoAccelerationService *iface )
 {
@@ -115,6 +106,7 @@ static ULONG WINAPI DirectXVideoAccelerationService_Release( IDirectXVideoAccele
     {
         TRACE("Destroying\n");
         IDirect3DDevice9_Release(This->device);
+        IWineVideoService_Release(This->backend);
         CoTaskMemFree(This);
     }
 
@@ -200,6 +192,8 @@ static HRESULT WINAPI DirectXVideoDecoderService_CreateVideoDecoder( IDirectXVid
         IDirectXVideoDecoder **ppDecode )
 {
     DirectXVideoAccelerationServiceImpl *This = impl_from_IDirectXVideoDecoderService(iface);
+    IWineVideoDecoder *decoder_backend;
+    HRESULT hr;
 
     FIXME("(%p/%p)->(%s, %p, %p, %p, %u, %p): stub\n",
         iface, This, debugstr_guid(guid), pVideoDesc, pConfig, ppDecoderRenderTargets, NumSurfaces, ppDecode);
@@ -207,14 +201,20 @@ static HRESULT WINAPI DirectXVideoDecoderService_CreateVideoDecoder( IDirectXVid
     if (!guid || !pVideoDesc || !pConfig || !ppDecoderRenderTargets || !NumSurfaces || !ppDecode)
         return E_INVALIDARG;
 
-    return E_NOTIMPL;
+    hr = IWineVideoService_CreateVideoDecoder(This->backend, guid, pVideoDesc, pConfig, NumSurfaces, &decoder_backend);
+    if (SUCCEEDED(hr))
+    {
+        hr = genericdecoder_create(iface, pVideoDesc, pConfig, ppDecoderRenderTargets, NumSurfaces, decoder_backend, ppDecode);
+        IWineVideoDecoder_Release(decoder_backend);
+    }
+
+    return hr;
 }
 
 static HRESULT WINAPI DirectXVideoDecoderService_GetDecoderConfigurations( IDirectXVideoDecoderService *iface, REFGUID guid,
         const DXVA2_VideoDesc *pVideoDesc, IUnknown *pReserved, UINT *pCount, DXVA2_ConfigPictureDecode **ppConfigs )
 {
     DirectXVideoAccelerationServiceImpl *This = impl_from_IDirectXVideoDecoderService(iface);
-    DXVA2_ConfigPictureDecode *config;
 
     FIXME("(%p/%p)->(%s, %p, %p, %p, %p): semi-stub\n",
         iface, This, debugstr_guid(guid), pVideoDesc, pReserved, pCount, ppConfigs);
@@ -222,46 +222,19 @@ static HRESULT WINAPI DirectXVideoDecoderService_GetDecoderConfigurations( IDire
     if (!guid || !pVideoDesc || !pCount || !ppConfigs)
         return E_INVALIDARG;
 
-    config = CoTaskMemAlloc(sizeof(*config));
-    if (!config)
-        return E_OUTOFMEMORY;
-
-    /* TODO: Query decoder instead of using hardcoded values */
-
-    memcpy(&config->guidConfigBitstreamEncryption, &DXVA_NoEncrypt, sizeof(GUID));
-    memcpy(&config->guidConfigMBcontrolEncryption, &DXVA_NoEncrypt, sizeof(GUID));
-    memcpy(&config->guidConfigResidDiffEncryption, &DXVA_NoEncrypt, sizeof(GUID));
-
-    config->ConfigBitstreamRaw             = 1;
-    config->ConfigMBcontrolRasterOrder     = is_h264_codec(guid) ? 0 : 1;
-    config->ConfigResidDiffHost            = 0; /* FIXME */
-    config->ConfigSpatialResid8            = 0; /* FIXME */
-    config->ConfigResid8Subtraction        = 0; /* FIXME */
-    config->ConfigSpatialHost8or9Clipping  = 0; /* FIXME */
-    config->ConfigSpatialResidInterleaved  = 0; /* FIXME */
-    config->ConfigIntraResidUnsigned       = 0; /* FIXME */
-    config->ConfigResidDiffAccelerator     = 0;
-    config->ConfigHostInverseScan          = 0;
-    config->ConfigSpecificIDCT             = 1;
-    config->Config4GroupedCoefs            = 0;
-    config->ConfigMinRenderTargetBuffCount = 3;
-    config->ConfigDecoderSpecific          = 0;
-
-    *pCount    = 1;
-    *ppConfigs = config;
-    return S_OK;
+    return IWineVideoService_GetDecoderConfigurations(This->backend, guid, pVideoDesc, pReserved, pCount, ppConfigs);
 }
 
 static HRESULT WINAPI DirectXVideoDecoderService_GetDecoderDeviceGuids( IDirectXVideoDecoderService *iface, UINT *count, GUID **pGuids )
 {
     DirectXVideoAccelerationServiceImpl *This = impl_from_IDirectXVideoDecoderService(iface);
 
-    FIXME("(%p/%p)->(%p, %p): stub\n", iface, This, count, pGuids);
+    FIXME("(%p/%p)->(%p, %p): semi-stub\n", iface, This, count, pGuids);
 
     if (!count || !pGuids)
         return E_INVALIDARG;
 
-    return E_NOTIMPL;
+    return IWineVideoService_GetDecoderDeviceGuids(This->backend, count, pGuids);
 }
 
 static HRESULT WINAPI DirectXVideoDecoderService_GetDecoderRenderTargets( IDirectXVideoDecoderService *iface, REFGUID guid,
@@ -269,12 +242,12 @@ static HRESULT WINAPI DirectXVideoDecoderService_GetDecoderRenderTargets( IDirec
 {
     DirectXVideoAccelerationServiceImpl *This = impl_from_IDirectXVideoDecoderService(iface);
 
-    FIXME("(%p/%p)->(%s, %p, %p): stub\n", iface, This, debugstr_guid(guid), pCount, pFormats);
+    FIXME("(%p/%p)->(%s, %p, %p): semi-stub\n", iface, This, debugstr_guid(guid), pCount, pFormats);
 
     if (!guid || !pCount || !pFormats)
         return E_INVALIDARG;
 
-    return E_NOTIMPL;
+    return IWineVideoService_GetDecoderRenderTargets(This->backend, guid, pCount, pFormats);
 }
 
 static const IDirectXVideoDecoderServiceVtbl DirectXVideoDecoderService_VTable =
@@ -444,6 +417,7 @@ static const IDirectXVideoProcessorServiceVtbl DirectXVideoProcessorService_VTab
 
 HRESULT videoservice_create( IDirect3DDevice9 *device, REFIID riid, void **ppv )
 {
+    IWineVideoService *backend;
     DirectXVideoAccelerationServiceImpl *videoservice;
 
     if (!device || !riid || !ppv)
@@ -451,15 +425,23 @@ HRESULT videoservice_create( IDirect3DDevice9 *device, REFIID riid, void **ppv )
 
     *ppv = NULL;
 
+    backend = vaapi_videoservice_create();
+    if (!backend)
+        return E_NOINTERFACE;
+
     videoservice = CoTaskMemAlloc(sizeof(DirectXVideoAccelerationServiceImpl));
     if (!videoservice)
+    {
+        IWineVideoService_Release(videoservice->backend);
         return E_OUTOFMEMORY;
+    }
 
     videoservice->IDirectXVideoAccelerationService_iface.lpVtbl = &DirectXVideoAccelerationService_VTable;
     videoservice->IDirectXVideoDecoderService_iface.lpVtbl      = &DirectXVideoDecoderService_VTable;
     videoservice->IDirectXVideoProcessorService_iface.lpVtbl    = &DirectXVideoProcessorService_VTable;
     videoservice->refCount = 1;
     videoservice->device = device;
+    videoservice->backend = backend;
 
     if (IsEqualIID(riid, &IID_IUnknown))
         *ppv = &videoservice->IDirectXVideoAccelerationService_iface;
@@ -471,6 +453,8 @@ HRESULT videoservice_create( IDirect3DDevice9 *device, REFIID riid, void **ppv )
         *ppv = &videoservice->IDirectXVideoProcessorService_iface;
     else
     {
+        FIXME("Service %s not implemented\n", debugstr_guid(riid));
+        IWineVideoService_Release(videoservice->backend);
         CoTaskMemFree(videoservice);
         return E_NOINTERFACE;
     }
