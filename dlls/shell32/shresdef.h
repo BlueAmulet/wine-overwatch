@@ -149,6 +149,14 @@
 #define IDM_RECYCLEBIN_RESTORE      301
 #define IDM_RECYCLEBIN_ERASE        302
 
+/* Strings for file operations */
+#define IDS_FILEOP_COPYING          333
+#define IDS_FILEOP_MOVING           334
+#define IDS_FILEOP_DELETING         335
+#define IDS_FILEOP_FROM_TO          336
+#define IDS_FILEOP_FROM             337
+#define IDS_FILEOP_PREFLIGHT        338
+
 /* Note: this string is referenced from the registry*/
 #define IDS_RECYCLEBIN_FOLDER_NAME   8964
 

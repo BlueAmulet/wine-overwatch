@@ -185,6 +185,13 @@ If the files in the destination folder have the same names as files in the\n\
 selected folder they will be replaced. Do you still want to move or copy\n\
 the folder?"
 
+        IDS_FILEOP_COPYING   "Copying"
+        IDS_FILEOP_MOVING    "Moving"
+        IDS_FILEOP_DELETING  "Deleting"
+        IDS_FILEOP_FROM_TO   "From %1 to %2"
+        IDS_FILEOP_FROM      "From %1"
+        IDS_FILEOP_PREFLIGHT "Preflight"
+
         /* message box strings */
         IDS_RESTART_TITLE       "Restart"
         IDS_RESTART_PROMPT      "Do you want to simulate a Windows reboot?"
