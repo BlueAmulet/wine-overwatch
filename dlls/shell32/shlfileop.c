@@ -1963,7 +1963,7 @@ static void progressbar_calc_totalsize(FILE_OPERATION *op, const FILE_LIST *from
 static void progressbar_update_title(FILE_OPERATION *op)
 {
     WCHAR buf[64];
-    UINT title_id, builder_id;
+    UINT title_id, builder_id, animation_id;
 
     if (op->progress == NULL)
         return;
@@ -1971,18 +1971,21 @@ static void progressbar_update_title(FILE_OPERATION *op)
     switch (op->req->wFunc)
     {
         case FO_COPY:
-            title_id   = IDS_FILEOP_COPYING;
-            builder_id = IDS_FILEOP_FROM_TO;
+            title_id      = IDS_FILEOP_COPYING;
+            builder_id    = IDS_FILEOP_FROM_TO;
+            animation_id  = IDR_AVI_FILECOPY;
             break;
 
         case FO_DELETE:
-            title_id   = IDS_FILEOP_DELETING;
-            builder_id = IDS_FILEOP_FROM;
+            title_id      = IDS_FILEOP_DELETING;
+            builder_id    = IDS_FILEOP_FROM;
+            animation_id  = IDR_AVI_FILEDELETE;
             break;
 
         case FO_MOVE:
-            title_id   = IDS_FILEOP_MOVING;
-            builder_id = IDS_FILEOP_FROM_TO;
+            title_id      = IDS_FILEOP_MOVING;
+            builder_id    = IDS_FILEOP_FROM_TO;
+            animation_id  = IDR_AVI_FILEMOVE;
             break;
 
         default:
@@ -1997,6 +2000,8 @@ static void progressbar_update_title(FILE_OPERATION *op)
 
     LoadStringW(shell32_hInstance, IDS_FILEOP_PREFLIGHT, buf, sizeof(buf)/sizeof(WCHAR));
     IProgressDialog_SetLine(op->progress, 1, buf, FALSE, NULL);
+
+    IProgressDialog_SetAnimation(op->progress, shell32_hInstance, animation_id);
 }
 
 static void progressbar_update_files(FILE_OPERATION *op, LPCWSTR src, LPCWSTR dst)
