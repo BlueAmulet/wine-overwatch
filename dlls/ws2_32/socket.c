@@ -473,6 +473,7 @@ static inline const char *debugstr_optval(const char *optval, int optlenval)
 struct ws2_async_io
 {
     struct ws2_async_io *next;
+    DWORD                size;
 };
 
 struct ws2_async_shutdown
@@ -548,16 +549,30 @@ static struct ws2_async_io *alloc_async_io( DWORD size )
 {
     /* first free remaining previous fileinfos */
 
-    struct ws2_async_io *io = InterlockedExchangePointer( (void **)&async_io_freelist, NULL );
+    struct ws2_async_io *old_io = InterlockedExchangePointer( (void **)&async_io_freelist, NULL );
+    struct ws2_async_io *io = NULL;
 
-    while (io)
+    while (old_io)
     {
-        struct ws2_async_io *next = io->next;
-        HeapFree( GetProcessHeap(), 0, io );
-        io = next;
+        if (!io && old_io->size >= size && old_io->size <= max(4096, 4 * size))
+        {
+            io     = old_io;
+            size   = old_io->size;
+            old_io = old_io->next;
+        }
+        else
+        {
+            struct ws2_async_io *next = old_io->next;
+            HeapFree( GetProcessHeap(), 0, old_io );
+            old_io = next;
+        }
     }
 
-    return HeapAlloc( GetProcessHeap(), 0, size );
+    if (io || (io = HeapAlloc( GetProcessHeap(), 0, size )))
+    {
+        io->size = size;
+    }
+    return io;
 }
 
 /****************************************************************/
