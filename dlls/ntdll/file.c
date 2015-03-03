@@ -363,6 +363,7 @@ NTSTATUS WINAPI NtCreateFile( PHANDLE handle, ACCESS_MASK access, POBJECT_ATTRIB
 struct async_fileio
 {
     struct async_fileio *next;
+    DWORD                size;
     HANDLE               handle;
     PIO_APC_ROUTINE      apc;
     void                *apc_arg;
@@ -409,17 +410,28 @@ static struct async_fileio *alloc_fileio( DWORD size, HANDLE handle, PIO_APC_ROU
 {
     /* first free remaining previous fileinfos */
 
-    struct async_fileio *io = interlocked_xchg_ptr( (void **)&fileio_freelist, NULL );
+    struct async_fileio *old_io = interlocked_xchg_ptr( (void **)&fileio_freelist, NULL );
+    struct async_fileio *io = NULL;
 
-    while (io)
+    while (old_io)
     {
-        struct async_fileio *next = io->next;
-        RtlFreeHeap( GetProcessHeap(), 0, io );
-        io = next;
+        if (!io && old_io->size >= size && old_io->size <= max(4096, 4 * size))
+        {
+            io     = old_io;
+            size   = old_io->size;
+            old_io = old_io->next;
+        }
+        else
+        {
+            struct async_fileio *next = old_io->next;
+            RtlFreeHeap( GetProcessHeap(), 0, old_io );
+            old_io = next;
+        }
     }
 
-    if ((io = RtlAllocateHeap( GetProcessHeap(), 0, size )))
+    if (io || (io = RtlAllocateHeap( GetProcessHeap(), 0, size )))
     {
+        io->size    = size;
         io->handle  = handle;
         io->apc     = apc;
         io->apc_arg = arg;
