@@ -33,6 +33,8 @@
 WINE_DEFAULT_DEBUG_CHANNEL(dxva2);
 
 BOOL config_vaapi_enabled = FALSE;
+BOOL config_vaapi_drm = FALSE;
+char config_vaapi_drm_path[MAX_PATH] = "";
 
 BOOL WINAPI CapabilitiesRequestAndCapabilitiesReply( HMONITOR monitor, LPSTR buffer, DWORD length )
 {
@@ -377,6 +379,12 @@ static void dxva2_init( void )
 
     if (get_config_key(defkey, appkey, "backend", buffer, sizeof(buffer)))
         config_vaapi_enabled = !strcmp(buffer, "va");
+
+    if (get_config_key(defkey, appkey, "va_mode", buffer, sizeof(buffer)))
+        config_vaapi_drm = !strcmp(buffer, "drm");
+
+    if (!get_config_key(defkey, appkey, "va_drm_device", config_vaapi_drm_path, sizeof(config_vaapi_drm_path)))
+        strcpy(config_vaapi_drm_path, "/dev/dri/card0");
 
     if (defkey) RegCloseKey(defkey);
     if (appkey) RegCloseKey(appkey);

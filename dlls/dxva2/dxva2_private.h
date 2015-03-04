@@ -22,6 +22,7 @@
 #ifdef HAVE_VAAPI
 # undef Status
 # include <va/va_x11.h>
+# include <va/va_drm.h>
 #endif
 
 extern HRESULT videoservice_create( IDirect3DDevice9 *device, REFIID riid, void **ppv ) DECLSPEC_HIDDEN;
@@ -39,6 +40,8 @@ extern HRESULT genericdecoder_create( IDirectXVideoDecoderService *videodecoder,
 
 /* public */
 extern BOOL config_vaapi_enabled DECLSPEC_HIDDEN;
+BOOL config_vaapi_drm DECLSPEC_HIDDEN;
+char config_vaapi_drm_path[MAX_PATH] DECLSPEC_HIDDEN;
 extern IWineVideoService *vaapi_videoservice_create( void ) DECLSPEC_HIDDEN;
 
 /* internal */
@@ -101,11 +104,13 @@ typedef struct
     /* libraries */
     void *va_handle;
     void *va_x11_handle;
+    void *va_drm_handle;
     void *x11_handle;
 
-    /* display */
+    /* display / drm connection */
     Display *x11_display;
     VADisplay va_display;
+    int drm_fd;
 } WineVideoServiceImpl;
 
 static inline WineVideoServiceImpl *impl_from_IWineVideoService( IWineVideoService *iface )

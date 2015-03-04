@@ -55,6 +55,7 @@ MAKE_FUNCPTR(vaEndPicture);
 MAKE_FUNCPTR(vaErrorStr);
 MAKE_FUNCPTR(vaGetConfigAttributes);
 MAKE_FUNCPTR(vaGetDisplay);
+MAKE_FUNCPTR(vaGetDisplayDRM);
 MAKE_FUNCPTR(vaGetImage);
 MAKE_FUNCPTR(vaInitialize);
 MAKE_FUNCPTR(vaMapBuffer);
@@ -128,6 +129,23 @@ static void *load_libva_x11( void )
     }
 
     LOAD_FUNCPTR(vaGetDisplay);
+    return handle;
+
+error:
+    wine_dlclose(handle, NULL, 0);
+    return NULL;
+}
+
+static void *load_libva_drm( void )
+{
+    void *handle = wine_dlopen(SONAME_LIBVA_DRM, RTLD_NOW, NULL, 0);
+    if (!handle)
+    {
+        FIXME("Wine cannot find the %s library.\n", SONAME_LIBVA_DRM);
+        return FALSE;
+    }
+
+    LOAD_FUNCPTR(vaGetDisplayDRM);
     return handle;
 
 error:
@@ -480,11 +498,18 @@ static ULONG WINAPI WineVideoService_Release( IWineVideoService *iface )
         pvaTerminate(This->va_display);
         vaapi_unlock();
 
-        pXCloseDisplay(This->x11_display);
-
-        wine_dlclose(This->x11_handle, NULL, 0);
-        wine_dlclose(This->va_x11_handle, NULL, 0);
-        wine_dlclose(This->va_handle, NULL, 0);
+        if (This->x11_display)
+            pXCloseDisplay(This->x11_display);
+        if (This->x11_handle)
+            wine_dlclose(This->x11_handle, NULL, 0);
+        if (This->drm_fd > 0)
+            close(This->drm_fd);
+        if (This->va_drm_handle)
+            wine_dlclose(This->va_drm_handle, NULL, 0);
+        if (This->va_x11_handle)
+            wine_dlclose(This->va_x11_handle, NULL, 0);
+        if (This->va_handle)
+            wine_dlclose(This->va_handle, NULL, 0);
 
         CoTaskMemFree(This);
     }
@@ -703,30 +728,56 @@ IWineVideoService *vaapi_videoservice_create( void )
 
     videoservice->va_handle     = NULL;
     videoservice->va_x11_handle = NULL;
+    videoservice->va_drm_handle = NULL;
     videoservice->x11_handle    = NULL;
 
     videoservice->x11_display   = NULL;
     videoservice->va_display    = NULL;
+    videoservice->drm_fd        = -1;
 
     videoservice->va_handle = load_libva();
     if (!videoservice->va_handle)
         goto err;
 
-    videoservice->va_x11_handle = load_libva_x11();
-    if (!videoservice->va_x11_handle)
-        goto err;
+    if (config_vaapi_drm)
+    {
+        TRACE("Using VAAPI in DRM mode.\n");
 
-    videoservice->x11_handle = load_libx11();
-    if (!videoservice->x11_handle)
-        goto err;
+        videoservice->va_drm_handle = load_libva_drm();
+        if (!videoservice->va_drm_handle)
+            goto err;
 
-    videoservice->x11_display = pXOpenDisplay(NULL);
-    if (!videoservice->x11_display)
-        goto err;
+        videoservice->drm_fd = open(config_vaapi_drm_path, O_RDWR);
+        if (videoservice->drm_fd < 0)
+        {
+            FIXME("Failed to open device %s\n", config_vaapi_drm_path);
+            goto err;
+        }
 
-    videoservice->va_display = pvaGetDisplay(videoservice->x11_display);
-    if (!videoservice->va_display)
-        goto err;
+        videoservice->va_display = pvaGetDisplayDRM(videoservice->drm_fd);
+        if (!videoservice->va_display)
+            goto err;
+    }
+    else
+    {
+        TRACE("Using VAAPI in X11 mode.\n");
+
+        videoservice->va_x11_handle = load_libva_x11();
+        if (!videoservice->va_x11_handle)
+            goto err;
+
+        videoservice->x11_handle = load_libx11();
+        if (!videoservice->x11_handle)
+            goto err;
+
+        videoservice->x11_display = pXOpenDisplay(NULL);
+        if (!videoservice->x11_display)
+            goto err;
+
+        videoservice->va_display = pvaGetDisplay(videoservice->x11_display);
+        if (!videoservice->va_display)
+            goto err;
+    }
 
     if (pvaInitialize(videoservice->va_display, &major, &minor) != VA_STATUS_SUCCESS)
         goto err;
@@ -749,6 +800,10 @@ err:
         pXCloseDisplay(videoservice->x11_display);
     if (videoservice->x11_handle)
         wine_dlclose(videoservice->x11_handle, NULL, 0);
+    if (videoservice->drm_fd > 0)
+        close(videoservice->drm_fd);
+    if (videoservice->va_drm_handle)
+        wine_dlclose(videoservice->va_drm_handle, NULL, 0);
     if (videoservice->va_x11_handle)
         wine_dlclose(videoservice->va_x11_handle, NULL, 0);
     if (videoservice->va_handle)

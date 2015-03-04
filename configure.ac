@@ -1160,17 +1160,18 @@ This probably prevents linking to OpenGL. Try deleting the file and restarting c
 OpenGL and Direct3D won't be supported.])
 
     dnl **** Check for libva ****
-    AC_CHECK_HEADERS([va/va_x11.h])
-    if test "$ac_cv_header_va_va_x11_h" = "yes"
+    AC_CHECK_HEADERS([va/va_x11.h va/va_drm.h])
+    if test "$ac_cv_header_va_va_x11_h" = "yes" -a "$ac_cv_header_va_va_drm_h" = "yes"
     then
         WINE_CHECK_SONAME(va,vaQuerySurfaceAttributes,,,[$X_LIBS])
         WINE_CHECK_SONAME(va-x11,vaGetDisplay,,,[$X_LIBS -lva])
-        if test "x$ac_cv_lib_soname_va" != "x" -a "x$ac_cv_lib_soname_va_x11" != "x"
+        WINE_CHECK_SONAME(va-drm,vaGetDisplayDRM,,,[$X_LIBS -lva])
+        if test "x$ac_cv_lib_soname_va" != "x" -a "x$ac_cv_lib_soname_va_x11" != "x" -a "x$ac_cv_lib_soname_va_drm" != "x"
         then
             AC_DEFINE(HAVE_VAAPI, 1, [Define if you have the libva development files])
         fi
     fi
-    WINE_NOTICE_WITH(va,[test "x$ac_cv_lib_soname_va" = "x" -o "x$ac_cv_lib_soname_va_x11" = "x"],
+    WINE_NOTICE_WITH(va,[test "x$ac_cv_lib_soname_va" = "x" -o "x$ac_cv_lib_soname_va_x11" = "x" -o "x$ac_cv_lib_soname_va_drm" = "x"],
                      [libva ${notice_platform}development files not found, GPU video acceleration won't be supported.])
 
     CPPFLAGS="$ac_save_CPPFLAGS"
