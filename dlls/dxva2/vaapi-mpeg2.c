@@ -145,13 +145,13 @@ static HRESULT process_picture_parameters( WineVideoDecoderMPEG2Impl *This, cons
         return E_FAIL;
     }
 
-    /* vaRenderPicture is supposed to destroy the buffer */
     status = pvaRenderPicture(va_display, This->context, &vaPictureParam, 1);
+    pvaDestroyBuffer(va_display, vaPictureParam);
+
     if (status == VA_STATUS_SUCCESS)
         return S_OK;
 
     ERR("failed to process picture parameter buffer: %s (0x%x)\n", pvaErrorStr(status), status);
-    pvaDestroyBuffer(va_display, vaPictureParam);
     return E_FAIL;
 }
 
@@ -193,13 +193,13 @@ static HRESULT process_quantization_matrix( WineVideoDecoderMPEG2Impl *This, con
         return E_FAIL;
     }
 
-    /* vaRenderPicture is supposed to destroy the buffer */
     status = pvaRenderPicture(va_display, This->context, &vaIQMatrix, 1);
+    pvaDestroyBuffer(va_display, vaIQMatrix);
+
     if (status == VA_STATUS_SUCCESS)
         return S_OK;
 
     ERR("failed to process quantization matrix buffer: %s (0x%x)\n", pvaErrorStr(status), status);
-    pvaDestroyBuffer(va_display, vaIQMatrix);
     return E_FAIL;
 }
 
@@ -267,10 +267,12 @@ static HRESULT process_slice_control_buffer( WineVideoDecoderMPEG2Impl *This, co
     if (pvaUnmapBuffer(va_display, vaSliceInfo) != VA_STATUS_SUCCESS)
         goto err;
 
-    /* vaRenderPicture is supposed to destroy the buffer */
     status = pvaRenderPicture(va_display, This->context, &vaSliceInfo, 1);
     if (status == VA_STATUS_SUCCESS)
+    {
+        pvaDestroyBuffer(va_display, vaSliceInfo);
         return S_OK;
+    }
 
     ERR("failed to process slice control buffer: %s (0x%x)\n", pvaErrorStr(status), status);
 
@@ -284,20 +286,19 @@ static HRESULT process_data_buffer( WineVideoDecoderMPEG2Impl *This, const DXVA2
 {
     VADisplay va_display = IWineVideoService_VADisplay(This->service);
     VAStatus status;
-    HRESULT hr = E_FAIL;
+    HRESULT hr = S_OK;
 
     if (This->vaBitstream == VA_INVALID_ID)
         return E_FAIL;
 
-    /* vaRenderPicture is supposed to destroy the buffer */
     status = pvaRenderPicture(va_display, This->context, &This->vaBitstream, 1);
     if (status != VA_STATUS_SUCCESS)
     {
         ERR("failed to process slice buffer: %s (0x%x)\n", pvaErrorStr(status), status);
-        pvaDestroyBuffer(va_display, This->vaBitstream);
+        hr = E_FAIL;
     }
-    else hr = S_OK;
 
+    pvaDestroyBuffer(va_display, This->vaBitstream);
     This->vaBitstream = VA_INVALID_ID;
     return hr;
 }
