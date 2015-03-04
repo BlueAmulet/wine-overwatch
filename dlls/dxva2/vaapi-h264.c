@@ -382,21 +382,47 @@ static HRESULT process_slice_control_buffer( WineVideoDecoderH264Impl *This, con
 
         for (j = 0; j < 32; j++)
         {
-            slice[i].luma_weight_l0[j]      = This->d3dSliceInfo[i].Weights[0][j][0][0];
-            slice[i].luma_offset_l0[j]      = This->d3dSliceInfo[i].Weights[0][j][0][1];
+            if (This->d3dSliceInfo[i].RefPicList[0][j].bPicEntry != 0xFF)
+            {
+                slice[i].luma_weight_l0[j]      = This->d3dSliceInfo[i].Weights[0][j][0][0];
+                slice[i].luma_offset_l0[j]      = This->d3dSliceInfo[i].Weights[0][j][0][1];
 
-            slice[i].chroma_weight_l0[j][0] = This->d3dSliceInfo[i].Weights[0][j][1][0];
-            slice[i].chroma_offset_l0[j][0] = This->d3dSliceInfo[i].Weights[0][j][1][1];
-            slice[i].chroma_weight_l0[j][1] = This->d3dSliceInfo[i].Weights[0][j][2][0];
-            slice[i].chroma_offset_l0[j][1] = This->d3dSliceInfo[i].Weights[0][j][2][1];
+                slice[i].chroma_weight_l0[j][0] = This->d3dSliceInfo[i].Weights[0][j][1][0];
+                slice[i].chroma_offset_l0[j][0] = This->d3dSliceInfo[i].Weights[0][j][1][1];
+                slice[i].chroma_weight_l0[j][1] = This->d3dSliceInfo[i].Weights[0][j][2][0];
+                slice[i].chroma_offset_l0[j][1] = This->d3dSliceInfo[i].Weights[0][j][2][1];
+            }
+            else
+            {
+                slice[i].luma_weight_l0[j]      = 1 << This->d3dSliceInfo[i].luma_log2_weight_denom;
+                slice[i].luma_offset_l0[j]      = 0;
 
-            slice[i].luma_weight_l1[j]      = This->d3dSliceInfo[i].Weights[1][j][0][0];
-            slice[i].luma_offset_l1[j]      = This->d3dSliceInfo[i].Weights[1][j][0][1];
+                slice[i].chroma_weight_l0[j][0] = 1 << This->d3dSliceInfo[i].chroma_log2_weight_denom;
+                slice[i].chroma_offset_l0[j][0] = 0;
+                slice[i].chroma_weight_l0[j][1] = 1 << This->d3dSliceInfo[i].chroma_log2_weight_denom;
+                slice[i].chroma_offset_l0[j][1] = 0;
+            }
 
-            slice[i].chroma_weight_l1[j][0] = This->d3dSliceInfo[i].Weights[1][j][1][0];
-            slice[i].chroma_offset_l1[j][0] = This->d3dSliceInfo[i].Weights[1][j][1][1];
-            slice[i].chroma_weight_l1[j][1] = This->d3dSliceInfo[i].Weights[1][j][2][0];
-            slice[i].chroma_offset_l1[j][1] = This->d3dSliceInfo[i].Weights[1][j][2][1];
+            if (This->d3dSliceInfo[i].RefPicList[1][j].bPicEntry != 0xFF)
+            {
+                slice[i].luma_weight_l1[j]      = This->d3dSliceInfo[i].Weights[1][j][0][0];
+                slice[i].luma_offset_l1[j]      = This->d3dSliceInfo[i].Weights[1][j][0][1];
+
+                slice[i].chroma_weight_l1[j][0] = This->d3dSliceInfo[i].Weights[1][j][1][0];
+                slice[i].chroma_offset_l1[j][0] = This->d3dSliceInfo[i].Weights[1][j][1][1];
+                slice[i].chroma_weight_l1[j][1] = This->d3dSliceInfo[i].Weights[1][j][2][0];
+                slice[i].chroma_offset_l1[j][1] = This->d3dSliceInfo[i].Weights[1][j][2][1];
+            }
+            else
+            {
+                slice[i].luma_weight_l1[j]      = 1 << This->d3dSliceInfo[i].luma_log2_weight_denom;
+                slice[i].luma_offset_l1[j]      = 0;
+
+                slice[i].chroma_weight_l1[j][0] = 1 << This->d3dSliceInfo[i].chroma_log2_weight_denom;
+                slice[i].chroma_offset_l1[j][0] = 0;
+                slice[i].chroma_weight_l1[j][1] = 1 << This->d3dSliceInfo[i].chroma_log2_weight_denom;
+                slice[i].chroma_offset_l1[j][1] = 0;
+            }
         }
     }
 
