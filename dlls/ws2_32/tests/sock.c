@@ -8424,6 +8424,17 @@ static void test_TransmitFile(void)
     ok(memcmp(buf, &footer_msg[0], sizeof(footer_msg)+1) == 0,
        "TransmitFile footer buffer did not match!\n");
 
+    /* Test TransmitFile w/ TF_DISCONNECT */
+    SetFilePointer(file, 0, NULL, FILE_BEGIN);
+    bret = pTransmitFile(client, file, 0, 0, NULL, NULL, TF_DISCONNECT);
+    ok(bret, "TransmitFile failed unexpectedly.\n");
+    compare_file(file, dest, 0);
+    closesocket(client);
+    ok(send(client, "test", 4, 0) == -1, "send() after TF_DISCONNECT succeeded unexpectedly.\n");
+    err = WSAGetLastError();
+    todo_wine ok(err == WSAENOTSOCK, "send() after TF_DISCONNECT triggered unexpected errno (%d != %d)\n",
+                 err, WSAENOTSOCK);
+
     /* Test TransmitFile with a UDP datagram socket */
     closesocket(client);
     client = socket(AF_INET, SOCK_DGRAM, 0);

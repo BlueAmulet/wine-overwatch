@@ -3072,7 +3072,16 @@ static NTSTATUS WS2_transmitfile_base( int fd, struct ws2_transmitfile_async *ws
             return wsaErrStatus();
     }
 
-    return status;
+    if (status != STATUS_SUCCESS)
+        return status;
+
+    if (wsa->flags & TF_DISCONNECT)
+    {
+        /* we can't use WS_closesocket because it modifies the last error */
+        NtClose( SOCKET2HANDLE(wsa->write.hSocket) );
+    }
+
+    return STATUS_SUCCESS;
 }
 
 /***********************************************************************
@@ -3109,6 +3118,7 @@ static BOOL WINAPI WS2_TransmitFile( SOCKET s, HANDLE h, DWORD file_bytes, DWORD
                                      LPOVERLAPPED overlapped, LPTRANSMIT_FILE_BUFFERS buffers,
                                      DWORD flags )
 {
+    DWORD unsupported_flags = flags & ~(TF_DISCONNECT);
     union generic_unix_sockaddr uaddr;
     unsigned int uaddrlen = sizeof(uaddr);
     struct ws2_transmitfile_async *wsa;
@@ -3130,8 +3140,8 @@ static BOOL WINAPI WS2_TransmitFile( SOCKET s, HANDLE h, DWORD file_bytes, DWORD
         WSASetLastError( WSAENOTCONN );
         return FALSE;
     }
-    if (flags)
-        FIXME("Flags are not currently supported (0x%x).\n", flags);
+    if (unsupported_flags)
+        FIXME("Flags are not currently supported (0x%x).\n", unsupported_flags);
 
     if (h && GetFileType( h ) != FILE_TYPE_DISK)
     {
