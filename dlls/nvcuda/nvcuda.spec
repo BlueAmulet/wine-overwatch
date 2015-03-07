@@ -240,7 +240,7 @@
 @ stdcall cuModuleGetGlobal_v2(ptr ptr ptr str) wine_cuModuleGetGlobal_v2
 @ stdcall cuModuleGetSurfRef(ptr ptr str) wine_cuModuleGetSurfRef
 @ stdcall cuModuleGetTexRef(ptr ptr str) wine_cuModuleGetTexRef
-@ stub cuModuleLoad
+@ stdcall cuModuleLoad(ptr str) wine_cuModuleLoad
 @ stdcall cuModuleLoadData(ptr ptr) wine_cuModuleLoadData
 @ stdcall cuModuleLoadDataEx(ptr ptr long ptr ptr) wine_cuModuleLoadDataEx
 @ stdcall cuModuleLoadFatBinary(ptr ptr) wine_cuModuleLoadFatBinary

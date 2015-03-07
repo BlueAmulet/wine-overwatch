@@ -29,6 +29,7 @@
 
 #include "windef.h"
 #include "winbase.h"
+#include "winternl.h"
 #include "wine/library.h"
 #include "wine/debug.h"
 #include "wine/list.h"
@@ -261,6 +262,7 @@ static CUresult (*pcuModuleGetGlobal)(CUdeviceptr *dptr, size_t *bytes, CUmodule
 static CUresult (*pcuModuleGetGlobal_v2)(CUdeviceptr *dptr, size_t *bytes, CUmodule hmod, const char *name);
 static CUresult (*pcuModuleGetSurfRef)(CUsurfref *pSurfRef, CUmodule hmod, const char *name);
 static CUresult (*pcuModuleGetTexRef)(CUtexref *pTexRef, CUmodule hmod, const char *name);
+static CUresult (*pcuModuleLoad)(CUmodule *module, const char *fname);
 static CUresult (*pcuModuleLoadData)(CUmodule *module, const void *image);
 static CUresult (*pcuModuleLoadDataEx)(CUmodule *module, const void *image, unsigned int numOptions, CUjit_option *options, void **optionValues);
 static CUresult (*pcuModuleLoadFatBinary)(CUmodule *module, const void *fatCubin);
@@ -606,6 +608,7 @@ static BOOL load_functions(void)
     LOAD_FUNCPTR(cuModuleGetGlobal_v2);
     LOAD_FUNCPTR(cuModuleGetSurfRef);
     LOAD_FUNCPTR(cuModuleGetTexRef);
+    LOAD_FUNCPTR(cuModuleLoad);
     LOAD_FUNCPTR(cuModuleLoadData);
     LOAD_FUNCPTR(cuModuleLoadDataEx);
     LOAD_FUNCPTR(cuModuleLoadFatBinary);
@@ -1881,6 +1884,49 @@ CUresult WINAPI wine_cuModuleGetTexRef(CUtexref *pTexRef, CUmodule hmod, const c
 {
     TRACE("(%p, %p, %s)\n", pTexRef, hmod, name);
     return pcuModuleGetTexRef(pTexRef, hmod, name);
+}
+
+/* FIXME: Should we pay attention to AreFileApisANSI() ? */
+static BOOL get_unix_path(ANSI_STRING *unix_name, const char *filename)
+{
+    UNICODE_STRING dospathW, ntpathW;
+    ANSI_STRING dospath;
+    NTSTATUS status;
+
+    RtlInitAnsiString(&dospath, filename);
+
+    if (RtlAnsiStringToUnicodeString(&dospathW, &dospath, TRUE))
+        return FALSE;
+
+    if (!RtlDosPathNameToNtPathName_U(dospathW.Buffer, &ntpathW, NULL, NULL))
+    {
+        RtlFreeUnicodeString(&dospathW);
+        return FALSE;
+    }
+
+    status = wine_nt_to_unix_file_name(&ntpathW, unix_name, FILE_OPEN, FALSE);
+
+    RtlFreeUnicodeString(&ntpathW);
+    RtlFreeUnicodeString(&dospathW);
+    return !status;
+}
+
+CUresult WINAPI wine_cuModuleLoad(CUmodule *module, const char *fname)
+{
+    ANSI_STRING unix_name;
+    CUresult ret;
+
+    TRACE("(%p, %s)\n", module, fname);
+
+    if (!fname)
+        return CUDA_ERROR_INVALID_VALUE;
+
+    if (!get_unix_path(&unix_name, fname))
+        return CUDA_ERROR_FILE_NOT_FOUND;
+
+    ret = pcuModuleLoad(module, unix_name.Buffer);
+    RtlFreeAnsiString(&unix_name);
+    return ret;
 }
 
 CUresult WINAPI wine_cuModuleLoadData(CUmodule *module, const void *image)
