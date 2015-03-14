@@ -1,5 +1,6 @@
 /*
  * Copyright 2010 Christian Costa
+ * Copyright 2015 Sebastian Lackner
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -197,7 +198,13 @@ DECLARE_INTERFACE_(ID3DXEffectStateManager, IUnknown)
 
 typedef struct ID3DXEffect *LPD3DXEFFECT;
 
+#if defined(_D3DX9_VER) && _D3DX9_VER <= 25
+DEFINE_GUID(IID_ID3DXEffect, 0xd165ccb1, 0x62b0, 0x4a33, 0xb3, 0xfa, 0xa9, 0x23, 0x0, 0x30, 0x5a, 0x11);
+#elif defined(_D3DX9_VER) && _D3DX9_VER == 26
+DEFINE_GUID(IID_ID3DXEffect, 0xc7b17651, 0x5420, 0x490e, 0x8a, 0x7f, 0x92, 0x36, 0x75, 0xa2, 0xd6, 0x87);
+#else
 DEFINE_GUID(IID_ID3DXEffect, 0xf6ceb4b3, 0x4e4c, 0x40dd, 0xb8, 0x83, 0x8d, 0x8d, 0xe5, 0xea, 0xc, 0xd5);
+#endif
 
 #define INTERFACE ID3DXEffect
 
@@ -282,10 +289,15 @@ DECLARE_INTERFACE_(ID3DXEffect, ID3DXBaseEffect)
     STDMETHOD(BeginParameterBlock)(THIS) PURE;
     STDMETHOD_(D3DXHANDLE, EndParameterBlock)(THIS) PURE;
     STDMETHOD(ApplyParameterBlock)(THIS_ D3DXHANDLE parameter_block) PURE;
+#if !defined(_D3DX9_VER) || _D3DX9_VER >= 26
     STDMETHOD(DeleteParameterBlock)(THIS_ D3DXHANDLE parameter_block) PURE;
+#endif
     STDMETHOD(CloneEffect)(THIS_ struct IDirect3DDevice9 *device, struct ID3DXEffect **effect) PURE;
+#if !defined(_D3DX9_VER) || _D3DX9_VER >= 27
     STDMETHOD(SetRawValue)(THIS_ D3DXHANDLE parameter, const void *data, UINT byte_offset, UINT bytes) PURE;
+#endif
 };
+
 #undef INTERFACE
 
 typedef struct ID3DXEffectCompiler *LPD3DXEFFECTCOMPILER;
