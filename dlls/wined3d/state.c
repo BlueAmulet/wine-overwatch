@@ -407,8 +407,11 @@ static GLenum gl_blend_factor(enum wined3d_blend factor, const struct wined3d_fo
         case WINED3D_BLEND_INVBLENDFACTOR:
             return GL_ONE_MINUS_CONSTANT_COLOR_EXT;
         default:
-            FIXME("Unhandled blend factor %#x.\n", factor);
+        {
+            static int once;
+            if (factor || !once++) FIXME("Unhandled blend factor %#x.\n", factor);
             return GL_NONE;
+        }
     }
 }
 
