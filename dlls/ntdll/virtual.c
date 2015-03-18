@@ -2824,6 +2824,58 @@ done:
 
 
 /***********************************************************************
+ *           virtual_map_shared_memory
+ */
+NTSTATUS virtual_map_shared_memory( int fd, PVOID *addr_ptr, ULONG zero_bits,
+                                    SIZE_T *size_ptr, ULONG protect )
+{
+    SIZE_T size, mask = get_mask( zero_bits );
+    struct file_view *view;
+    unsigned int vprot;
+    sigset_t sigset;
+    NTSTATUS res;
+    int prot;
+
+    size = ROUND_SIZE( 0, *size_ptr );
+    if (size < *size_ptr)
+        return STATUS_INVALID_PARAMETER;
+
+    server_enter_uninterrupted_section( &csVirtual, &sigset );
+
+    get_vprot_flags( protect, &vprot, FALSE );
+    vprot |= VPROT_COMMITTED;
+    res = map_view( &view, *addr_ptr, size, mask, FALSE, vprot );
+    if (!res)
+    {
+        /* Map the shared memory */
+
+        prot = VIRTUAL_GetUnixProt( vprot );
+        if (force_exec_prot && !(vprot & VPROT_NOEXEC) && (vprot & VPROT_READ))
+        {
+            TRACE( "forcing exec permission on mapping %p-%p\n",
+                   (char *)view->base, (char *)view->base + size - 1 );
+            prot |= PROT_EXEC;
+        }
+
+        if (mmap( view->base, size, prot, MAP_FIXED | MAP_SHARED, fd, 0 ) != (void *)-1)
+        {
+            memset( view->prot, vprot, size >> page_shift );
+            *addr_ptr = view->base;
+            *size_ptr = size;
+        }
+        else
+        {
+            ERR( "virtual_map_shared_memory %p %lx failed\n", view->base, size );
+            delete_view( view );
+        }
+    }
+
+    server_leave_uninterrupted_section( &csVirtual, &sigset );
+    return res;
+}
+
+
+/***********************************************************************
  *             NtUnmapViewOfSection   (NTDLL.@)
  *             ZwUnmapViewOfSection   (NTDLL.@)
  */

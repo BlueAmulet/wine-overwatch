@@ -168,6 +168,7 @@ extern NTSTATUS nt_to_unix_file_name_attr( const OBJECT_ATTRIBUTES *attr, ANSI_S
 extern void virtual_get_system_info( SYSTEM_BASIC_INFORMATION *info ) DECLSPEC_HIDDEN;
 extern NTSTATUS virtual_create_builtin_view( void *base ) DECLSPEC_HIDDEN;
 extern NTSTATUS virtual_alloc_thread_stack( TEB *teb, SIZE_T reserve_size, SIZE_T commit_size ) DECLSPEC_HIDDEN;
+extern NTSTATUS virtual_map_shared_memory( int fd, PVOID *addr_ptr, ULONG zero_bits, SIZE_T *size_ptr, ULONG protect ) DECLSPEC_HIDDEN;
 extern void virtual_clear_thread_stack(void) DECLSPEC_HIDDEN;
 extern BOOL virtual_handle_stack_fault( void *addr ) DECLSPEC_HIDDEN;
 extern BOOL virtual_is_valid_code_address( const void *addr, SIZE_T size ) DECLSPEC_HIDDEN;
