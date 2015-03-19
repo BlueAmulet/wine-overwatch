@@ -1544,6 +1544,7 @@ static void queue_hardware_message( struct desktop *desktop, struct message *msg
 
     update_key_state( desktop, desktop->keystate, msg );
     last_input_time = get_tick_count();
+    if (shmglobal) shmglobal->last_input_time = last_input_time;
     if (msg->msg != WM_MOUSEMOVE) always_queue = 1;
 
     if (is_keyboard_msg( msg ))

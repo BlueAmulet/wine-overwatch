@@ -481,6 +481,7 @@ done:
 BOOL WINAPI GetLastInputInfo(PLASTINPUTINFO plii)
 {
     BOOL ret;
+    shmglobal_t *shm = wine_get_shmglobal();
 
     TRACE("%p\n", plii);
 
@@ -488,6 +489,12 @@ BOOL WINAPI GetLastInputInfo(PLASTINPUTINFO plii)
     {
         SetLastError(ERROR_INVALID_PARAMETER);
         return FALSE;
+    }
+
+    if (shm)
+    {
+        plii->dwTime = shm->last_input_time;
+        return TRUE;
     }
 
     SERVER_START_REQ( get_last_input_time )

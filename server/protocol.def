@@ -71,12 +71,12 @@ struct request_max_size
 
 typedef struct
 {
-    int dummy;
+    unsigned int last_input_time;   /* last input time */
 } shmglobal_t;
 
 typedef struct
 {
-    int queue_bits;     /* queue wake bits */
+    int queue_bits;                 /* queue wake bits */
 } shmlocal_t;
 
 /* debug event data */
