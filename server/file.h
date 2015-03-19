@@ -159,6 +159,14 @@ extern struct object *create_mailslot_device( struct object *root, const struct 
 extern struct object *create_unix_device( struct object *root, const struct unicode_str *name,
                                           const char *unix_path );
 
+/* shared memory functions */
+
+extern int allocate_shared_memory( int *fd, void **memory, size_t size );
+extern void release_shared_memory( int fd, void *memory, size_t size );
+extern void init_shared_memory( void );
+extern shmglobal_t *shmglobal;
+extern int          shmglobal_fd;
+
 /* change notification functions */
 
 extern void do_change_notify( int unix_fd );

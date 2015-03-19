@@ -395,6 +395,7 @@ void terminate_thread( int status )
 void exit_thread( int status )
 {
     static void *prev_teb;
+    shmlocal_t *shmlocal;
     sigset_t sigset;
     TEB *teb;
 
@@ -417,6 +418,9 @@ void exit_thread( int status )
 
     LdrShutdownThread();
     RtlFreeThreadActivationContextStack();
+
+    shmlocal = interlocked_xchg_ptr( &NtCurrentTeb()->Reserved5[2], NULL );
+    if (shmlocal) NtUnmapViewOfSection( NtCurrentProcess(), shmlocal );
 
     pthread_sigmask( SIG_BLOCK, &server_block_set, NULL );
 

@@ -366,7 +366,7 @@ typedef struct _TEB
     PVOID                        Spare4;                            /* f7c/1750 */
     PVOID                        ReservedForOle;                    /* f80/1758 */
     ULONG                        WaitingOnLoaderLock;               /* f84/1760 */
-    PVOID                        Reserved5[3];                      /* f88/1768 */
+    PVOID                        Reserved5[3];                      /* f88/1768 used for x86_64 OSX and wineserver shared memory */
     PVOID                       *TlsExpansionSlots;                 /* f94/1780 */
     ULONG                        ImpersonationLocale;               /* f98/1788 */
     ULONG                        IsImpersonating;                   /* f9c/178c */

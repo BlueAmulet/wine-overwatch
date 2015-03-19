@@ -1000,6 +1000,66 @@ done:
 
 
 /***********************************************************************
+ *           server_get_shared_memory_fd
+ *
+ * Receive a file descriptor to a server shared memory block.
+ */
+static int server_get_shared_memory_fd( HANDLE thread, int *unix_fd )
+{
+    obj_handle_t dummy;
+    sigset_t sigset;
+    int ret;
+
+    server_enter_uninterrupted_section( &fd_cache_section, &sigset );
+
+    SERVER_START_REQ( get_shared_memory )
+    {
+        req->tid = HandleToULong(thread);
+        if (!(ret = wine_server_call( req )))
+        {
+            *unix_fd = receive_fd( &dummy );
+            if (*unix_fd == -1) ret = STATUS_NOT_SUPPORTED;
+        }
+    }
+    SERVER_END_REQ;
+
+    server_leave_uninterrupted_section( &fd_cache_section, &sigset );
+    return ret;
+}
+
+
+/***********************************************************************
+ *           server_get_shared_memory
+ *
+ * Get address of a shared memory block.
+ */
+void *server_get_shared_memory( HANDLE thread )
+{
+    static shmglobal_t *shmglobal = (void *)-1;
+    void *mem = NULL;
+    int fd = -1;
+
+    /* The global memory block is only requested once. No locking is
+     * required because this function is called very early during the
+     * process initialization for the first time. */
+    if (!thread && shmglobal != (void *)-1)
+        return shmglobal;
+
+    if (!server_get_shared_memory_fd( thread, &fd ))
+    {
+        SIZE_T size = thread ? sizeof(shmlocal_t) : sizeof(shmglobal_t);
+        virtual_map_shared_memory( fd, &mem, 0, &size, PAGE_READONLY );
+        close( fd );
+    }
+
+    if (!thread)
+        shmglobal = mem;
+
+    return mem;
+}
+
+
+/***********************************************************************
  *           wine_server_fd_to_handle   (NTDLL.@)
  *
  * Allocate a file handle for a Unix file descriptor.
@@ -1527,6 +1587,10 @@ size_t server_init_thread( void *entry_point )
         server_cpus       = reply->all_cpus;
     }
     SERVER_END_REQ;
+
+    /* initialize thread shared memory pointers */
+    NtCurrentTeb()->Reserved5[1] = server_get_shared_memory( 0 );
+    NtCurrentTeb()->Reserved5[2] = server_get_shared_memory( NtCurrentTeb()->ClientId.UniqueThread );
 
     is_wow64 = !is_win64 && (server_cpus & ((1 << CPU_x86_64) | (1 << CPU_ARM64))) != 0;
     ntdll_get_thread_data()->wow64_redir = is_wow64;
