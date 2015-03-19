@@ -448,17 +448,29 @@ DWORD WINAPI GetQueueStatus( UINT flags )
  */
 BOOL WINAPI GetInputState(void)
 {
+    shmlocal_t *shm = wine_get_shmlocal();
     DWORD ret;
 
     check_for_events( QS_INPUT );
+
+    /* req->clear is not set, so we can safely get the
+     * wineserver status without an additional call. */
+    if (shm)
+    {
+        ret = shm->queue_bits;
+        goto done;
+    }
 
     SERVER_START_REQ( get_queue_status )
     {
         req->clear_bits = 0;
         wine_server_call( req );
-        ret = reply->wake_bits & (QS_KEY | QS_MOUSEBUTTON);
+        ret = reply->wake_bits;
     }
     SERVER_END_REQ;
+
+done:
+    ret &= (QS_KEY | QS_MOUSEBUTTON);
     return ret;
 }
 

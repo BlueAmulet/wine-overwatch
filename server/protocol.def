@@ -76,7 +76,7 @@ typedef struct
 
 typedef struct
 {
-    int dummy;
+    int queue_bits;     /* queue wake bits */
 } shmlocal_t;
 
 /* debug event data */

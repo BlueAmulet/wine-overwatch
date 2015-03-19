@@ -121,6 +121,7 @@ struct thread_input
 struct msg_queue
 {
     struct object          obj;             /* object header */
+    struct thread         *thread;          /* reference to the thread owning the queue */
     struct fd             *fd;              /* optional file descriptor to poll */
     unsigned int           wake_bits;       /* wakeup bits */
     unsigned int           wake_mask;       /* wakeup mask */
@@ -292,6 +293,7 @@ static struct msg_queue *create_msg_queue( struct thread *thread, struct thread_
     if ((queue = alloc_object( &msg_queue_ops )))
     {
         queue->fd              = NULL;
+        queue->thread          = thread;
         queue->wake_bits       = 0;
         queue->wake_mask       = 0;
         queue->changed_bits    = 0;
@@ -325,6 +327,7 @@ void free_msg_queue( struct thread *thread )
 {
     remove_thread_hooks( thread );
     if (!thread->queue) return;
+    thread->queue->thread = NULL;
     release_object( thread->queue );
     thread->queue = NULL;
 }
@@ -447,11 +450,21 @@ static inline int is_signaled( struct msg_queue *queue )
     return ((queue->wake_bits & queue->wake_mask) || (queue->changed_bits & queue->changed_mask));
 }
 
+/* synchronize the queue state with the shared memory */
+static inline void update_shm_queue_bits( struct msg_queue *queue )
+{
+    shmlocal_t *shm;
+    if (!queue->thread) return;
+    if ((shm = queue->thread->shm))
+        shm->queue_bits = queue->wake_bits;
+}
+
 /* set some queue bits */
 static inline void set_queue_bits( struct msg_queue *queue, unsigned int bits )
 {
     queue->wake_bits |= bits;
     queue->changed_bits |= bits;
+    update_shm_queue_bits( queue );
     if (is_signaled( queue )) wake_up( &queue->obj, 0 );
 }
 
@@ -460,6 +473,7 @@ static inline void clear_queue_bits( struct msg_queue *queue, unsigned int bits 
 {
     queue->wake_bits &= ~bits;
     queue->changed_bits &= ~bits;
+    update_shm_queue_bits( queue );
 }
 
 /* check whether msg is a keyboard message */
