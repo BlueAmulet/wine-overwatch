@@ -101,6 +101,7 @@ struct thread_input
 {
     struct object          obj;           /* object header */
     struct desktop        *desktop;       /* desktop that this thread input belongs to */
+    struct list            queues;        /* list of all queues this input belongs to */
     user_handle_t          focus;         /* focus window */
     user_handle_t          capture;       /* capture window */
     user_handle_t          active;        /* active window */
@@ -142,6 +143,7 @@ struct msg_queue
     lparam_t               next_timer_id;   /* id for the next timer with a 0 window */
     struct timeout_user   *timeout;         /* timeout for next timer to expire */
     struct thread_input   *input;           /* thread input descriptor */
+    struct list            input_entry;     /* entry in input->queues */
     struct hook_table     *hooks;           /* hook table */
     timeout_t              last_get_msg;    /* time of last get message call */
     unsigned int           ignore_post_msg; /* ignore post messages newer than this unique id */
@@ -263,6 +265,7 @@ static struct thread_input *create_thread_input( struct thread *thread )
         input->cursor       = 0;
         input->cursor_count = 0;
         input->lock_count   = 0;
+        list_init( &input->queues );
         list_init( &input->msg_list );
         set_caret_window( input, 0 );
         memset( input->keystate, 0, sizeof(input->keystate) );
@@ -307,6 +310,7 @@ static struct msg_queue *create_msg_queue( struct thread *thread, struct thread_
         queue->next_timer_id   = 0x7fff;
         queue->timeout         = NULL;
         queue->input           = (struct thread_input *)grab_object( input );
+        list_add_tail( &input->queues, &queue->input_entry );
         queue->hooks           = NULL;
         queue->last_get_msg    = current_time;
         queue->ignore_post_msg = 0;
@@ -346,10 +350,12 @@ static int assign_thread_input( struct thread *thread, struct thread_input *new_
     {
         if (queue->keystate_locked) queue->input->lock_count--;
         queue->input->cursor_count -= queue->cursor_count;
+        list_remove( &queue->input_entry );
         release_object( queue->input );
         queue->keystate_locked = 0;
     }
     queue->input = (struct thread_input *)grab_object( new_input );
+    list_add_tail( &new_input->queues, &queue->input_entry );
     new_input->cursor_count += queue->cursor_count;
     return 1;
 }
@@ -1028,6 +1034,7 @@ static void msg_queue_destroy( struct object *obj )
     if (queue->timeout) remove_timeout_user( queue->timeout );
     if (queue->keystate_locked) queue->input->lock_count--;
     queue->input->cursor_count -= queue->cursor_count;
+    list_remove( &queue->input_entry );
     release_object( queue->input );
     if (queue->hooks) release_object( queue->hooks );
     if (queue->fd) release_object( queue->fd );
@@ -1054,6 +1061,7 @@ static void thread_input_destroy( struct object *obj )
 {
     struct thread_input *input = (struct thread_input *)obj;
 
+    assert( list_empty(&input->queues) );
     empty_msg_list( &input->msg_list );
     if (input->desktop)
     {
