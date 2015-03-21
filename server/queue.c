@@ -280,6 +280,25 @@ static struct thread_input *create_thread_input( struct thread *thread )
     return input;
 }
 
+/* synchronize the input state with the shared memory */
+static void update_shm_thread_input( struct thread_input *input )
+{
+    struct msg_queue *queue;
+
+    /* the loop doesn't matter, usually it should only have one or a few entries */
+    LIST_FOR_EACH_ENTRY( queue, &input->queues, struct msg_queue, input_entry )
+    {
+        shmlocal_t *shm;
+        if (!queue->thread) continue;
+        if ((shm = queue->thread->shm))
+        {
+            shm->input_active  = input->active;
+            shm->input_focus   = input->focus;
+            shm->input_capture = input->capture;
+        }
+    }
+}
+
 /* create a message queue object */
 static struct msg_queue *create_msg_queue( struct thread *thread, struct thread_input *input )
 {
@@ -322,7 +341,11 @@ static struct msg_queue *create_msg_queue( struct thread *thread, struct thread_
 
         thread->queue = queue;
     }
-    if (new_input) release_object( new_input );
+    if (new_input)
+    {
+        update_shm_thread_input( new_input );
+        release_object( new_input );
+    }
     return queue;
 }
 
@@ -357,6 +380,7 @@ static int assign_thread_input( struct thread *thread, struct thread_input *new_
     queue->input = (struct thread_input *)grab_object( new_input );
     list_add_tail( &new_input->queues, &queue->input_entry );
     new_input->cursor_count += queue->cursor_count;
+    update_shm_thread_input( new_input );
     return 1;
 }
 
@@ -1081,6 +1105,7 @@ static inline void thread_input_cleanup_window( struct msg_queue *queue, user_ha
     if (window == input->menu_owner) input->menu_owner = 0;
     if (window == input->move_size) input->move_size = 0;
     if (window == input->caret) set_caret_window( input, 0 );
+    update_shm_thread_input( input );
 }
 
 /* check if the specified window can be set in the input data of a given queue */
@@ -3085,6 +3110,7 @@ DECL_HANDLER(set_focus_window)
     {
         reply->previous = queue->input->focus;
         queue->input->focus = get_user_full_handle( req->handle );
+        update_shm_thread_input( queue->input );
     }
 }
 
@@ -3101,6 +3127,7 @@ DECL_HANDLER(set_active_window)
         {
             reply->previous = queue->input->active;
             queue->input->active = get_user_full_handle( req->handle );
+            update_shm_thread_input( queue->input );
         }
         else set_error( STATUS_INVALID_HANDLE );
     }
@@ -3127,6 +3154,7 @@ DECL_HANDLER(set_capture_window)
         input->capture = get_user_full_handle( req->handle );
         input->menu_owner = (req->flags & CAPTURE_MENU) ? input->capture : 0;
         input->move_size = (req->flags & CAPTURE_MOVESIZE) ? input->capture : 0;
+        update_shm_thread_input( input );
         reply->full_handle = input->capture;
     }
 }

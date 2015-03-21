@@ -76,7 +76,10 @@ typedef struct
 
 typedef struct
 {
-    int queue_bits;                 /* queue wake bits */
+    int             queue_bits;     /* queue wake bits */
+    user_handle_t   input_focus;    /* focus window */
+    user_handle_t   input_capture;  /* capture window */
+    user_handle_t   input_active;   /* active window */
 } shmlocal_t;
 
 /* debug event data */
