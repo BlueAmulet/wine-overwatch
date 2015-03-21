@@ -186,6 +186,8 @@ struct user_thread_info
     HWND                          top_window;             /* Desktop window */
     HWND                          msg_window;             /* HWND_MESSAGE parent window */
     RAWINPUT                     *rawinput;
+    HWND                          foreground_wnd;         /* Cache of the foreground window */
+    DWORD                         foreground_wnd_epoch;   /* Counter to invalidate foreground window */
 };
 
 C_ASSERT( sizeof(struct user_thread_info) <= sizeof(((TEB *)0)->Win32ClientInfo) );

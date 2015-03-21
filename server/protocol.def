@@ -69,11 +69,14 @@ struct request_max_size
 #define FIRST_USER_HANDLE 0x0020  /* first possible value for low word of user handle */
 #define LAST_USER_HANDLE  0xffef  /* last possible value for low word of user handle */
 
+/* wineserver global shared memory block */
 typedef struct
 {
-    unsigned int last_input_time;   /* last input time */
+    unsigned int last_input_time;       /* last input time */
+    unsigned int foreground_wnd_epoch;  /* counter to invalidate foreground window */
 } shmglobal_t;
 
+/* wineserver local shared memory block */
 typedef struct
 {
     int             queue_bits;     /* queue wake bits */
