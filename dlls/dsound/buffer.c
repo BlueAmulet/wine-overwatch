@@ -1128,6 +1128,9 @@ HRESULT IDirectSoundBufferImpl_Create(
 			HeapFree(GetProcessHeap(),0,dsb);
 			dsb = NULL;
 		}
+
+		if (dsb->device->eax.using_eax)
+			init_eax_buffer(dsb);
 	}
 
         IDirectSoundBuffer8_AddRef(&dsb->IDirectSoundBuffer8_iface);
@@ -1166,6 +1169,8 @@ void secondarybuffer_destroy(IDirectSoundBufferImpl *This)
         }
         HeapFree(GetProcessHeap(), 0, This->filters);
     }
+
+    free_eax_buffer(This);
 
     HeapFree(GetProcessHeap(), 0, This);
 

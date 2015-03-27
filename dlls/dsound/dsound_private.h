@@ -236,6 +236,8 @@ HRESULT WINAPI EAX_Get(IDirectSoundBufferImpl *buf, REFGUID guidPropSet,
 HRESULT WINAPI EAX_Set(IDirectSoundBufferImpl *buf, REFGUID guidPropSet,
         ULONG dwPropID, void *pInstanceData, ULONG cbInstanceData, void *pPropData,
         ULONG cbPropData) DECLSPEC_HIDDEN;
+void free_eax_buffer(IDirectSoundBufferImpl *dsb) DECLSPEC_HIDDEN;
+void init_eax_buffer(IDirectSoundBufferImpl *dsb) DECLSPEC_HIDDEN;
 
 /* mixer.c */
 void DSOUND_CheckEvent(const IDirectSoundBufferImpl *dsb, DWORD playpos, int len) DECLSPEC_HIDDEN;
