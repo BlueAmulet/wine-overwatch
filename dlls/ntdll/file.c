@@ -2617,6 +2617,7 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE hFile, PIO_STATUS_BLOCK io,
     case FilePipeLocalInformation:
         {
             FILE_PIPE_LOCAL_INFORMATION* pli = ptr;
+            int avail, fd, needs_close;
 
             SERVER_START_REQ( get_named_pipe_info )
             {
@@ -2640,12 +2641,19 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE hFile, PIO_STATUS_BLOCK io,
                     pli->MaximumInstances = reply->maxinstances;
                     pli->CurrentInstances = reply->instances;
                     pli->InboundQuota = reply->insize;
-                    pli->ReadDataAvailable = 0; /* FIXME */
+                    pli->ReadDataAvailable = 0;
                     pli->OutboundQuota = reply->outsize;
                     pli->WriteQuotaAvailable = 0; /* FIXME */
                     pli->NamedPipeState = 0; /* FIXME */
                     pli->NamedPipeEnd = (reply->flags & NAMED_PIPE_SERVER_END) ?
                         FILE_PIPE_SERVER_END : FILE_PIPE_CLIENT_END;
+
+                    if (!server_get_unix_fd( hFile, FILE_READ_DATA, &fd, &needs_close, NULL, NULL ))
+                    {
+                        if (!unix_fd_avail( fd, &avail ))
+                            pli->ReadDataAvailable = min(avail, reply->outsize); /* FIXME */
+                        if (needs_close) close( fd );
+                    }
                 }
             }
             SERVER_END_REQ;
