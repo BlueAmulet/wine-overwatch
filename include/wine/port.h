@@ -368,6 +368,9 @@ extern int _spawnvp(int mode, const char *cmdname, const char * const argv[]);
 #ifndef XATTR_USER_PREFIX
 # define XATTR_USER_PREFIX "user."
 #endif
+#ifndef XATTR_SIZE_MAX
+# define XATTR_SIZE_MAX    65536
+#endif
 
 extern int xattr_fget( int filedes, const char *name, void *value, size_t size );
 extern int xattr_fremove( int filedes, const char *name );

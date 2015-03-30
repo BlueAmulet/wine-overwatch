@@ -32,6 +32,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
+#include <limits.h>
 #include <unistd.h>
 #ifdef HAVE_UTIME_H
 #include <utime.h>
@@ -51,6 +52,14 @@
 #include "request.h"
 #include "process.h"
 #include "security.h"
+
+/* We intentionally do not match the Samba 4 extended attribute for NT security descriptors (SDs):
+ *  1) Samba stores this information using an internal data structure (we use a flat NT SD).
+ *  2) Samba uses the attribute "security.NTACL".  This attribute is within a namespace that only
+ *     the administrator has write access to, which prohibits the user from copying the attributes
+ *     when copying a file and would require Wine to run with adminstrative privileges.
+ */
+#define WINE_XATTR_SD  XATTR_USER_PREFIX "wine.sd"
 
 struct file
 {
@@ -195,6 +204,28 @@ static struct object *create_file_obj( struct fd *fd, unsigned int access, mode_
                                          SACL_SECURITY_INFORMATION );
 
     return &file->obj;
+}
+
+static void set_xattr_sd( int fd, const struct security_descriptor *sd )
+{
+    char buffer[XATTR_SIZE_MAX];
+    int present, len;
+    const ACL *dacl;
+
+    /* there's no point in storing the security descriptor if there's no DACL */
+    if (!sd) return;
+    dacl = sd_get_dacl( sd, &present );
+    if (!present || !dacl) return;
+
+    len = 2 + sizeof(struct security_descriptor) + sd->owner_len +
+          sd->group_len + sd->sacl_len + sd->dacl_len;
+    if (len > XATTR_SIZE_MAX) return;
+
+    /* include the descriptor revision and resource manager control bits */
+    buffer[0] = SECURITY_DESCRIPTOR_REVISION;
+    buffer[1] = 0;
+    memcpy( &buffer[2], sd, len - 2 );
+    xattr_fset( fd, WINE_XATTR_SD, buffer, len );
 }
 
 static struct object *create_file( struct fd *root, const char *nameptr, data_size_t len,
@@ -629,6 +660,9 @@ int set_file_sd( struct object *obj, struct fd *fd, mode_t *mode, uid_t *uid,
 
             *mode = new_mode;
         }
+
+        /* extended attributes are set after the file mode, to ensure it stays in sync */
+        set_xattr_sd( unix_fd, new_sd );
 
         free( obj->sd );
         obj->sd = new_sd;
