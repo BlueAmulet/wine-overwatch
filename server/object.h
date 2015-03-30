@@ -158,6 +158,9 @@ extern struct fd *no_get_fd( struct object *obj );
 extern unsigned int no_map_access( struct object *obj, unsigned int access );
 extern struct security_descriptor *default_get_sd( struct object *obj );
 extern int default_set_sd( struct object *obj, const struct security_descriptor *sd, unsigned int set_info );
+extern struct security_descriptor *set_sd_from_token_internal( const struct security_descriptor *sd,
+                                                               const struct security_descriptor *old_sd,
+                                                               unsigned int set_info, struct token *token );
 extern int set_sd_defaults_from_token( struct object *obj, const struct security_descriptor *sd,
                                        unsigned int set_info, struct token *token );
 extern struct object *no_lookup_name( struct object *obj, struct unicode_str *name, unsigned int attributes );
