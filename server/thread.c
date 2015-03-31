@@ -492,7 +492,10 @@ static void set_thread_info( struct thread *thread,
         if ((req->priority >= min && req->priority <= max) ||
             req->priority == THREAD_PRIORITY_IDLE ||
             req->priority == THREAD_PRIORITY_TIME_CRITICAL)
+        {
             thread->priority = req->priority;
+            set_scheduler_priority( thread );
+        }
         else
             set_error( STATUS_INVALID_PARAMETER );
     }
