@@ -4046,6 +4046,12 @@ HRESULT WINAPI D3DXFrameDestroy(D3DXFRAME *frame, ID3DXAllocateHierarchy *alloc_
     return D3D_OK;
 }
 
+D3DXFRAME* WINAPI D3DXFrameFind(const D3DXFRAME *frame_root, const char *name)
+{
+    FIXME("frame_root %p, name %s stub.\n", frame_root, debugstr_a(name));
+    return NULL;
+}
+
 HRESULT WINAPI D3DXLoadMeshFromXA(const char *filename, DWORD options, struct IDirect3DDevice9 *device,
         struct ID3DXBuffer **adjacency, struct ID3DXBuffer **materials, struct ID3DXBuffer **effect_instances,
         DWORD *num_materials, struct ID3DXMesh **mesh)
