@@ -1101,17 +1101,12 @@ static inline DWORD call_process_entry( PEB *peb, LPTHREAD_START_ROUTINE entry )
  *
  * Startup routine of a new process. Runs on the new process stack.
  */
-static DWORD WINAPI start_process( PEB *peb )
+static DWORD WINAPI start_process( LPTHREAD_START_ROUTINE entry )
 {
-    IMAGE_NT_HEADERS *nt;
-    LPTHREAD_START_ROUTINE entry;
+    PEB *peb = NtCurrentTeb()->Peb;
     BOOL being_debugged;
 
-    nt = RtlImageNtHeader( peb->ImageBaseAddress );
-    entry = (LPTHREAD_START_ROUTINE)((char *)peb->ImageBaseAddress +
-                                     nt->OptionalHeader.AddressOfEntryPoint);
-
-    if (!nt->OptionalHeader.AddressOfEntryPoint)
+    if (!entry)
     {
         ERR( "%s doesn't have an entry point, it cannot be executed\n",
              debugstr_w(peb->ProcessParameters->ImagePathName.Buffer) );
