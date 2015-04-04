@@ -1090,8 +1090,6 @@ HRESULT IDirectSoundBufferImpl_Create(
 	/* calculate fragment size and write lead */
 	DSOUND_RecalcFormat(dsb);
 
-	dsb->eax.reverb_mix = EAX_REVERBMIX_USEDISTANCE;
-
 	if (dsb->dsbd.dwFlags & DSBCAPS_CTRL3D) {
 		dsb->ds3db_ds3db.dwSize = sizeof(DS3DBUFFER);
 		dsb->ds3db_ds3db.vPosition.x = 0.0;
@@ -1119,6 +1117,8 @@ HRESULT IDirectSoundBufferImpl_Create(
 
 	/* register buffer if not primary */
 	if (!(dsbd->dwFlags & DSBCAPS_PRIMARYBUFFER)) {
+        init_eax_buffer(dsb);
+
 		err = DirectSoundDevice_AddBuffer(device, dsb);
 		if (err != DS_OK) {
 			HeapFree(GetProcessHeap(),0,dsb->buffer->memory);
@@ -1128,9 +1128,6 @@ HRESULT IDirectSoundBufferImpl_Create(
 			HeapFree(GetProcessHeap(),0,dsb);
 			dsb = NULL;
 		}
-
-		if (dsb->device->eax.using_eax)
-			init_eax_buffer(dsb);
 	}
 
         IDirectSoundBuffer8_AddRef(&dsb->IDirectSoundBuffer8_iface);
@@ -1186,7 +1183,7 @@ HRESULT IDirectSoundBufferImpl_Duplicate(
     HRESULT hres = DS_OK;
     TRACE("(%p,%p,%p)\n", device, ppdsb, pdsb);
 
-    dsb = HeapAlloc(GetProcessHeap(),0,sizeof(*dsb));
+    dsb = HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,sizeof(*dsb));
     if (dsb == NULL) {
         WARN("out of memory\n");
         *ppdsb = NULL;
@@ -1222,6 +1219,8 @@ HRESULT IDirectSoundBufferImpl_Duplicate(
     DSOUND_RecalcFormat(dsb);
 
     RtlInitializeResource(&dsb->lock);
+
+    init_eax_buffer(dsb); /* FIXME: should we duplicate EAX properties? */
 
     /* register buffer */
     hres = DirectSoundDevice_AddBuffer(device, dsb);
