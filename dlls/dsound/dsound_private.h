@@ -37,6 +37,7 @@
 
 extern int ds_hel_buflen DECLSPEC_HIDDEN;
 extern int ds_hq_buffers_max DECLSPEC_HIDDEN;
+extern BOOL ds_eax_enabled DECLSPEC_HIDDEN;
 
 /*****************************************************************************
  * Predeclare the interface implementation structures
@@ -230,6 +231,7 @@ LONG capped_refcount_dec(LONG *ref) DECLSPEC_HIDDEN;
 HRESULT DSOUND_FullDuplexCreate(REFIID riid, void **ppv) DECLSPEC_HIDDEN;
 
 /* eax.c */
+BOOL WINAPI EAX_QuerySupport(REFGUID guidPropSet, ULONG dwPropID, ULONG *pTypeSupport) DECLSPEC_HIDDEN;
 HRESULT WINAPI EAX_Get(IDirectSoundBufferImpl *buf, REFGUID guidPropSet,
         ULONG dwPropID, void *pInstanceData, ULONG cbInstanceData, void *pPropData,
         ULONG cbPropData, ULONG *pcbReturned) DECLSPEC_HIDDEN;

@@ -809,12 +809,37 @@ void free_eax_buffer(IDirectSoundBufferImpl *dsb)
         HeapFree(GetProcessHeap(), 0, dsb->eax.SampleBuffer);
 }
 
+BOOL WINAPI EAX_QuerySupport(REFGUID guidPropSet, ULONG dwPropID, ULONG *pTypeSupport)
+{
+    TRACE("(%s,%d,%p)\n", debugstr_guid(guidPropSet), dwPropID, pTypeSupport);
+
+    if (!ds_eax_enabled)
+        return FALSE;
+
+    if (IsEqualGUID(&DSPROPSETID_EAX_ReverbProperties, guidPropSet)) {
+        if (dwPropID <= DSPROPERTY_EAX_DAMPING) {
+            *pTypeSupport = KSPROPERTY_SUPPORT_GET | KSPROPERTY_SUPPORT_SET;
+            return TRUE;
+        }
+    } else if (IsEqualGUID(&DSPROPSETID_EAXBUFFER_ReverbProperties, guidPropSet)) {
+        if (dwPropID <= DSPROPERTY_EAXBUFFER_REVERBMIX) {
+            *pTypeSupport = KSPROPERTY_SUPPORT_GET | KSPROPERTY_SUPPORT_SET;
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
 HRESULT WINAPI EAX_Get(IDirectSoundBufferImpl *buf, REFGUID guidPropSet,
         ULONG dwPropID, void *pInstanceData, ULONG cbInstanceData, void *pPropData,
         ULONG cbPropData, ULONG *pcbReturned)
 {
     TRACE("(buf=%p,guidPropSet=%s,dwPropID=%d,pInstanceData=%p,cbInstanceData=%d,pPropData=%p,cbPropData=%d,pcbReturned=%p)\n",
         buf, debugstr_guid(guidPropSet), dwPropID, pInstanceData, cbInstanceData, pPropData, cbPropData, pcbReturned);
+
+    if (!ds_eax_enabled)
+        return E_PROP_ID_UNSUPPORTED;
 
     *pcbReturned = 0;
 
@@ -921,6 +946,9 @@ HRESULT WINAPI EAX_Set(IDirectSoundBufferImpl *buf, REFGUID guidPropSet,
 
     TRACE("(%p,%s,%d,%p,%d,%p,%d)\n",
         buf, debugstr_guid(guidPropSet), dwPropID, pInstanceData, cbInstanceData, pPropData, cbPropData);
+
+    if (!ds_eax_enabled)
+        return E_PROP_ID_UNSUPPORTED;
 
     if (IsEqualGUID(&DSPROPSETID_EAX_ReverbProperties, guidPropSet)) {
         buf->device->eax.using_eax = TRUE;
