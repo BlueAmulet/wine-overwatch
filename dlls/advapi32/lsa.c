@@ -488,14 +488,17 @@ NTSTATUS WINAPI LsaLookupSids(
     if (!(*Names = heap_alloc(name_fullsize))) return STATUS_NO_MEMORY;
     /* maximum count of stored domain infos is Count, allocate it like that cause really needed
        count could only be computed after sid data is retrieved */
-    domain_fullsize = sizeof(LSA_REFERENCED_DOMAIN_LIST) + sizeof(LSA_TRUST_INFORMATION)*Count;
+    domain_fullsize = sizeof(LSA_REFERENCED_DOMAIN_LIST) + sizeof(LSA_TRUST_INFORMATION) * (Count + 1);
     if (!(*ReferencedDomains = heap_alloc(domain_fullsize)))
     {
         heap_free(*Names);
         return STATUS_NO_MEMORY;
     }
     (*ReferencedDomains)->Entries = 0;
-    (*ReferencedDomains)->Domains = (LSA_TRUST_INFORMATION*)((char*)*ReferencedDomains + sizeof(LSA_REFERENCED_DOMAIN_LIST));
+    (*ReferencedDomains)->Domains = (LSA_TRUST_INFORMATION*)((char*)*ReferencedDomains +
+                                    sizeof(LSA_REFERENCED_DOMAIN_LIST) + sizeof(LSA_TRUST_INFORMATION));
+    (*ReferencedDomains)->Domains[-1].Sid = NULL;
+    RtlInitUnicodeStringEx(&(*ReferencedDomains)->Domains[-1].Name, NULL);
 
     /* Get full names data length and full length needed to store domain name and SID */
     for (i = 0; i < Count; i++)
@@ -555,7 +558,8 @@ NTSTATUS WINAPI LsaLookupSids(
 
     *ReferencedDomains = heap_realloc(*ReferencedDomains, domain_fullsize);
     /* fix pointer after reallocation */
-    (*ReferencedDomains)->Domains = (LSA_TRUST_INFORMATION*)((char*)*ReferencedDomains + sizeof(LSA_REFERENCED_DOMAIN_LIST));
+    (*ReferencedDomains)->Domains = (LSA_TRUST_INFORMATION*)((char*)*ReferencedDomains +
+                                    sizeof(LSA_REFERENCED_DOMAIN_LIST) + sizeof(LSA_TRUST_INFORMATION));
     domain_data = (char*)(*ReferencedDomains)->Domains + sizeof(LSA_TRUST_INFORMATION)*Count;
 
     mapped = 0;
