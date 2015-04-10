@@ -886,24 +886,7 @@ PROC WINAPI wglGetProcAddress( LPCSTR name )
         void *driver_func = funcs->wgl.p_wglGetProcAddress( name );
 
         if (!is_extension_supported(ext_ret->extension))
-        {
-            unsigned int i;
-            static const struct { const char *name, *alt; } alternatives[] =
-            {
-                { "glCopyTexSubImage3DEXT", "glCopyTexSubImage3D" },     /* needed by RuneScape */
-                { "glVertexAttribDivisor", "glVertexAttribDivisorARB"},  /* needed by Caffeine */
-            };
-
-            for (i = 0; i < sizeof(alternatives)/sizeof(alternatives[0]); i++)
-            {
-                if (strcmp( name, alternatives[i].name )) continue;
-                WARN("Extension %s required for %s not supported, trying %s\n",
-                    ext_ret->extension, name, alternatives[i].alt );
-                return wglGetProcAddress( alternatives[i].alt );
-            }
             WARN("Extension %s required for %s not supported\n", ext_ret->extension, name);
-            return NULL;
-        }
 
         if (driver_func == NULL)
         {
