@@ -3541,7 +3541,59 @@ NTSTATUS WINAPI NtQueryVolumeInformationFile( HANDLE handle, PIO_STATUS_BLOCK io
         FIXME( "%p: control info not supported\n", handle );
         break;
     case FileFsFullSizeInformation:
-        FIXME( "%p: full size info not supported\n", handle );
+        if(length < sizeof(FILE_FS_FULL_SIZE_INFORMATION))
+            io->u.Status = STATUS_BUFFER_TOO_SMALL;
+        else
+        {
+            FILE_FS_FULL_SIZE_INFORMATION *info = buffer;
+
+            if (fstat( fd, &st ) < 0)
+            {
+                io->u.Status = FILE_GetNtStatus();
+                break;
+            }
+            if(!S_ISREG(st.st_mode) && !S_ISDIR(st.st_mode))
+            {
+                io->u.Status = STATUS_INVALID_DEVICE_REQUEST;
+            }
+            else
+            {
+                ULONGLONG bsize;
+#if !defined(linux) || !defined(HAVE_FSTATFS)
+                struct statvfs stfs;
+
+                if(fstatvfs( fd, &stfs ) < 0)
+                {
+                    io->u.Status = FILE_GetNtStatus();
+                    break;
+                }
+                bsize = stfs.f_frsize;
+#else
+                struct statfs stfs;
+                if(fstatfs( fd, &stfs ) < 0)
+                {
+                    io->u.Status = FILE_GetNtStatus();
+                    break;
+                }
+                bsize = stfs.f_bsize;
+#endif
+                if(bsize == 2048)   /* assume CD-ROM */
+                {
+                    info->BytesPerSector = 2048;
+                    info->SectorsPerAllocationUnit = 1;
+                }
+                else
+                {
+                    info->BytesPerSector = 512;
+                    info->SectorsPerAllocationUnit = 8;
+                }
+                info->TotalAllocationUnits.QuadPart = bsize * stfs.f_blocks / (info->BytesPerSector * info->SectorsPerAllocationUnit);
+                info->CallerAvailableAllocationUnits.QuadPart = bsize * stfs.f_bavail / (info->BytesPerSector * info->SectorsPerAllocationUnit);
+                info->ActualAvailableAllocationUnits.QuadPart = bsize * stfs.f_bfree / (info->BytesPerSector * info->SectorsPerAllocationUnit);
+                io->Information = sizeof(*info);
+                io->u.Status = STATUS_SUCCESS;
+            }
+        }
         break;
     case FileFsObjectIdInformation:
         FIXME( "%p: object id info not supported\n", handle );
