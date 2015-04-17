@@ -650,6 +650,10 @@ HKLM,Software\Borland\Database Engine\Settings\SYSTEM\INIT,SHAREDMEMLOCATION,,90
 HKLM,Software\Clients\Mail,,2,"Native Mail Client"
 HKLM,Software\Clients\Mail\Native Mail Client,,2,"Native Mail Client"
 HKLM,Software\Clients\Mail\Native Mail Client,"DLLPath",2,"%11%\winemapi.dll"
+HKLM,Software\Classes\MediaFoundation,,16
+HKLM,Software\Classes\MediaFoundation\MediaSources,,16
+HKLM,Software\Classes\MediaFoundation\Transforms,,16
+HKLM,Software\Classes\MediaFoundation\Transforms\Categories,,16
 HKLM,Software\Microsoft\Advanced INF Setup,,16
 HKLM,Software\Microsoft\Clients,,16
 HKLM,Software\Microsoft\Cryptography\Calais\Current,,16
