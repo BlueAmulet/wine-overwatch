@@ -196,7 +196,7 @@ static const WCHAR Domain_Admins[] = { 'D','o','m','a','i','n',' ','A','d','m','
 static const WCHAR Domain_Computers[] = { 'D','o','m','a','i','n',' ','C','o','m','p','u','t','e','r','s',0 };
 static const WCHAR Domain_Controllers[] = { 'D','o','m','a','i','n',' ','C','o','n','t','r','o','l','l','e','r','s',0 };
 static const WCHAR Domain_Guests[] = { 'D','o','m','a','i','n',' ','G','u','e','s','t','s',0 };
-static const WCHAR Domain_Users[] = { 'D','o','m','a','i','n',' ','U','s','e','r','s',0 };
+static const WCHAR None[] = { 'N','o','n','e',0 };
 static const WCHAR Enterprise_Admins[] = { 'E','n','t','e','r','p','r','i','s','e',' ','A','d','m','i','n','s',0 };
 static const WCHAR ENTERPRISE_DOMAIN_CONTROLLERS[] = { 'E','N','T','E','R','P','R','I','S','E',' ','D','O','M','A','I','N',' ','C','O','N','T','R','O','L','L','E','R','S',0 };
 static const WCHAR Everyone[] = { 'E','v','e','r','y','o','n','e',0 };
@@ -2295,7 +2295,10 @@ LookupAccountSidW(
                             ac = Domain_Admins;
                             break;
                         case DOMAIN_GROUP_RID_USERS:
-                            ac = Domain_Users;
+                            /* MSDN says the name of DOMAIN_GROUP_RID_USERS is Domain Users,
+                             * tests show that MSDN seems to be wrong. */
+                            ac = None;
+                            use = 2;
                             break;
                         case DOMAIN_GROUP_RID_GUESTS:
                             ac = Domain_Guests;
