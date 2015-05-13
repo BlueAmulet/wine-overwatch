@@ -554,6 +554,41 @@ static void create_volatile_environment_registry_key(void)
     RegCloseKey( hkey );
 }
 
+static void create_etc_stub_files(void)
+{
+    static const WCHAR drivers_etcW[] = {'\\','d','r','i','v','e','r','s','\\','e','t','c',0};
+    static const WCHAR hostsW[]    = {'h','o','s','t','s',0};
+    static const WCHAR networksW[] = {'n','e','t','w','o','r','k','s',0};
+    static const WCHAR protocolW[] = {'p','r','o','t','o','c','o','l',0};
+    static const WCHAR servicesW[] = {'s','e','r','v','i','c','e','s',0};
+    static const WCHAR *files[] = { hostsW, networksW, protocolW, servicesW };
+    WCHAR path[MAX_PATH + sizeof(drivers_etcW)/sizeof(WCHAR) + 32];
+    DWORD i, path_len;
+    HANDLE file;
+
+    GetSystemDirectoryW( path, MAX_PATH );
+    strcatW( path, drivers_etcW );
+    path_len = strlenW( path );
+
+    if (!CreateDirectoryW( path, NULL ) && GetLastError() != ERROR_ALREADY_EXISTS)
+        return;
+
+    path[ path_len++ ] = '\\';
+    for (i = 0; i < sizeof(files) / sizeof(files[0]); i++)
+    {
+        path[ path_len ] = 0;
+        strcatW( path, files[i] );
+        if (PathFileExistsW( path )) continue;
+
+        file = CreateFileW( path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                            NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL );
+        if (file == INVALID_HANDLE_VALUE)
+            WINE_ERR( "wine: failed to create %s.\n", wine_dbgstr_w(path) );
+        else
+            CloseHandle( file );
+    }
+}
+
 /* Performs the rename operations dictated in %SystemRoot%\Wininit.ini.
  * Returns FALSE if there was an error, or otherwise if all is ok.
  */
@@ -1160,6 +1195,9 @@ static void update_wineprefix( BOOL force )
             }
             DestroyWindow( hwnd );
         }
+
+        create_etc_stub_files();
+
         WINE_MESSAGE( "wine: configuration in '%s' has been updated.\n", config_dir );
     }
 
