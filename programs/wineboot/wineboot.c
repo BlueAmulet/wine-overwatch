@@ -81,6 +81,7 @@
 #include <shobjidl.h>
 #include <shlwapi.h>
 #include <shellapi.h>
+#include <ntsecapi.h>
 #include "resource.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(wineboot);
@@ -161,6 +162,36 @@ done:
 static DWORD set_reg_value( HKEY hkey, const WCHAR *name, const WCHAR *value )
 {
     return RegSetValueExW( hkey, name, 0, REG_SZ, (const BYTE *)value, (strlenW(value) + 1) * sizeof(WCHAR) );
+}
+
+/* set a serial number for the disk containing windows */
+static void create_disk_serial_number(void)
+{
+    static const  WCHAR filename[] = {'\\','.','w','i','n','d','o','w','s','-','s','e','r','i','a','l',0};
+    DWORD serial, written;
+    WCHAR path[MAX_PATH];
+    char buffer[16];
+    HANDLE file;
+
+    if (GetSystemDirectoryW( path, sizeof(path)/sizeof(path[0]) ) && path[1] == ':')
+    {
+        path[2] = 0;
+        strcatW( path, filename );
+        if (!PathFileExistsW( path ) && RtlGenRandom( &serial, sizeof(serial) ))
+        {
+            WINE_TRACE( "Putting serial number of %08X into file %s\n", serial, wine_dbgstr_w(path) );
+            file = CreateFileW( path, GENERIC_WRITE, FILE_SHARE_READ, NULL,
+                                CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL );
+            if (file == INVALID_HANDLE_VALUE)
+                WINE_ERR( "wine: failed to create %s.\n", wine_dbgstr_w(path) );
+            else
+            {
+                sprintf( buffer, "%X\n", serial );
+                WriteFile( file, buffer, strlen(buffer), &written, NULL );
+                CloseHandle( file );
+            }
+        }
+    }
 }
 
 /* create the volatile hardware registry keys */
@@ -1230,6 +1261,7 @@ int main( int argc, char *argv[] )
 
     ResetEvent( event );  /* in case this is a restart */
 
+    create_disk_serial_number();
     create_hardware_registry_keys();
     create_dynamic_registry_keys();
     create_environment_registry_keys();
