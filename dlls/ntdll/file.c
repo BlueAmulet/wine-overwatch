@@ -3486,9 +3486,36 @@ NTSTATUS WINAPI NtQueryVolumeInformationFile( HANDLE handle, PIO_STATUS_BLOCK io
         else
         {
             FILE_FS_DEVICE_INFORMATION *info = buffer;
+            ANSI_STRING unix_name;
 
             if ((io->u.Status = get_device_info( fd, info )) == STATUS_SUCCESS)
+            {
                 io->Information = sizeof(*info);
+
+                /* Some MSI installers complain when the SystemRoot is located
+                 * on a virtual disk. Fake return values for compatibility. */
+                if (info->DeviceType == FILE_DEVICE_VIRTUAL_DISK &&
+                    user_shared_data->NtSystemRoot[1] == ':' &&
+                    !server_get_unix_name( handle, &unix_name ))
+                {
+                    UNICODE_STRING nt_name;
+                    if (!wine_unix_to_nt_file_name( &unix_name, &nt_name ))
+                    {
+                        WCHAR *buf = nt_name.Buffer;
+                        if (nt_name.Length >= 6 * sizeof(WCHAR) &&
+                            buf[0] == '\\' && buf[1] == '?' && buf[2] == '?' && buf[3] == '\\' &&
+                            buf[4] == user_shared_data->NtSystemRoot[0] && buf[5] == ':')
+                        {
+                            WARN( "returning fake disk type for %s\n",
+                                  debugstr_wn(buf, nt_name.Length/sizeof(WCHAR)) );
+                            info->DeviceType = FILE_DEVICE_DISK_FILE_SYSTEM;
+                        }
+                        RtlFreeUnicodeString( &nt_name );
+                    }
+                    RtlFreeAnsiString( &unix_name );
+                }
+
+            }
         }
         break;
     case FileFsAttributeInformation:
