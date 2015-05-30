@@ -280,4 +280,9 @@ extern HANDLE keyed_event DECLSPEC_HIDDEN;
 
 NTSTATUS WINAPI RtlHashUnicodeString(PCUNICODE_STRING,BOOLEAN,ULONG,ULONG*);
 
+/* version */
+extern const char * CDECL NTDLL_wine_get_version(void);
+extern const char * CDECL NTDLL_wine_get_build_id(void);
+extern void CDECL NTDLL_wine_get_host_version( const char **sysname, const char **release );
+
 #endif
