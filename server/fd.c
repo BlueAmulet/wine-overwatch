@@ -1730,6 +1730,7 @@ void set_fd_user( struct fd *fd, const struct fd_ops *user_ops, struct object *u
 char *dup_fd_name( struct fd *root, const char *name )
 {
     char *ret;
+    int len;
 
     if (!root) return strdup( name );
     if (!root->unix_name) return NULL;
@@ -1737,11 +1738,18 @@ char *dup_fd_name( struct fd *root, const char *name )
     /* skip . prefix */
     if (name[0] == '.' && (!name[1] || name[1] == '/')) name++;
 
-    if ((ret = malloc( strlen(root->unix_name) + strlen(name) + 2 )))
+    len = strlen( root->unix_name );
+    if ((ret = malloc( len + strlen(name) + 2 )))
     {
-        strcpy( ret, root->unix_name );
-        if (name[0] && name[0] != '/') strcat( ret, "/" );
-        strcat( ret, name );
+        memcpy( ret, root->unix_name, len );
+        while (len && ret[len - 1] == '/') len--;
+        while (name[0] == '/') name++;
+        if (name[0])
+        {
+            ret[ len ] = '/';
+            strcpy( ret + len + 1, name );
+        }
+        else ret[ len ] = 0;
     }
     return ret;
 }
