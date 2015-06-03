@@ -1493,10 +1493,22 @@ static void test_create_device(void)
     hr = D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, 0, D3D11_SDK_VERSION,
             &swapchain_desc, &swapchain, &device, &feature_level, &immediate_context);
     todo_wine ok(hr == DXGI_ERROR_INVALID_CALL, "D3D11CreateDeviceAndSwapChain returned %#x.\n", hr);
-    ok(!swapchain, "Got unexpected swapchain pointer %p.\n", swapchain);
-    ok(!device, "Got unexpected device pointer %p.\n", device);
-    ok(!feature_level, "Got unexpected feature level %#x.\n", feature_level);
-    ok(!immediate_context, "Got unexpected immediate context pointer %p.\n", immediate_context);
+    if (SUCCEEDED(hr))
+    {
+        refcount = IDXGISwapChain_Release(swapchain);
+        ok(!refcount, "Swapchain has %u references left.\n", refcount);
+        refcount = ID3D11DeviceContext_Release(immediate_context);
+        ok(!refcount, "Immediate context has %u references left.\n", refcount);
+        refcount = ID3D11Device_Release(device);
+        ok(!refcount, "Device has %u references left.\n", refcount);
+    }
+    else
+    {
+        ok(!swapchain, "Got unexpected swapchain pointer %p.\n", swapchain);
+        ok(!device, "Got unexpected device pointer %p.\n", device);
+        ok(!feature_level, "Got unexpected feature level %#x.\n", feature_level);
+        ok(!immediate_context, "Got unexpected immediate context pointer %p.\n", immediate_context);
+    }
 
     swapchain = (IDXGISwapChain *)0xdeadbeef;
     device = (ID3D11Device *)0xdeadbeef;

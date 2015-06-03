@@ -1473,11 +1473,14 @@ static BOOL set_pixel_format(HDC hdc, int format, BOOL allow_change)
 
     TRACE("(%p,%d)\n", hdc, format);
 
-    if (!hwnd || hwnd == GetDesktopWindow())
+    if (!hwnd)
     {
         WARN( "not a valid window DC %p/%p\n", hdc, hwnd );
         return FALSE;
     }
+
+    if (hwnd == GetDesktopWindow())
+        FIXME("Using desktop window for OpenGL is not supported on windows\n");
 
     fmt = get_pixel_format(gdi_display, format, FALSE /* Offscreen */);
     if (!fmt)
