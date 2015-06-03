@@ -2650,8 +2650,12 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE hFile, PIO_STATUS_BLOCK io,
 
                     if (!server_get_unix_fd( hFile, FILE_READ_DATA, &fd, &needs_close, NULL, NULL ))
                     {
-                        if (!unix_fd_avail( fd, &avail ))
+                        NTSTATUS status = unix_fd_avail( fd, &avail );
+                        if (!status)
                             pli->ReadDataAvailable = min(avail, reply->outsize); /* FIXME */
+                        else if (status == STATUS_PIPE_BROKEN)
+                            pli->NamedPipeState = FILE_PIPE_CLOSING_STATE;
+
                         if (needs_close) close( fd );
                     }
                 }
