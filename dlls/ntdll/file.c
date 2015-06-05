@@ -214,7 +214,17 @@ static NTSTATUS FILE_CreateFile( PHANDLE handle, ACCESS_MASK access, POBJECT_ATT
             *handle = wine_server_ptr_handle( reply->handle );
         }
         SERVER_END_REQ;
-        if (io->u.Status == STATUS_SUCCESS) io->Information = FILE_OPENED;
+        if (io->u.Status == STATUS_SUCCESS)
+        {
+            /* pre-cache the file descriptor. this is necessary because the fd cannot be
+             * acquired anymore after one end of the pipe has been closed - see kernel32/pipe
+             * tests. */
+            int unix_fd, needs_close;
+            int ret = server_get_unix_fd( *handle, 0, &unix_fd, &needs_close, NULL, NULL );
+            if (!ret && needs_close) close( unix_fd );
+            io->Information = FILE_OPENED;
+        }
+
         return io->u.Status;
     }
 
