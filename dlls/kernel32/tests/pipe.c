@@ -1917,7 +1917,7 @@ static void test_CloseHandle(void)
     SetLastError(0xdeadbeef);
     ret = WriteFile(hfile, testdata, sizeof(testdata), &numbytes, NULL);
     ok(!ret, "WriteFile unexpectedly succeeded\n");
-    todo_wine ok(GetLastError() == ERROR_NO_DATA, "expected ERROR_NO_DATA, got %u\n", GetLastError());
+    ok(GetLastError() == ERROR_NO_DATA, "expected ERROR_NO_DATA, got %u\n", GetLastError());
 
     CloseHandle(hfile);
 

@@ -1239,6 +1239,9 @@ static NTSTATUS write_unix_fd(int fd, const char *buf, ULONG *total, ULONG lengt
                 return STATUS_SUCCESS;
             else if (errno == EFAULT)
                 return STATUS_INVALID_USER_BUFFER;
+            else if (type == FD_TYPE_PIPE && (errno == EPIPE || errno == ECONNRESET))
+                return (get_pipe_flags( fd ) & NAMED_PIPE_CLOSED_HANDLE) ?
+                       STATUS_PIPE_EMPTY : STATUS_PIPE_DISCONNECTED;
             return FILE_GetNtStatus();
         }
     }

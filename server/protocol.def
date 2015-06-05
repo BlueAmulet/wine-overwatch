@@ -2431,6 +2431,7 @@ enum message_type
 #define NAMED_PIPE_MESSAGE_STREAM_WRITE 0x0001
 #define NAMED_PIPE_MESSAGE_STREAM_READ  0x0002
 #define NAMED_PIPE_NONBLOCKING_MODE     0x0004
+#define NAMED_PIPE_CLOSED_HANDLE        0x0008
 #define NAMED_PIPE_SERVER_END           0x8000
 
 /* Get named pipe information by handle */
