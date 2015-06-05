@@ -3641,14 +3641,25 @@ NTSTATUS WINAPI NtQueryVolumeInformationFile( HANDLE handle, PIO_STATUS_BLOCK io
  *  Success: 0. Atrributes read into buffer
  *  Failure: An NTSTATUS error code describing the error.
  */
-NTSTATUS WINAPI NtQueryEaFile( HANDLE hFile, PIO_STATUS_BLOCK iosb, PVOID buffer, ULONG length,
+NTSTATUS WINAPI NtQueryEaFile( HANDLE handle, PIO_STATUS_BLOCK iosb, PVOID buffer, ULONG length,
                                BOOLEAN single_entry, PVOID ea_list, ULONG ea_list_len,
                                PULONG ea_index, BOOLEAN restart )
 {
-    FIXME("(%p,%p,%p,%d,%d,%p,%d,%p,%d) stub\n",
-            hFile, iosb, buffer, length, single_entry, ea_list,
+    int fd, needs_close;
+    NTSTATUS status;
+
+    FIXME("(%p,%p,%p,%d,%d,%p,%d,%p,%d) semi-stub\n",
+            handle, iosb, buffer, length, single_entry, ea_list,
             ea_list_len, ea_index, restart);
-    return STATUS_ACCESS_DENIED;
+
+    if ((status = server_get_unix_fd( handle, 0, &fd, &needs_close, NULL, NULL )) != STATUS_SUCCESS)
+        return status;
+
+    if (buffer && length)
+        memset( buffer, 0, length );
+
+    if (needs_close) close( fd );
+    return STATUS_NO_EAS_ON_FILE;
 }
 
 
