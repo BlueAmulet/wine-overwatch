@@ -244,6 +244,7 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_NV_vertex_program2",               NV_VERTEX_PROGRAM2            },
     {"GL_NV_vertex_program2_option",        NV_VERTEX_PROGRAM2_OPTION     },
     {"GL_NV_vertex_program3",               NV_VERTEX_PROGRAM3            },
+    {"GL_NVX_gpu_memory_info",              NVX_GPU_MEMORY_INFO           },
 
     /* SGI */
     {"GL_SGIS_generate_mipmap",             SGIS_GENERATE_MIPMAP          },
@@ -1508,6 +1509,15 @@ static const struct gpu_description *query_gpu_description(const struct wined3d_
             *vram_bytes = (UINT64)value * 1024 * 1024;
         TRACE("Card reports vendor PCI ID 0x%04x, device PCI ID 0x%04x, 0x%s bytes of video memory.\n",
                 vendor, device, wine_dbgstr_longlong(*vram_bytes));
+    }
+    else if (gl_info->supported[NVX_GPU_MEMORY_INFO])
+    {
+        GLint vram_kb;
+        gl_info->gl_ops.gl.p_glGetIntegerv(GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX, &vram_kb);
+
+        *vram_bytes = (UINT64)vram_kb * 1024;
+        TRACE("Got 0x%s as video memory from NVX_GPU_MEMORY_INFO extension.\n",
+                wine_dbgstr_longlong(*vram_bytes));
     }
 
     if (wined3d_settings.pci_vendor_id != PCI_VENDOR_NONE)
