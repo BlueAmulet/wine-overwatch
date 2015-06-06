@@ -3420,7 +3420,18 @@ NTSTATUS WINAPI NtQueryVolumeInformationFile( HANDLE handle, PIO_STATUS_BLOCK io
     switch( info_class )
     {
     case FileFsVolumeInformation:
-        if (!once++) FIXME( "%p: volume info not supported\n", handle );
+        if (length < sizeof(FILE_FS_VOLUME_INFORMATION))
+            io->u.Status = STATUS_BUFFER_TOO_SMALL;
+        else
+        {
+            FILE_FS_VOLUME_INFORMATION *info = buffer;
+
+            if (!once++) FIXME( "%p: faking volume info\n", handle );
+            memset( info, 0, sizeof(*info) );
+
+            io->Information = sizeof(*info);
+            io->u.Status = STATUS_SUCCESS;
+        }
         break;
     case FileFsLabelInformation:
         FIXME( "%p: label info not supported\n", handle );
