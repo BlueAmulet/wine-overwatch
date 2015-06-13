@@ -1033,13 +1033,13 @@ todo_wine
     replysz = sizeof(ICMP_ECHO_REPLY) + ICMP_MINLEN;
     ret = pIcmpSendEcho(icmp, address, senddata, ICMP_MINLEN, NULL, replydata, replysz, 1000);
     error = GetLastError();
-todo_wine
     ok (ret, "IcmpSendEcho failed unexpectedly with error %d\n", error);
 
     SetLastError(0xdeadbeef);
     replysz = sizeof(ICMP_ECHO_REPLY) + ICMP_MINLEN;
     ret = pIcmpSendEcho(icmp, address, senddata, ICMP_MINLEN + 1, NULL, replydata, replysz, 1000);
     error = GetLastError();
+todo_wine
     ok (!ret, "IcmpSendEcho succeeded unexpectedly\n");
 todo_wine
     ok (error == IP_GENERAL_FAILURE
