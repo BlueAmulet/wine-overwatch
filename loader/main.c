@@ -48,6 +48,7 @@
 #include "main.h"
 
 #ifdef __APPLE__
+#include <mach-o/dyld.h>
 
 #ifndef __clang__
 __asm__(".zerofill WINE_DOS, WINE_DOS, ___wine_dos, 0x40000000");
@@ -71,6 +72,26 @@ static inline void reserve_area( void *addr, size_t size )
 {
     wine_anon_mmap( addr, size, PROT_NONE, MAP_FIXED | MAP_NORESERVE );
     wine_mmap_add_reserved_area( addr, size );
+}
+
+static const char *get_macho_library_path( const char *libname )
+{
+    unsigned int path_len, libname_len = strlen( libname );
+    uint32_t i, count = _dyld_image_count();
+
+    for (i = 0; i < count; i++)
+    {
+        const char *path = _dyld_get_image_name( i );
+        if (!path) continue;
+
+        path_len = strlen( path );
+        if (path_len < libname_len + 1) continue;
+        if (path[path_len - libname_len - 1] != '/') continue;
+        if (strcmp( path + path_len - libname_len, libname )) continue;
+
+        return path;
+    }
+    return NULL;
 }
 
 #else  /* __APPLE__ */
@@ -181,7 +202,11 @@ static void check_command_line( int argc, char *argv[] )
                 else
             #endif
                 {
-                    printf( "%s: found\n", *wine_libs );
+                    const char *path = NULL;
+                #ifdef __APPLE__
+                    path = get_macho_library_path( *wine_libs );
+                #endif
+                    printf( "%s: %s\n", *wine_libs, path ? path : "found");
                 }
                 wine_dlclose( lib_handle, NULL, 0 );
             }
