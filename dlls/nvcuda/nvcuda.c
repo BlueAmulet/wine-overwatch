@@ -412,11 +412,28 @@ static void *cuda_handle = NULL;
 
 static BOOL load_functions(void)
 {
-    cuda_handle = wine_dlopen("libcuda.so", RTLD_NOW, NULL, 0);
+    static const char *libname[] =
+    {
+    #ifdef __APPLE__
+        "libcuda.dylib",
+        "libcuda.6.0.dylib",
+        "/usr/local/cuda/lib/libcuda.dylib",
+        "/usr/local/cuda/lib/libcuda.6.0.dylib",
+    #else
+        "libcuda.so"
+    #endif
+    };
+    int i;
+
+    for (i = 0; i < sizeof(libname)/sizeof(libname[0]); i++)
+    {
+        cuda_handle = wine_dlopen(libname[i], RTLD_NOW, NULL, 0);
+        if (cuda_handle) break;
+    }
 
     if (!cuda_handle)
     {
-        FIXME("Wine cannot find the libcuda.so library, CUDA support disabled.\n");
+        FIXME("Wine cannot find the libcuda library, CUDA support is disabled.\n");
         return FALSE;
     }
 
