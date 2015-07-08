@@ -160,7 +160,7 @@
 @ stdcall D3DXGetShaderConstantTable(ptr ptr)
 @ stdcall D3DXGetShaderConstantTableEx(ptr long ptr)
 @ stdcall D3DXGetShaderInputSemantics(ptr ptr ptr)
-@ stub D3DXGetShaderOutputSemantics(ptr ptr ptr)
+@ stdcall D3DXGetShaderOutputSemantics(ptr ptr ptr)
 @ stdcall D3DXGetShaderSamplers(ptr ptr ptr)
 @ stdcall D3DXGetShaderSize(ptr)
 @ stdcall D3DXGetShaderVersion(ptr)
