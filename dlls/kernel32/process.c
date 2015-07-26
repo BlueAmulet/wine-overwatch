@@ -2315,13 +2315,17 @@ static BOOL create_cmd_process( LPCWSTR filename, LPWSTR cmd_line, LPVOID env, L
 
 {
     static const WCHAR comspecW[] = {'C','O','M','S','P','E','C',0};
+    static const WCHAR cmdW[] = {'\\','c','m','d','.','e','x','e',0};
     static const WCHAR slashcW[] = {' ','/','c',' ',0};
     WCHAR comspec[MAX_PATH];
     WCHAR *newcmdline;
     BOOL ret;
 
     if (!GetEnvironmentVariableW( comspecW, comspec, sizeof(comspec)/sizeof(WCHAR) ))
-        return FALSE;
+    {
+        GetSystemDirectoryW( comspec, (sizeof(comspec) - sizeof(cmdW))/sizeof(WCHAR) );
+        strcatW( comspec, cmdW );
+    }
     if (!(newcmdline = HeapAlloc( GetProcessHeap(), 0,
                                   (strlenW(comspec) + 4 + strlenW(cmd_line) + 1) * sizeof(WCHAR))))
         return FALSE;
