@@ -275,7 +275,8 @@ static void save_subkeys( const struct key *key, const struct key *base, FILE *f
     {
         fprintf( f, "\n[" );
         if (key != base) dump_path( key, base, f );
-        fprintf( f, "] %u\n", (unsigned int)((key->modif - ticks_1601_to_1970) / TICKS_PER_SEC) );
+        fprintf( f, "] %u %u\n", (unsigned int)((key->modif - ticks_1601_to_1970) / TICKS_PER_SEC),
+                                 (unsigned int)((key->modif - ticks_1601_to_1970) % TICKS_PER_SEC) );
         fprintf( f, "#time=%x%08x\n", (unsigned int)(key->modif >> 32), (unsigned int)key->modif );
         if (key->class)
         {
@@ -1380,8 +1381,8 @@ static struct key *load_key( struct key *base, const char *buffer, int prefix_le
 {
     WCHAR *p;
     struct unicode_str name;
-    int res;
-    unsigned int mod;
+    int res, num_items;
+    unsigned int mod, mod_ticks;
     data_size_t len;
 
     if (!get_file_tmp_space( info, strlen(buffer) * sizeof(WCHAR) )) return NULL;
@@ -1392,10 +1393,11 @@ static struct key *load_key( struct key *base, const char *buffer, int prefix_le
         file_read_error( "Malformed key", info );
         return NULL;
     }
-    if (sscanf( buffer + res, " %u", &mod ) == 1)
-        *modif = (timeout_t)mod * TICKS_PER_SEC + ticks_1601_to_1970;
-    else
-        *modif = current_time;
+
+    *modif = current_time;
+    num_items = sscanf( buffer + res, " %u %u", &mod, &mod_ticks );
+    if (num_items >= 1) *modif = (timeout_t)mod * TICKS_PER_SEC + ticks_1601_to_1970;
+    if (num_items >= 2) *modif += mod_ticks;
 
     p = info->tmp;
     while (prefix_len && *p) { if (*p++ == '\\') prefix_len--; }
