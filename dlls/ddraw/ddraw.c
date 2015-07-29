@@ -4209,7 +4209,7 @@ static HRESULT WINAPI d3d7_CreateDevice(IDirect3D7 *iface, REFCLSID riid,
     TRACE("iface %p, riid %s, surface %p, device %p.\n", iface, debugstr_guid(riid), surface, device);
 
     wined3d_mutex_lock();
-    if (SUCCEEDED(hr = d3d_device_create(ddraw, target, (IUnknown *)surface, 7, &object, NULL)))
+    if (SUCCEEDED(hr = d3d_device_create(ddraw, riid, target, (IUnknown *)surface, 7, &object, NULL)))
     {
         *device = &object->IDirect3DDevice7_iface;
     }
@@ -4238,7 +4238,7 @@ static HRESULT WINAPI d3d3_CreateDevice(IDirect3D3 *iface, REFCLSID riid,
         return CLASS_E_NOAGGREGATION;
 
     wined3d_mutex_lock();
-    if (SUCCEEDED(hr = d3d_device_create(ddraw, surface_impl, (IUnknown *)surface, 3, &device_impl, NULL)))
+    if (SUCCEEDED(hr = d3d_device_create(ddraw, riid, surface_impl, (IUnknown *)surface, 3, &device_impl, NULL)))
     {
         *device = &device_impl->IDirect3DDevice3_iface;
     }
@@ -4264,7 +4264,7 @@ static HRESULT WINAPI d3d2_CreateDevice(IDirect3D2 *iface, REFCLSID riid,
             iface, debugstr_guid(riid), surface, device);
 
     wined3d_mutex_lock();
-    if (SUCCEEDED(hr = d3d_device_create(ddraw, surface_impl, (IUnknown *)surface, 2, &device_impl, NULL)))
+    if (SUCCEEDED(hr = d3d_device_create(ddraw, riid, surface_impl, (IUnknown *)surface, 2, &device_impl, NULL)))
     {
         *device = &device_impl->IDirect3DDevice2_iface;
     }
