@@ -5166,7 +5166,7 @@ HRESULT WINAPI D3DXCreateTeapot(struct IDirect3DDevice9 *device,
 {
     FIXME("(%p, %p, %p): stub\n", device, mesh, adjacency);
 
-    return E_NOTIMPL;
+    return D3DXCreateSphere(device, 1.0f, 4, 4, mesh, adjacency);
 }
 
 HRESULT WINAPI D3DXCreateTextA(struct IDirect3DDevice9 *device, HDC hdc, const char *text, float deviation,
