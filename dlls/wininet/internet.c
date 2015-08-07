@@ -2958,6 +2958,9 @@ BOOL WINAPI InternetSetOptionW(HINTERNET hInternet, DWORD dwOption,
     case INTERNET_OPTION_SETTINGS_CHANGED:
         FIXME("INTERNET_OPTION_SETTINGS_CHANGED; STUB\n");
         break;
+    case INTERNET_OPTION_REFRESH:
+        FIXME("INTERNET_OPTION_REFRESH; STUB\n");
+        break;
     default:
         FIXME("Option %d STUB\n",dwOption);
         SetLastError(ERROR_INTERNET_INVALID_OPTION);
