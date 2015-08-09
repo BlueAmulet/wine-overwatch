@@ -1,0 +1,7 @@
+MODULE    = uxtheme-gtk.dll
+EXTRAINCL = $(GTK3_CFLAGS)
+
+C_SRCS = \
+	uxtheme.c
+
+RC_SRCS = version.rc

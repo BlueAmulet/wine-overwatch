@@ -109,6 +109,26 @@ test -z "$ac_libs" || ac_libs=`echo " $ac_libs" | sed 's/ -L\([[^/]]\)/ -L\$(top
 AS_VAR_POPDEF([ac_libs])dnl
 AS_VAR_POPDEF([ac_cflags])])dnl
 
+dnl **** Get include path from pkg-config ****
+dnl
+dnl Usage: WINE_PACKAGE_INCLUDE_FLAGS(var,pkg-name,[cflags-alternate,[checks]]])
+dnl
+AC_DEFUN([WINE_PACKAGE_INCLUDE_FLAGS],
+[AC_REQUIRE([WINE_PATH_PKG_CONFIG])dnl
+AS_VAR_PUSHDEF([ac_cflags],[[$1]_CFLAGS])dnl
+AC_ARG_VAR(ac_cflags, [C compiler flags for $2, overriding pkg-config])dnl
+AS_VAR_IF([ac_cflags],[],
+      [AS_VAR_SET_IF([PKG_CONFIG],
+      [ac_cflags=`$PKG_CONFIG --cflags-only-I [$2] 2>/dev/null`])])
+m4_ifval([$3],[test "$cross_compiling" = yes || ac_cflags=[$]{ac_cflags:-[$3]}])
+AS_ECHO(["$as_me:${as_lineno-$LINENO}: $2 cflags: $ac_cflags"]) >&AS_MESSAGE_LOG_FD
+ac_save_CPPFLAGS=$CPPFLAGS
+CPPFLAGS="$CPPFLAGS $ac_cflags"
+$4
+CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$ac_cflags" || ac_cflags=`echo " $ac_cflags" | sed 's/ -I\([[^/]]\)/ -I\$(top_builddir)\/\1/g'`
+AS_VAR_POPDEF([ac_cflags])])dnl
+
 dnl **** Link C code with an assembly file ****
 dnl
 dnl Usage: WINE_TRY_ASM_LINK(asm-code,includes,function,[action-if-found,[action-if-not-found]])
