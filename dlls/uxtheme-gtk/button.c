@@ -29,6 +29,10 @@
 
 #include "wine/debug.h"
 
+#if !GTK_CHECK_VERSION(3, 14, 0)
+# define GTK_STATE_FLAG_CHECKED (1 << 11)
+#endif
+
 WINE_DEFAULT_DEBUG_CHANNEL(uxthemegtk);
 
 typedef struct _button_theme
@@ -219,16 +223,16 @@ static GtkStateFlags get_checkbox_state_flags(int state_id)
             return GTK_STATE_FLAG_INSENSITIVE;
 
         case CBS_CHECKEDNORMAL:
-            return GTK_STATE_FLAG_NORMAL | GTK_STATE_FLAG_ACTIVE;
+            return GTK_STATE_FLAG_NORMAL | GTK_STATE_FLAG_ACTIVE | GTK_STATE_FLAG_CHECKED;
 
         case CBS_CHECKEDHOT:
-            return GTK_STATE_FLAG_PRELIGHT | GTK_STATE_FLAG_ACTIVE;
+            return GTK_STATE_FLAG_PRELIGHT | GTK_STATE_FLAG_ACTIVE | GTK_STATE_FLAG_CHECKED;
 
         case CBS_CHECKEDPRESSED:
-            return GTK_STATE_FLAG_SELECTED | GTK_STATE_FLAG_ACTIVE;
+            return GTK_STATE_FLAG_SELECTED | GTK_STATE_FLAG_ACTIVE | GTK_STATE_FLAG_CHECKED;
 
         case CBS_CHECKEDDISABLED:
-            return GTK_STATE_FLAG_INSENSITIVE | GTK_STATE_FLAG_ACTIVE;
+            return GTK_STATE_FLAG_INSENSITIVE | GTK_STATE_FLAG_ACTIVE | GTK_STATE_FLAG_CHECKED;
 
         case CBS_MIXEDNORMAL:
             return GTK_STATE_FLAG_NORMAL | GTK_STATE_FLAG_INCONSISTENT;
@@ -237,7 +241,7 @@ static GtkStateFlags get_checkbox_state_flags(int state_id)
             return GTK_STATE_FLAG_PRELIGHT | GTK_STATE_FLAG_INCONSISTENT;
 
         case CBS_MIXEDPRESSED:
-            return GTK_STATE_FLAG_ACTIVE | GTK_STATE_FLAG_INCONSISTENT;
+            return GTK_STATE_FLAG_ACTIVE | GTK_STATE_FLAG_CHECKED | GTK_STATE_FLAG_INCONSISTENT;
 
         case CBS_MIXEDDISABLED:
             return GTK_STATE_FLAG_INSENSITIVE | GTK_STATE_FLAG_INCONSISTENT;
