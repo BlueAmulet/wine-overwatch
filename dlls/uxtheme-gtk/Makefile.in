@@ -1,5 +1,5 @@
 MODULE    = uxtheme-gtk.dll
-IMPORTS   = user32 gdi32 advapi32
+IMPORTS   = user32 gdi32 advapi32 shell32
 DELAYIMPORTS = msimg32
 EXTRAINCL = $(GTK3_CFLAGS)
 

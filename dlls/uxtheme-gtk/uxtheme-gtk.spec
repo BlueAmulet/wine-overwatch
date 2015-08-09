@@ -1,3 +1,47 @@
+# Export by Ordinal
+1  stdcall -noname QueryThemeServices()
+2  stdcall -noname OpenThemeFile(wstr wstr wstr ptr long)
+3  stdcall -noname CloseThemeFile(ptr)
+4  stdcall -noname ApplyTheme(ptr ptr ptr)
+7  stdcall -noname GetThemeDefaults(wstr wstr long wstr long)
+8  stdcall -noname EnumThemes(wstr ptr ptr)
+9  stdcall -noname EnumThemeColors(wstr wstr long ptr)
+10 stdcall -noname EnumThemeSizes(wstr wstr long ptr)
+11 stdcall -noname ParseThemeIniFile(wstr wstr ptr ptr)
+13 stub -noname DrawNCPreview
+14 stub -noname RegisterDefaultTheme
+15 stub -noname DumpLoadedThemeToTextFile
+16 stub -noname OpenThemeDataFromFile
+17 stub -noname OpenThemeFileFromData
+18 stub -noname GetThemeSysSize96
+19 stub -noname GetThemeSysFont96
+20 stub -noname SessionAllocate
+21 stub -noname SessionFree
+22 stub -noname ThemeHooksOn
+23 stub -noname ThemeHooksOff
+24 stub -noname AreThemeHooksActive
+25 stub -noname GetCurrentChangeNumber
+26 stub -noname GetNewChangeNumber
+27 stub -noname SetGlobalTheme
+28 stub -noname GetGlobalTheme
+29 stub -noname CheckThemeSignature(wstr)
+30 stub -noname LoadTheme
+31 stub -noname InitUserTheme
+32 stub -noname InitUserRegistry
+33 stub -noname ReestablishServerConnection
+34 stub -noname ThemeHooksInstall
+35 stub -noname ThemeHooksRemove
+36 stub -noname RefreshThemeForTS
+43 stub -noname ClassicGetSystemMetrics
+44 stub -noname ClassicSystemParametersInfoA
+45 stub -noname ClassicSystemParametersInfoW
+46 stub -noname ClassicAdjustWindowRectEx
+48 stub -noname GetThemeParseErrorInfo
+60 stub -noname CreateThemeDataFromObjects
+61 stub OpenThemeDataEx
+62 stub -noname ServerClearStockObjects
+63 stub -noname MarkSelection
+
 # System
 @ stdcall CloseThemeData(ptr)
 @ stdcall EnableThemeDialogTexture(ptr long)
