@@ -1,6 +1,7 @@
 /*
  * GTK uxtheme implementation
  *
+ * Copyright (C) 2015 Ivan Akulinchev
  * Copyright (C) 2015 Michael Müller
  *
  * This library is free software; you can redistribute it and/or
@@ -21,8 +22,44 @@
 #ifndef UXTHEMEGTK_H
 #define UXTHEMEGTK_H
 
+#include "windef.h"
+
 #define GDK_DISABLE_DEPRECATION_WARNINGS
 #include <gtk/gtk.h>
+
+typedef struct _uxgtk_theme uxgtk_theme_t;
+typedef struct _uxgtk_theme_vtable uxgtk_theme_vtable_t;
+
+struct _uxgtk_theme_vtable
+{
+    HRESULT (*get_color)(uxgtk_theme_t *theme, int part_id, int state_id,
+                         int prop_id, GdkRGBA *rgba);
+    HRESULT (*draw_background)(uxgtk_theme_t *theme, cairo_t *cr, int part_id, int state_id,
+                              int width, int height);
+    HRESULT (*get_part_size)(uxgtk_theme_t *theme, int part_id, int state_id,
+                             RECT *rect, SIZE *size);
+    BOOL (*is_part_defined)(int part_id, int state_id);
+};
+
+struct _uxgtk_theme
+{
+    const uxgtk_theme_vtable_t *vtable;
+
+    GtkWidget *window;
+    GtkWidget *layout;
+};
+
+typedef HANDLE HTHEMEFILE;
+
+typedef struct tagTHEMENAMES
+{
+    WCHAR szName[MAX_PATH+1];
+    WCHAR szDisplayName[MAX_PATH+1];
+    WCHAR szTooltip[MAX_PATH+1];
+} THEMENAMES, *PTHEMENAMES;
+
+typedef BOOL (CALLBACK *EnumThemeProc)(LPVOID, LPCWSTR, LPCWSTR, LPCWSTR, LPVOID, LPVOID);
+typedef BOOL (CALLBACK *ParseThemeIniFileProc)(DWORD, LPWSTR, LPWSTR, LPWSTR, DWORD, LPVOID);
 
 #define MAKE_FUNCPTR(f) extern typeof(f) * p##f DECLSPEC_HIDDEN
 MAKE_FUNCPTR(cairo_create);
@@ -84,5 +121,21 @@ MAKE_FUNCPTR(gtk_widget_get_style_context);
 MAKE_FUNCPTR(gtk_widget_style_get);
 MAKE_FUNCPTR(gtk_window_new);
 #undef MAKE_FUNCPTR
+
+uxgtk_theme_t *uxgtk_button_theme_create(void) DECLSPEC_HIDDEN;
+uxgtk_theme_t *uxgtk_combobox_theme_create(void) DECLSPEC_HIDDEN;
+uxgtk_theme_t *uxgtk_edit_theme_create(void) DECLSPEC_HIDDEN;
+uxgtk_theme_t *uxgtk_header_theme_create(void) DECLSPEC_HIDDEN;
+uxgtk_theme_t *uxgtk_listbox_theme_create(void) DECLSPEC_HIDDEN;
+uxgtk_theme_t *uxgtk_listview_theme_create(void) DECLSPEC_HIDDEN;
+uxgtk_theme_t *uxgtk_menu_theme_create(void) DECLSPEC_HIDDEN;
+uxgtk_theme_t *uxgtk_rebar_theme_create(void) DECLSPEC_HIDDEN;
+uxgtk_theme_t *uxgtk_status_theme_create(void) DECLSPEC_HIDDEN;
+uxgtk_theme_t *uxgtk_tab_theme_create(void) DECLSPEC_HIDDEN;
+uxgtk_theme_t *uxgtk_toolbar_theme_create(void) DECLSPEC_HIDDEN;
+uxgtk_theme_t *uxgtk_trackbar_theme_create(void) DECLSPEC_HIDDEN;
+uxgtk_theme_t *uxgtk_window_theme_create(void) DECLSPEC_HIDDEN;
+
+void uxgtk_theme_init(uxgtk_theme_t *theme, const uxgtk_theme_vtable_t *vtable) DECLSPEC_HIDDEN;
 
 #endif /* UXTHEMEGTK_H */

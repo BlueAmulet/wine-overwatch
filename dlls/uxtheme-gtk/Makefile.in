@@ -1,7 +1,22 @@
 MODULE    = uxtheme-gtk.dll
+IMPORTS   = user32 gdi32 advapi32
+DELAYIMPORTS = msimg32
 EXTRAINCL = $(GTK3_CFLAGS)
 
 C_SRCS = \
-	uxtheme.c
+	button.c \
+	combobox.c \
+	edit.c \
+	header.c \
+	listbox.c \
+	listview.c \
+	menu.c \
+	rebar.c \
+	status.c \
+	tab.c \
+	toolbar.c \
+	trackbar.c \
+	uxtheme.c \
+	window.c
 
 RC_SRCS = version.rc
