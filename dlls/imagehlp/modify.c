@@ -159,26 +159,25 @@ BOOL WINAPI BindImageEx(
 /***********************************************************************
  *		CheckSum (internal)
  */
-static WORD CalcCheckSum(
-  DWORD StartValue, LPVOID BaseAddress, DWORD WordCount)
+static WORD CalcCheckSum(DWORD StartValue, LPVOID BaseAddress, DWORD ByteCount)
 {
-   LPWORD Ptr;
-   DWORD Sum;
-   DWORD i;
+    LPWORD Ptr;
+    DWORD Sum, i;
 
-   Sum = StartValue;
-   Ptr = (LPWORD)BaseAddress;
-   for (i = 0; i < WordCount; i++)
-     {
-	Sum += *Ptr;
-	if (HIWORD(Sum) != 0)
-	  {
-	     Sum = LOWORD(Sum) + HIWORD(Sum);
-	  }
-	Ptr++;
-     }
+    Sum = StartValue;
+    Ptr = (LPWORD)BaseAddress;
+    for (i = ByteCount; i > 1; i -= 2)
+    {
+        Sum += *Ptr;
+        if (HIWORD(Sum) != 0)
+            Sum = LOWORD(Sum) + HIWORD(Sum);
+        Ptr++;
+    }
 
-   return (WORD)(LOWORD(Sum) + HIWORD(Sum));
+    if (i == 1)
+        Sum += *(BYTE *)Ptr;
+
+    return (WORD)(LOWORD(Sum) + HIWORD(Sum));
 }
 
 
@@ -201,7 +200,7 @@ PIMAGE_NT_HEADERS WINAPI CheckSumMappedFile(
     BaseAddress, FileLength, HeaderSum, CheckSum
   );
 
-  CalcSum = (DWORD)CalcCheckSum(0, BaseAddress, (FileLength + 1) / sizeof(WORD));
+  CalcSum = (DWORD)CalcCheckSum(0, BaseAddress, FileLength);
 
   __TRY
   {

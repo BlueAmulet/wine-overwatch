@@ -362,7 +362,7 @@ static void test_pe_checksum(void)
     ret = pCheckSumMappedFile(buffer, 11, &checksum_orig, &checksum_new);
     ok(ret == NULL, "Expected NULL, got %p\n", ret);
     ok(checksum_orig == 0, "Expected 0, got %x\n", checksum_orig);
-    todo_wine ok(checksum_new == 0xaad7, "Expected 0xaad7, got %x\n", checksum_new);
+    ok(checksum_new == 0xaad7, "Expected 0xaad7, got %x\n", checksum_new);
 
     /* test checksum of PE module */
     memset(buffer, 0x22, sizeof(buffer));
