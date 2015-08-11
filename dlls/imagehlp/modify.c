@@ -25,6 +25,7 @@
 #include "winternl.h"
 #include "winerror.h"
 #include "wine/debug.h"
+#include "wine/exception.h"
 #include "imagehlp.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(imagehlp);
@@ -191,37 +192,45 @@ PIMAGE_NT_HEADERS WINAPI CheckSumMappedFile(
   IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *) BaseAddress;
   PIMAGE_NT_HEADERS32 Header32;
   PIMAGE_NT_HEADERS64 Header64;
+  PIMAGE_NT_HEADERS ret = NULL;
   DWORD *ChecksumFile;
   DWORD CalcSum;
-  DWORD HdrSum;
+  DWORD HdrSum = 0;
 
   TRACE("(%p, %d, %p, %p)\n",
     BaseAddress, FileLength, HeaderSum, CheckSum
   );
 
-  CalcSum = (DWORD)CalcCheckSum(0,
-				BaseAddress,
-				(FileLength + 1) / sizeof(WORD));
+  CalcSum = (DWORD)CalcCheckSum(0, BaseAddress, (FileLength + 1) / sizeof(WORD));
 
-  if (dos->e_magic != IMAGE_DOS_SIGNATURE)
-    return NULL;
-
-  Header32 = (IMAGE_NT_HEADERS32 *)((char *)dos + dos->e_lfanew);
-
-  if (Header32->Signature != IMAGE_NT_SIGNATURE)
-    return NULL;
-
-  if (Header32->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC)
-    ChecksumFile = &Header32->OptionalHeader.CheckSum;
-  else if (Header32->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC)
+  __TRY
   {
-    Header64 = (IMAGE_NT_HEADERS64 *)Header32;
-    ChecksumFile = &Header64->OptionalHeader.CheckSum;
-  }
-  else
-    return NULL;
+    if (dos->e_magic != IMAGE_DOS_SIGNATURE)
+      break;
 
-  HdrSum = *ChecksumFile;
+    Header32 = (IMAGE_NT_HEADERS32 *)((char *)dos + dos->e_lfanew);
+    if (Header32->Signature != IMAGE_NT_SIGNATURE)
+      break;
+
+    ret = (PIMAGE_NT_HEADERS)Header32;
+
+    if (Header32->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC)
+      ChecksumFile = &Header32->OptionalHeader.CheckSum;
+    else if (Header32->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC)
+    {
+      Header64 = (IMAGE_NT_HEADERS64 *)Header32;
+      ChecksumFile = &Header64->OptionalHeader.CheckSum;
+    }
+    else
+      break;
+
+    HdrSum = *ChecksumFile;
+  }
+  __EXCEPT_PAGE_FAULT
+  {
+    /* nothing */
+  }
+  __ENDTRY
 
   /* Subtract image checksum from calculated checksum. */
   /* fix low word of checksum */
@@ -248,9 +257,9 @@ PIMAGE_NT_HEADERS WINAPI CheckSumMappedFile(
   CalcSum += FileLength;
 
   *CheckSum = CalcSum;
-  *HeaderSum = *ChecksumFile;
+  *HeaderSum = HdrSum;
 
-  return (PIMAGE_NT_HEADERS) Header32;
+  return ret;
 }
 
 /***********************************************************************
