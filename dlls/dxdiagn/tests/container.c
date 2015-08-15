@@ -901,7 +901,8 @@ static void test_DxDiag_SystemInfo(void)
         {szProcessorEnglish, VT_BSTR},
     };
 
-    IDxDiagContainer *container;
+    IDxDiagContainer *container, *container2;
+    static const WCHAR empty[] = {0};
     HRESULT hr;
 
     if (!create_root_IDxDiagContainer())
@@ -910,6 +911,9 @@ static void test_DxDiag_SystemInfo(void)
         return;
     }
 
+    hr = IDxDiagContainer_GetChildContainer(pddc, empty, &container2);
+    ok(hr == E_INVALIDARG, "Expected IDxDiagContainer::GetChildContainer to return E_INVALIDARG, got 0x%08x\n", hr);
+
     hr = IDxDiagContainer_GetChildContainer(pddc, DxDiag_SystemInfo, &container);
     ok(hr == S_OK, "Expected IDxDiagContainer::GetChildContainer to return S_OK, got 0x%08x\n", hr);
 
@@ -917,6 +921,14 @@ static void test_DxDiag_SystemInfo(void)
     {
         trace("Testing container DxDiag_SystemInfo\n");
         test_container_properties(container, property_tests, sizeof(property_tests)/sizeof(property_tests[0]));
+
+        container2 = NULL;
+        hr = IDxDiagContainer_GetChildContainer(container, empty, &container2);
+        ok(hr == S_OK, "Expected IDxDiagContainer::GetChildContainer to return S_OK, got 0x%08x\n", hr);
+        ok(container2 != NULL, "Expected container2 != NULL\n");
+        ok(container2 != container, "Expected container != container2\n");
+        if (hr == S_OK) IDxDiagContainer_Release(container2);
+
         IDxDiagContainer_Release(container);
     }
 
@@ -1033,6 +1045,7 @@ static void test_DxDiag_SoundDevices(void)
     static const WCHAR szGuidDeviceID[] = {'s','z','G','u','i','d','D','e','v','i','c','e','I','D',0};
     static const WCHAR szDriverPath[] = {'s','z','D','r','i','v','e','r','P','a','t','h',0};
     static const WCHAR szDriverName[] = {'s','z','D','r','i','v','e','r','N','a','m','e',0};
+    static const WCHAR empty[] = {0};
 
     static const struct property_test property_tests[] =
     {
@@ -1072,7 +1085,7 @@ static void test_DxDiag_SoundDevices(void)
     for (i = 0; i < count; i++)
     {
         WCHAR child_container[256];
-        IDxDiagContainer *child;
+        IDxDiagContainer *child, *child2;
 
         hr = IDxDiagContainer_EnumChildContainerNames(sound_cont, i, child_container, sizeof(child_container)/sizeof(WCHAR));
         ok(hr == S_OK, "Expected IDxDiagContainer::EnumChildContainerNames to return S_OK, got 0x%08x\n", hr);
@@ -1085,6 +1098,14 @@ static void test_DxDiag_SoundDevices(void)
             trace("Testing container %s\n", wine_dbgstr_w(child_container));
             test_container_properties(child, property_tests, sizeof(property_tests)/sizeof(property_tests[0]));
         }
+
+        child2 = NULL;
+        hr = IDxDiagContainer_GetChildContainer(child, empty, &child2);
+        ok(hr == S_OK, "Expected IDxDiagContainer::GetChildContainer to return S_OK, got 0x%08x\n", hr);
+        ok(child2 != NULL, "Expected child2 != NULL\n");
+        ok(child2 != child, "Expected child != child2\n");
+        if (hr == S_OK) IDxDiagContainer_Release(child2);
+
         IDxDiagContainer_Release(child);
     }
 
