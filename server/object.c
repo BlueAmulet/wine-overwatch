@@ -162,7 +162,7 @@ WCHAR *get_object_full_name( struct object *obj, data_size_t *ret_len )
     while (ptr && ptr->name)
     {
         struct object_name *name = ptr->name;
-        len += name->len + sizeof(WCHAR);
+        if (name->len) len += name->len + sizeof(WCHAR);
         ptr = name->parent;
     }
     if (!len) return NULL;
@@ -172,9 +172,12 @@ WCHAR *get_object_full_name( struct object *obj, data_size_t *ret_len )
     while (obj && obj->name)
     {
         struct object_name *name = obj->name;
-        memcpy( ret + len - name->len, name->name, name->len );
-        len -= name->len + sizeof(WCHAR);
-        memcpy( ret + len, &backslash, sizeof(WCHAR) );
+        if (name->len)
+        {
+            memcpy( ret + len - name->len, name->name, name->len );
+            len -= name->len + sizeof(WCHAR);
+            memcpy( ret + len, &backslash, sizeof(WCHAR) );
+        }
         obj = name->parent;
     }
     return (WCHAR *)ret;
@@ -262,8 +265,8 @@ struct object *lookup_named_object( struct object *root, const struct unicode_st
     return parent;
 }
 
-static struct object *create_object( struct object *parent, const struct object_ops *ops,
-                                     const struct unicode_str *name, const struct security_descriptor *sd )
+void *create_object( struct object *parent, const struct object_ops *ops,
+                     const struct unicode_str *name, const struct security_descriptor *sd )
 {
     struct object *obj;
     struct object_name *name_ptr;
@@ -358,8 +361,11 @@ static void dump_name( struct object *obj )
 
     if (!name) return;
     if (name->parent) dump_name( name->parent );
-    fputs( "\\\\", stderr );
-    dump_strW( name->name, name->len / sizeof(WCHAR), stderr, "[]" );
+    if (name->len)
+    {
+        fputs( "\\\\", stderr );
+        dump_strW( name->name, name->len / sizeof(WCHAR), stderr, "[]" );
+    }
 }
 
 /* dump the name of an object to stderr */

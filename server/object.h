@@ -135,6 +135,8 @@ extern WCHAR *get_object_full_name( struct object *obj, data_size_t *ret_len );
 extern void dump_object_name( struct object *obj );
 extern struct object *lookup_named_object( struct object *root, const struct unicode_str *name,
                                            unsigned int attr, struct unicode_str *name_left );
+extern void *create_object( struct object *parent, const struct object_ops *ops,
+                            const struct unicode_str *name, const struct security_descriptor *sd );
 extern void *create_named_object( struct object *parent, const struct object_ops *ops,
                                   const struct unicode_str *name, unsigned int attributes,
                                   const struct security_descriptor *sd );
