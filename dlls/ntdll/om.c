@@ -39,6 +39,7 @@
 #include "ntdll_misc.h"
 #include "wine/server.h"
 #include "wine/exception.h"
+#include "wine/unicode.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(ntdll);
 
@@ -606,12 +607,23 @@ NTSTATUS WINAPI NtQueryDirectoryObject(HANDLE handle, PDIRECTORY_BASIC_INFORMATI
 NTSTATUS WINAPI NtOpenSymbolicLinkObject( HANDLE *handle, ACCESS_MASK access,
                                           const OBJECT_ATTRIBUTES *attr)
 {
+    static const WCHAR SystemRootW[] = {'\\','S','y','s','t','e','m','R','o','o','t'};
     NTSTATUS ret;
 
     TRACE("(%p,0x%08x,%s)\n", handle, access, debugstr_ObjectAttributes(attr));
 
     if (!handle) return STATUS_ACCESS_VIOLATION;
     if ((ret = validate_open_object_attributes( attr ))) return ret;
+
+    /* MSYS2 tries to open \\SYSTEMROOT to check for case-insensitive systems */
+    if (!access && !attr->RootDirectory &&
+        attr->ObjectName->Length == sizeof(SystemRootW) &&
+        !memicmpW( attr->ObjectName->Buffer, SystemRootW,
+                   sizeof(SystemRootW)/sizeof(WCHAR) ))
+    {
+        TRACE( "returning STATUS_ACCESS_DENIED\n" );
+        return STATUS_ACCESS_DENIED;
+    }
 
     SERVER_START_REQ(open_symlink)
     {
