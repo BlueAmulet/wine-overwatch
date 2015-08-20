@@ -1474,6 +1474,8 @@ NTSTATUS virtual_alloc_thread_stack( TEB *teb, SIZE_T reserve_size, SIZE_T commi
     teb->DeallocationStack = view->base;
     teb->Tib.StackBase     = (char *)view->base + view->size;
     teb->Tib.StackLimit    = (char *)view->base + 2 * page_size;
+    ((struct ntdll_thread_data *)teb->SpareBytes1)->pthread_stack = view->base;
+
 done:
     server_leave_uninterrupted_section( &csVirtual, &sigset );
     return status;
@@ -2069,6 +2071,16 @@ NTSTATUS WINAPI NtFreeVirtualMemory( HANDLE process, PVOID *addr_ptr, SIZE_T *si
         /* Free the pages */
 
         if (size || (base != view->base)) status = STATUS_INVALID_PARAMETER;
+        else if (view->base == (void *)((ULONG_PTR)ntdll_get_thread_data()->pthread_stack & ~1))
+        {
+            ULONG_PTR stack = (ULONG_PTR)ntdll_get_thread_data()->pthread_stack;
+            if (stack & 1) status = STATUS_INVALID_PARAMETER;
+            else
+            {
+                WARN( "Application tried to deallocate current pthread stack %p, deferring\n", view->base);
+                ntdll_get_thread_data()->pthread_stack = (void *)(stack | 1);
+            }
+        }
         else
         {
             delete_view( view );

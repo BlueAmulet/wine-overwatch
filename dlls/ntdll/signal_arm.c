@@ -902,11 +902,18 @@ NTSTATUS signal_alloc_thread( TEB **teb )
 void signal_free_thread( TEB *teb )
 {
     SIZE_T size;
+    struct ntdll_thread_data *thread_data = (struct ntdll_thread_data *)teb->SpareBytes1;
 
     if (teb->DeallocationStack)
     {
         size = 0;
         NtFreeVirtualMemory( GetCurrentProcess(), &teb->DeallocationStack, &size, MEM_RELEASE );
+    }
+    if ((ULONG_PTR)thread_data->pthread_stack & 1)
+    {
+        void *addr = (void *)((ULONG_PTR)thread_data->pthread_stack & ~1);
+        size = 0;
+        NtFreeVirtualMemory( GetCurrentProcess(), &addr, &size, MEM_RELEASE );
     }
     size = 0;
     NtFreeVirtualMemory( NtCurrentProcess(), (void **)&teb, &size, MEM_RELEASE );

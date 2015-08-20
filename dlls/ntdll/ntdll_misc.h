@@ -238,7 +238,17 @@ struct ntdll_thread_data
     WINE_VM86_TEB_INFO vm86;          /* 1fc vm86 private data */
     void              *exit_frame;    /* 204 exit frame pointer */
 #endif
+    void              *pthread_stack; /* 208/318 pthread stack */
 };
+
+C_ASSERT( FIELD_OFFSET(TEB, SpareBytes1) + sizeof(struct ntdll_thread_data) <=
+          FIELD_OFFSET(TEB, GdiTebBatch) + sizeof(((TEB *)0)->GdiTebBatch) );
+
+#ifdef __i386__
+C_ASSERT( FIELD_OFFSET(TEB, SpareBytes1) + FIELD_OFFSET(struct ntdll_thread_data, vm86) == FIELD_OFFSET(TEB, GdiTebBatch) );
+C_ASSERT( FIELD_OFFSET(TEB, SpareBytes1) + FIELD_OFFSET(struct ntdll_thread_data, vm86) == 0x1fc );
+C_ASSERT( FIELD_OFFSET(TEB, SpareBytes1) + FIELD_OFFSET(struct ntdll_thread_data, gs)   == 0x1d8 );
+#endif
 
 static inline struct ntdll_thread_data *ntdll_get_thread_data(void)
 {
