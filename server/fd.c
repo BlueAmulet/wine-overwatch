@@ -2413,6 +2413,50 @@ failed:
     free( name );
 }
 
+static void set_fd_eof( struct fd *fd, file_pos_t eof )
+{
+    static const char zero;
+    struct stat st;
+    struct list *ptr;
+
+    if (!fd->inode)
+    {
+        set_error( STATUS_OBJECT_TYPE_MISMATCH );
+        return;
+    }
+
+    if (fd->unix_fd == -1)
+    {
+        set_error( fd->no_fd_status );
+        return;
+    }
+
+    /* can't set eof of files which are mapped to memory */
+    LIST_FOR_EACH( ptr, &fd->inode->open )
+    {
+        struct fd *fd_ptr = LIST_ENTRY( ptr, struct fd, inode_entry );
+        if (fd_ptr != fd && (fd_ptr->access & FILE_MAPPING_ACCESS))
+        {
+            set_error( STATUS_USER_MAPPED_FILE );
+            return;
+        }
+    }
+
+    /* first try normal truncate */
+    if (ftruncate( fd->unix_fd, eof ) != -1) return;
+
+    /* now check for the need to extend the file */
+    if (fstat( fd->unix_fd, &st ) != -1 && eof > st.st_size)
+    {
+        /* extend the file one byte beyond the requested size and then truncate it */
+        /* this should work around ftruncate implementations that can't extend files */
+        if (pwrite( fd->unix_fd, &zero, 1, eof ) != -1 &&
+            ftruncate( fd->unix_fd, eof) != -1) return;
+    }
+
+    file_set_error();
+}
+
 struct completion *fd_get_completion( struct fd *fd, apc_param_t *p_key )
 {
     *p_key = fd->comp_key;
@@ -2640,4 +2684,15 @@ DECL_HANDLER(set_fd_name_info)
         release_object( fd );
     }
     if (root_fd) release_object( root_fd );
+}
+
+/* set fd eof information */
+DECL_HANDLER(set_fd_eof_info)
+{
+    struct fd *fd = get_handle_fd_obj( current->process, req->handle, 0 );
+    if (fd)
+    {
+        set_fd_eof( fd, req->eof );
+        release_object( fd );
+    }
 }
