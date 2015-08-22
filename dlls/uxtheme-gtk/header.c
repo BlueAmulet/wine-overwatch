@@ -92,7 +92,9 @@ static BOOL is_part_defined(int part_id, int state_id)
     return (part_id == HP_HEADERITEM);
 }
 
-static const uxgtk_theme_vtable_t header_vtable = {
+static const uxgtk_theme_vtable_t header_vtable =
+{
+    "header",
     NULL, /* get_color */
     draw_background,
     NULL, /* get_part_size */

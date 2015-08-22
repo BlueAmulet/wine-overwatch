@@ -122,6 +122,7 @@ static BOOL is_part_defined(int part_id, int state_id)
 
 static const uxgtk_theme_vtable_t status_vtable =
 {
+    "status",
     NULL, /* get_color */
     draw_background,
     get_part_size,

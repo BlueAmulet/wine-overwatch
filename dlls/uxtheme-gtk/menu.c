@@ -154,6 +154,7 @@ static HRESULT get_color(uxgtk_theme_t *theme, int part_id, int state_id,
 
 static const uxgtk_theme_vtable_t menu_vtable =
 {
+    "menu",
     get_color,
     NULL, /* draw_background */
     NULL, /* get_part_size */

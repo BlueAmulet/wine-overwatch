@@ -32,6 +32,7 @@ typedef struct _uxgtk_theme_vtable uxgtk_theme_vtable_t;
 
 struct _uxgtk_theme_vtable
 {
+    const char *classname;
     HRESULT (*get_color)(uxgtk_theme_t *theme, int part_id, int state_id,
                          int prop_id, GdkRGBA *rgba);
     HRESULT (*draw_background)(uxgtk_theme_t *theme, cairo_t *cr, int part_id, int state_id,

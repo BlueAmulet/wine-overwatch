@@ -576,6 +576,7 @@ HRESULT WINAPI GetThemeColor(HTHEME htheme, int part_id, int state_id,
     if (color == NULL)
         return E_INVALIDARG;
 
+    TRACE("%s->get_color()\n", theme->vtable->classname);
     hr = theme->vtable->get_color(theme, part_id, state_id, prop_id, &rgba);
 
     if (SUCCEEDED(hr) && rgba.alpha > 0)
@@ -879,6 +880,7 @@ HRESULT WINAPI DrawThemeBackgroundEx(HTHEME htheme, HDC hdc, int part_id, int st
     surface = pcairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
     cr = pcairo_create(surface);
 
+    TRACE("%s->draw_background()\n", theme->vtable->classname);
     hr = theme->vtable->draw_background(theme, cr, part_id, state_id, width, height);
     if (SUCCEEDED(hr))
         paint_cairo_surface(surface, hdc, rect->left, rect->top, width, height);
@@ -1034,6 +1036,7 @@ HRESULT WINAPI GetThemePartSize(HTHEME htheme, HDC hdc, int part_id, int state_i
     if (rect == NULL || size == NULL)
         return E_INVALIDARG;
 
+    TRACE("%s->get_part_size()\n", theme->vtable->classname);
     return theme->vtable->get_part_size(theme, part_id, state_id, rect, size);
 }
 
@@ -1099,6 +1102,7 @@ BOOL WINAPI IsThemePartDefined(HTHEME htheme, int part_id, int state_id)
         return FALSE;
     }
 
+    TRACE("%s->is_part_defined()\n", theme->vtable->classname);
     return theme->vtable->is_part_defined(part_id, state_id);
 }
 
