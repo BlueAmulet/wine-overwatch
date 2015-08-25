@@ -939,8 +939,8 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, void *reserved)
                 desc.dwSize = sizeof(desc);
                 for(i = 0; i <= 1; i++)
                 {
-                    hr = IDirectDraw7_EnumSurfaces(&ddraw->IDirectDraw7_iface, DDENUMSURFACES_ALL,
-                            &desc, ddraw, DestroyCallback);
+                    hr = IDirectDraw7_EnumSurfaces(&ddraw->IDirectDraw7_iface,
+                            DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_ALL, &desc, ddraw, DestroyCallback);
                     if(hr != D3D_OK)
                         ERR("(%p) EnumSurfaces failed, prepare for trouble\n", ddraw);
                 }
