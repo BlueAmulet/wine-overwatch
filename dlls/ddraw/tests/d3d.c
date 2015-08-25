@@ -147,15 +147,15 @@ static BOOL CreateDirect3D(void)
 
     count.found = count.surfaces = 0;
     rc = IDirectDraw7_EnumSurfaces(lpDD, 0, &ddsd, &count, SurfaceCounter);
-    todo_wine ok(rc == DDERR_INVALIDPARAMS, "Expected DDERR_INVALIDPARAMS, got %x\n", rc);
+    ok(rc == DDERR_INVALIDPARAMS, "Expected DDERR_INVALIDPARAMS, got %x\n", rc);
     ok(count.found == 0, "Has %d surface descriptions, expected 0\n", count.found);
     ok(count.surfaces == 0, "Has %d surfaces, expected 0\n", count.surfaces);
 
     count.found = count.surfaces = 0;
     rc = IDirectDraw7_EnumSurfaces(lpDD, DDENUMSURFACES_ALL, NULL, &count, SurfaceCounter);
-    todo_wine ok(rc == DDERR_INVALIDPARAMS, "Expected DDERR_INVALIDPARAMS, got %x\n", rc);
-    todo_wine ok(count.found == 0, "Has %d surface descriptions, expected 0\n", count.found);
-    todo_wine ok(count.surfaces == 0, "Has %d surfaces, expected 0\n", count.surfaces);
+    ok(rc == DDERR_INVALIDPARAMS, "Expected DDERR_INVALIDPARAMS, got %x\n", rc);
+    ok(count.found == 0, "Has %d surface descriptions, expected 0\n", count.found);
+    ok(count.surfaces == 0, "Has %d surfaces, expected 0\n", count.surfaces);
 
     count.found = count.surfaces = 0;
     rc = IDirectDraw7_EnumSurfaces(lpDD, DDENUMSURFACES_MATCH, NULL, &count, SurfaceCounter);
@@ -220,22 +220,22 @@ static BOOL CreateDirect3D(void)
     rc = IDirectDraw7_EnumSurfaces(lpDD, DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_NOMATCH,
             &ddsd2, &count, SurfaceCounter);
     ok(rc == DD_OK, "Expected DD_OK, got %x\n", rc);
-    todo_wine ok(count.found == 0, "Has %d surface descriptions, expected 0\n", count.found);
-    todo_wine ok(count.surfaces == 0, "Has %d surfaces, expected 0\n", count.surfaces);
+    ok(count.found == 0, "Has %d surface descriptions, expected 0\n", count.found);
+    ok(count.surfaces == 0, "Has %d surfaces, expected 0\n", count.surfaces);
 
     count.found = count.surfaces = 0;
     rc = IDirectDraw7_EnumSurfaces(lpDD, DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_ALL |
             DDENUMSURFACES_MATCH, NULL, &count, SurfaceCounter);
-    todo_wine ok(rc == DDERR_INVALIDPARAMS, "Expected DDERR_INVALIDPARAMS, got %x\n", rc);
-    todo_wine ok(count.found == 0, "Has %d surface descriptions, expected 0\n", count.found);
-    todo_wine ok(count.surfaces == 0, "Has %d surfaces, expected 0\n", count.surfaces);
+    ok(rc == DDERR_INVALIDPARAMS, "Expected DDERR_INVALIDPARAMS, got %x\n", rc);
+    ok(count.found == 0, "Has %d surface descriptions, expected 0\n", count.found);
+    ok(count.surfaces == 0, "Has %d surfaces, expected 0\n", count.surfaces);
 
     count.found = count.surfaces = 0;
     rc = IDirectDraw7_EnumSurfaces(lpDD, DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_ALL |
             DDENUMSURFACES_NOMATCH, NULL, &count, SurfaceCounter);
-    todo_wine ok(rc == DDERR_INVALIDPARAMS, "Expected DDERR_INVALIDPARAMS, got %x\n", rc);
-    todo_wine ok(count.found == 0, "Has %d surface descriptions, expected 0\n", count.found);
-    todo_wine ok(count.surfaces == 0, "Has %d surfaces, expected 0\n", count.surfaces);
+    ok(rc == DDERR_INVALIDPARAMS, "Expected DDERR_INVALIDPARAMS, got %x\n", rc);
+    ok(count.found == 0, "Has %d surface descriptions, expected 0\n", count.found);
+    ok(count.surfaces == 0, "Has %d surfaces, expected 0\n", count.surfaces);
 
     count.found = count.surfaces = 0;
     rc = IDirectDraw7_EnumSurfaces(lpDD, DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_MATCH |
@@ -247,23 +247,23 @@ static BOOL CreateDirect3D(void)
     /* search type DDENUMSURFACES_CANBECREATED */
     count.found = count.surfaces = 0;
     rc = IDirectDraw7_EnumSurfaces(lpDD, DDENUMSURFACES_CANBECREATED, &ddsd, &count, SurfaceCounter);
-    todo_wine ok(rc == DDERR_INVALIDPARAMS, "Expected DDERR_INVALIDPARAMS, got %x\n", rc);
+    ok(rc == DDERR_INVALIDPARAMS, "Expected DDERR_INVALIDPARAMS, got %x\n", rc);
     ok(count.found == 0, "Has %d surface descriptions, expected 0\n", count.found);
     ok(count.surfaces == 0, "Has %d surfaces, expected 0\n", count.surfaces);
 
     count.found = count.surfaces = 0;
     rc = IDirectDraw7_EnumSurfaces(lpDD, DDENUMSURFACES_CANBECREATED | DDENUMSURFACES_ALL,
             &ddsd, &count, SurfaceCounter);
-    todo_wine ok(rc == DDERR_INVALIDPARAMS, "Expected DDERR_INVALIDPARAMS, got %x\n", rc);
-    todo_wine ok(count.found == 0, "Has %d surface descriptions, expected 0\n", count.found);
-    todo_wine ok(count.surfaces == 0, "Has %d surfaces, expected 0\n", count.surfaces);
+    ok(rc == DDERR_INVALIDPARAMS, "Expected DDERR_INVALIDPARAMS, got %x\n", rc);
+    ok(count.found == 0, "Has %d surface descriptions, expected 0\n", count.found);
+    ok(count.surfaces == 0, "Has %d surfaces, expected 0\n", count.surfaces);
 
     count.found = count.surfaces = 0;
     rc = IDirectDraw7_EnumSurfaces(lpDD, DDENUMSURFACES_CANBECREATED | DDENUMSURFACES_NOMATCH,
             &ddsd, &count, SurfaceCounter);
-    todo_wine ok(rc == DDERR_INVALIDPARAMS, "Expected DDERR_INVALIDPARAMS, got %x\n", rc);
-    todo_wine ok(count.found == 0, "Has %d surface descriptions, expected 0\n", count.found);
-    todo_wine ok(count.surfaces == 0, "Has %d surfaces, expected 0\n", count.surfaces);
+    ok(rc == DDERR_INVALIDPARAMS, "Expected DDERR_INVALIDPARAMS, got %x\n", rc);
+    ok(count.found == 0, "Has %d surface descriptions, expected 0\n", count.found);
+    ok(count.surfaces == 0, "Has %d surfaces, expected 0\n", count.surfaces);
 
     count.found = count.surfaces = 0;
     rc = IDirectDraw7_EnumSurfaces(lpDD, DDENUMSURFACES_CANBECREATED | DDENUMSURFACES_MATCH,
@@ -276,7 +276,7 @@ static BOOL CreateDirect3D(void)
     rc = IDirectDraw7_EnumSurfaces(lpDD, DDENUMSURFACES_CANBECREATED | DDENUMSURFACES_MATCH,
             &ddsd, &count, SurfaceCounter);
     ok(rc == DD_OK, "Expected DD_OK, got %x\n", rc);
-    todo_wine ok(count.found == 1, "Has %d surface descriptions, expected 1\n", count.found);
+    ok(count.found == 1, "Has %d surface descriptions, expected 1\n", count.found);
     ok(count.surfaces == 0, "Has %d surfaces, expected 0\n", count.surfaces);
 
     /* combination of DDENUMSURFACES_DOESEXIST and DDENUMSURFACES_CANBECREATED */
@@ -284,7 +284,7 @@ static BOOL CreateDirect3D(void)
     rc = IDirectDraw7_EnumSurfaces(lpDD, DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_CANBECREATED |
             DDENUMSURFACES_MATCH, &ddsd, &count, SurfaceCounter);
     ok(rc == DD_OK, "Expected DD_OK, got %x\n", rc);
-    todo_wine ok(count.found == 1, "Has %d surface descriptions, expected 1\n", count.found);
+    ok(count.found == 1, "Has %d surface descriptions, expected 1\n", count.found);
     ok(count.surfaces == 0, "Has %d surfaces, expected 0\n", count.surfaces);
 
     memset(&ddsd, 0, sizeof(ddsd));
