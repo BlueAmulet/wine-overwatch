@@ -1158,18 +1158,17 @@ static void test_WithWSAStartup(void)
     ok(res == 0, "WSAStartup() failed unexpectedly: %d\n", res);
 
     /* show that sockets are destroyed automatically after WSACleanup */
-    todo_wine {
     SetLastError(0xdeadbeef);
     res = send(pairs[0].src, "TEST", 4, 0);
     error = WSAGetLastError();
     ok(res == SOCKET_ERROR, "send should have failed\n");
-    ok(error == WSAENOTSOCK, "expected 10038, got %d\n", error);
+    todo_wine ok(error == WSAENOTSOCK, "expected 10038, got %d\n", error);
 
     SetLastError(0xdeadbeef);
     res = send(pairs[0].dst, "TEST", 4, 0);
     error = WSAGetLastError();
     ok(res == SOCKET_ERROR, "send should have failed\n");
-    ok(error == WSAENOTSOCK, "expected 10038, got %d\n", error);
+    todo_wine ok(error == WSAENOTSOCK, "expected 10038, got %d\n", error);
 
     /* Check that all sockets were destroyed */
     for (i = 0; i < socks; i++)
@@ -1189,11 +1188,12 @@ static void test_WithWSAStartup(void)
             SetLastError(0xdeadbeef);
             res = getsockname(sock, (struct sockaddr *)&saddr, &size);
             error = WSAGetLastError();
-            ok(res == SOCKET_ERROR, "Test[%d]: getsockname should have failed\n", i);
-            ok(error == WSAENOTSOCK, "Test[%d]: expected 10038, got %d\n", i, error);
+            if (j == 2 || (j == 0 && i == 0))
+                todo_wine ok(res == SOCKET_ERROR, "Test[%d]: getsockname should have failed\n", i);
+            else
+                ok(res == SOCKET_ERROR, "Test[%d]: getsockname should have failed\n", i);
+            todo_wine ok(error == WSAENOTSOCK, "Test[%d]: expected 10038, got %d\n", i, error);
         }
-    }
-
     }
 
     /* While wine is not fixed, close all sockets manually */

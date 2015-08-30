@@ -1420,3 +1420,12 @@ DECL_HANDLER(get_socket_info)
 
     release_object( &sock->obj );
 }
+
+DECL_HANDLER(socket_cleanup)
+{
+    unsigned int index = 0;
+    obj_handle_t sock;
+
+    while ((sock = enumerate_handles(current->process, &sock_ops, &index, NULL)))
+        close_handle(current->process, sock);
+}

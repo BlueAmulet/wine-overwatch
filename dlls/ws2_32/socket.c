@@ -1664,13 +1664,23 @@ int WINAPI WSAStartup(WORD wVersionRequested, LPWSADATA lpWSAData)
  */
 INT WINAPI WSACleanup(void)
 {
-    if (num_startup) {
-        num_startup--;
-        TRACE("pending cleanups: %d\n", num_startup);
-        return 0;
+    if (!num_startup)
+    {
+        SetLastError(WSANOTINITIALISED);
+        return SOCKET_ERROR;
     }
-    SetLastError(WSANOTINITIALISED);
-    return SOCKET_ERROR;
+
+    if (!--num_startup)
+    {
+        SERVER_START_REQ(socket_cleanup)
+        {
+            wine_server_call( req );
+        }
+        SERVER_END_REQ;
+    }
+
+    TRACE("pending cleanups: %d\n", num_startup);
+    return 0;
 }
 
 
