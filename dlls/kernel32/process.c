@@ -1655,7 +1655,7 @@ static startup_info_t *create_startup_info( LPCWSTR filename, LPCWSTR cmdline,
     const RTL_USER_PROCESS_PARAMETERS *cur_params;
     const WCHAR *title;
     startup_info_t *info;
-    DWORD size;
+    DWORD size, cur_dir_length;
     void *ptr;
     UNICODE_STRING newdir;
     WCHAR imagepath[MAX_PATH];
@@ -1669,24 +1669,27 @@ static startup_info_t *create_startup_info( LPCWSTR filename, LPCWSTR cmdline,
     cur_params = NtCurrentTeb()->Peb->ProcessParameters;
 
     newdir.Buffer = NULL;
-    if (cur_dir)
+    if (cur_dir && RtlDosPathNameToNtPathName_U( cur_dir, &newdir, NULL, NULL ))
     {
-        if (RtlDosPathNameToNtPathName_U( cur_dir, &newdir, NULL, NULL ))
-            cur_dir = newdir.Buffer + 4;  /* skip \??\ prefix */
-        else
-            cur_dir = NULL;
+        cur_dir = newdir.Buffer + 4;  /* skip \??\ prefix */
+        cur_dir_length = newdir.Length - 4 * sizeof(WCHAR);
     }
-    if (!cur_dir)
+    else if (NtCurrentTeb()->Tib.SubSystemTib)  /* FIXME: hack */
     {
-        if (NtCurrentTeb()->Tib.SubSystemTib)  /* FIXME: hack */
-            cur_dir = ((WIN16_SUBSYSTEM_TIB *)NtCurrentTeb()->Tib.SubSystemTib)->curdir.DosPath.Buffer;
-        else
-            cur_dir = cur_params->CurrentDirectory.DosPath.Buffer;
+        const UNICODE_STRING *dir = &((WIN16_SUBSYSTEM_TIB *)NtCurrentTeb()->Tib.SubSystemTib)->curdir.DosPath;
+        cur_dir = dir->Buffer;
+        cur_dir_length = dir->Length;
+    }
+    else
+    {
+        const UNICODE_STRING *dir = &cur_params->CurrentDirectory.DosPath;
+        cur_dir = dir->Buffer;
+        cur_dir_length = dir->Length;
     }
     title = startup->lpTitle ? startup->lpTitle : imagepath;
 
     size = sizeof(*info);
-    size += strlenW( cur_dir ) * sizeof(WCHAR);
+    size += cur_dir_length;
     size += cur_params->DllPath.Length;
     size += strlenW( imagepath ) * sizeof(WCHAR);
     size += strlenW( cmdline ) * sizeof(WCHAR);
@@ -1743,7 +1746,9 @@ static startup_info_t *create_startup_info( LPCWSTR filename, LPCWSTR cmdline,
     info->show      = startup->wShowWindow;
 
     ptr = info + 1;
-    info->curdir_len = append_string( &ptr, cur_dir );
+    info->curdir_len = cur_dir_length;
+    memcpy( ptr, cur_dir, cur_dir_length );
+    ptr = (char *)ptr + cur_dir_length;
     info->dllpath_len = cur_params->DllPath.Length;
     memcpy( ptr, cur_params->DllPath.Buffer, cur_params->DllPath.Length );
     ptr = (char *)ptr + cur_params->DllPath.Length;
