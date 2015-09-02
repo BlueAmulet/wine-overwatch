@@ -1,5 +1,6 @@
 FONT_SRCS = \
 	arial.sfd \
+	cour.sfd \
 	courier.sfd \
 	fixedsys.sfd \
 	fixedsys_jp.sfd \
