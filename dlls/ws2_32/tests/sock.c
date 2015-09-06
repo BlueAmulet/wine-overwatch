@@ -1188,10 +1188,7 @@ static void test_WithWSAStartup(void)
             SetLastError(0xdeadbeef);
             res = getsockname(sock, (struct sockaddr *)&saddr, &size);
             error = WSAGetLastError();
-            if (j == 2 || (j == 0 && i == 0))
-                todo_wine ok(res == SOCKET_ERROR, "Test[%d]: getsockname should have failed\n", i);
-            else
-                ok(res == SOCKET_ERROR, "Test[%d]: getsockname should have failed\n", i);
+            ok(res == SOCKET_ERROR, "Test[%d]: getsockname should have failed\n", i);
             todo_wine ok(error == WSAENOTSOCK, "Test[%d]: expected 10038, got %d\n", i, error);
         }
     }
