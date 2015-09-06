@@ -1434,6 +1434,28 @@ HRESULT ddraw_get_d3dcaps(const struct ddraw *ddraw, D3DDEVICEDESC7 *caps)
     return DD_OK;
 }
 
+HRESULT CALLBACK enum_zbuffer(DDPIXELFORMAT *format, void *ctx)
+{
+    DDCAPS *caps = ctx;
+
+    switch (format->u1.dwZBufferBitDepth)
+    {
+        case 8:
+            caps->dwZBufferBitDepths |= DDBD_8;
+            break;
+        case 16:
+            caps->dwZBufferBitDepths |= DDBD_16;
+            break;
+        case 24:
+            caps->dwZBufferBitDepths |= DDBD_24;
+            break;
+        case 32:
+            caps->dwZBufferBitDepths |= DDBD_32;
+            break;
+    }
+    return D3DENUMRET_OK;
+}
+
 /*****************************************************************************
  * IDirectDraw7::GetCaps
  *
@@ -1513,6 +1535,8 @@ static HRESULT WINAPI ddraw7_GetCaps(IDirectDraw7 *iface, DDCAPS *DriverCaps, DD
 
     caps.dwCaps |= DDCAPS_ALIGNSTRIDE;
     caps.dwAlignStrideAlign = DDRAW_STRIDE_ALIGNMENT;
+
+    IDirect3D7_EnumZBufferFormats(&ddraw->IDirect3D7_iface, &IID_IDirect3DHALDevice, enum_zbuffer, &caps);
 
     if(DriverCaps)
     {
