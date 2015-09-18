@@ -473,14 +473,90 @@ static int export_table( struct msidb_state *state, const WCHAR *table_name )
     return 1;
 }
 
+static int export_all_tables( struct msidb_state *state )
+{
+    static const WCHAR summary_information[] = {
+        '_','S','u','m','m','a','r','y','I','n','f','o','r','m','a','t','i','o','n',0 };
+    static const char query_command[] = "SELECT Name FROM _Tables";
+    MSIHANDLE view = 0;
+    UINT ret;
+
+    ret = MsiDatabaseOpenViewA( state->database_handle, query_command, &view );
+    if (ret != ERROR_SUCCESS)
+    {
+        ERR( "Failed to open _Tables table.\n" );
+        goto cleanup;
+    }
+    ret = MsiViewExecute( view, 0 );
+    if (ret != ERROR_SUCCESS)
+    {
+        ERR( "Failed to query list from _Tables table.\n" );
+        goto cleanup;
+    }
+    for (;;)
+    {
+        MSIHANDLE record = 0;
+        WCHAR table[256];
+        DWORD size;
+
+        ret = MsiViewFetch( view, &record );
+        if (ret == ERROR_NO_MORE_ITEMS)
+            break;
+        if (ret != ERROR_SUCCESS)
+        {
+            ERR( "Failed to query row from _Tables table.\n" );
+            goto cleanup;
+        }
+        size = sizeof(table)/sizeof(WCHAR);
+        ret = MsiRecordGetStringW( record, 1, table, &size );
+        if (ret != ERROR_SUCCESS)
+        {
+            ERR( "Failed to retrieve name string.\n" );
+            goto cleanup;
+        }
+        ret = MsiCloseHandle( record );
+        if (ret != ERROR_SUCCESS)
+        {
+            ERR( "Failed to close record handle.\n" );
+            goto cleanup;
+        }
+        if (!export_table( state, table ))
+        {
+            ret = ERROR_FUNCTION_FAILED;
+            goto cleanup;
+        }
+    }
+    ret = ERROR_SUCCESS;
+    /* the _SummaryInformation table is not listed in _Tables */
+    if (!export_table( state, summary_information ))
+    {
+        ret = ERROR_FUNCTION_FAILED;
+        goto cleanup;
+    }
+
+cleanup:
+    if (view)
+        MsiViewClose( view );
+    return (ret == ERROR_SUCCESS);
+}
+
 static int export_tables( struct msidb_state *state )
 {
+    const WCHAR wildcard[] = { '*',0 };
     struct msidb_listentry *data;
 
     LIST_FOR_EACH_ENTRY( data, &state->table_list, struct msidb_listentry, entry )
     {
-        if (!export_table( state, data->name ))
-            return 0; /* failed, do not commit changes */
+        if (strcmpW( data->name, wildcard ) == 0)
+        {
+            if (!export_all_tables( state ))
+                return 0; /* failed, do not commit changes */
+        }
+        else
+        {
+            if (!export_table( state, data->name ))
+                return 0; /* failed, do not commit changes */
+        }
     }
     return 1;
 }
