@@ -5945,6 +5945,7 @@ BOOL WINAPI FileEncryptionStatusA(LPCSTR lpFileName, LPDWORD lpStatus)
 
 static NTSTATUS combine_dacls(ACL *parent, ACL *child, ACL **result)
 {
+    NTSTATUS status;
     ACL *combined;
     int i;
 
@@ -5953,8 +5954,26 @@ static NTSTATUS combine_dacls(ACL *parent, ACL *child, ACL **result)
     if (!combined)
         return STATUS_NO_MEMORY;
 
-    memcpy(combined, child, child->AclSize);
-    combined->AclSize = child->AclSize+parent->AclSize;
+    status = RtlCreateAcl(combined, parent->AclSize+child->AclSize, ACL_REVISION);
+    if (status != STATUS_SUCCESS)
+    {
+        heap_free(combined);
+        return status;
+    }
+
+    /* copy the new ACEs */
+    for (i=0; i<child->AceCount; i++)
+    {
+        ACE_HEADER *ace;
+
+        if (!GetAce(child, i, (void*)&ace))
+        {
+            WARN("error obtaining new ACE\n");
+            continue;
+        }
+        if (!AddAce(combined, ACL_REVISION, MAXDWORD, ace, ace->AceSize))
+            WARN("error adding new ACE\n");
+    }
 
     /* copy the inherited ACEs */
     for (i=0; i<parent->AceCount; i++)
