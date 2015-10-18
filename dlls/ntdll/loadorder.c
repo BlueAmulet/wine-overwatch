@@ -316,7 +316,7 @@ static HANDLE get_standard_key(void)
         RtlInitUnicodeString( &nameW, DllOverridesW );
 
         /* @@ Wine registry key: HKCU\Software\Wine\DllOverrides */
-        if (NtOpenKey( &std_key, KEY_ALL_ACCESS, &attr )) std_key = 0;
+        if (NtOpenKey( &std_key, KEY_WOW64_64KEY | KEY_ALL_ACCESS, &attr )) std_key = 0;
         NtClose( root );
     }
     return std_key;
@@ -359,7 +359,7 @@ static HANDLE get_app_key( const WCHAR *app_name )
     RtlInitUnicodeString( &nameW, str );
 
     /* @@ Wine registry key: HKCU\Software\Wine\AppDefaults\app.exe\DllOverrides */
-    if (NtOpenKey( &app_key, KEY_ALL_ACCESS, &attr )) app_key = 0;
+    if (NtOpenKey( &app_key, KEY_WOW64_64KEY | KEY_ALL_ACCESS, &attr )) app_key = 0;
     NtClose( root );
     RtlFreeHeap( GetProcessHeap(), 0, str );
     return app_key;
