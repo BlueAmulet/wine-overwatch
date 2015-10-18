@@ -88,6 +88,7 @@ struct thread
     timeout_t              creation_time; /* Thread creation time */
     timeout_t              exit_time;     /* Thread exit time */
     struct token          *token;         /* security token associated with this thread */
+    struct timeout_user   *exit_poll;     /* poll if the thread/process has exited already */
 };
 
 struct thread_snapshot
