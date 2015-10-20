@@ -162,7 +162,6 @@ NTSTATUS WINAPI NtQueryInformationProcess(
 
     switch (ProcessInformationClass) 
     {
-    UNIMPLEMENTED_INFO_CLASS(ProcessQuotaLimits);
     UNIMPLEMENTED_INFO_CLASS(ProcessBasePriority);
     UNIMPLEMENTED_INFO_CLASS(ProcessRaisePriority);
     UNIMPLEMENTED_INFO_CLASS(ProcessExceptionPort);
@@ -223,6 +222,36 @@ NTSTATUS WINAPI NtQueryInformationProcess(
             else
             {
                 len = sizeof(PROCESS_BASIC_INFORMATION);
+                ret = STATUS_INFO_LENGTH_MISMATCH;
+            }
+        }
+        break;
+    case ProcessQuotaLimits:
+        {
+            QUOTA_LIMITS pqli;
+
+            if (ProcessInformationLength >= sizeof(QUOTA_LIMITS))
+            {
+                if (!ProcessInformation)
+                    ret = STATUS_ACCESS_VIOLATION;
+                else if (!ProcessHandle)
+                    ret = STATUS_INVALID_HANDLE;
+                else
+                {
+                    /* FIXME : real data */
+                    memset(&pqli, 0, sizeof(QUOTA_LIMITS));
+
+                    memcpy(ProcessInformation, &pqli, sizeof(QUOTA_LIMITS));
+
+                    len = sizeof(QUOTA_LIMITS);
+                }
+
+                if (ProcessInformationLength > sizeof(QUOTA_LIMITS))
+                    ret = STATUS_INFO_LENGTH_MISMATCH;
+            }
+            else
+            {
+                len = sizeof(QUOTA_LIMITS);
                 ret = STATUS_INFO_LENGTH_MISMATCH;
             }
         }
