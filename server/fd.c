@@ -2431,14 +2431,23 @@ static void set_fd_eof( struct fd *fd, file_pos_t eof )
         return;
     }
 
-    /* can't set eof of files which are mapped to memory */
-    LIST_FOR_EACH( ptr, &fd->inode->open )
+    if (fstat( fd->unix_fd, &st ) == -1)
     {
-        struct fd *fd_ptr = LIST_ENTRY( ptr, struct fd, inode_entry );
-        if (fd_ptr != fd && (fd_ptr->access & FILE_MAPPING_ACCESS))
+        file_set_error();
+        return;
+    }
+
+    /* can't truncate files which are mapped to memory */
+    if (eof < st.st_size)
+    {
+        LIST_FOR_EACH( ptr, &fd->inode->open )
         {
-            set_error( STATUS_USER_MAPPED_FILE );
-            return;
+            struct fd *fd_ptr = LIST_ENTRY( ptr, struct fd, inode_entry );
+            if (fd_ptr != fd && (fd_ptr->access & FILE_MAPPING_ACCESS))
+            {
+                set_error( STATUS_USER_MAPPED_FILE );
+                return;
+            }
         }
     }
 
@@ -2446,7 +2455,7 @@ static void set_fd_eof( struct fd *fd, file_pos_t eof )
     if (ftruncate( fd->unix_fd, eof ) != -1) return;
 
     /* now check for the need to extend the file */
-    if (fstat( fd->unix_fd, &st ) != -1 && eof > st.st_size)
+    if (eof > st.st_size)
     {
         /* extend the file one byte beyond the requested size and then truncate it */
         /* this should work around ftruncate implementations that can't extend files */
