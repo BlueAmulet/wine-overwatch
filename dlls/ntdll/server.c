@@ -382,8 +382,9 @@ static int wait_select_reply( void *cookie )
  *              invoke_apc
  *
  * Invoke a single APC. Return TRUE if a user APC has been run.
+ * Optionally unblock signals while executing user APCs.
  */
-static BOOL invoke_apc( const apc_call_t *call, apc_result_t *result )
+static BOOL invoke_apc( const apc_call_t *call, apc_result_t *result, sigset_t *user_sigset )
 {
     BOOL user_apc = FALSE;
     SIZE_T size;
@@ -398,15 +399,19 @@ static BOOL invoke_apc( const apc_call_t *call, apc_result_t *result )
     case APC_USER:
     {
         void (WINAPI *func)(ULONG_PTR,ULONG_PTR,ULONG_PTR) = wine_server_get_ptr( call->user.func );
+        if (user_sigset) pthread_sigmask( SIG_SETMASK, user_sigset, NULL );
         func( call->user.args[0], call->user.args[1], call->user.args[2] );
+        if (user_sigset) pthread_sigmask( SIG_BLOCK, &server_block_set, user_sigset );
         user_apc = TRUE;
         break;
     }
     case APC_TIMER:
     {
         void (WINAPI *func)(void*, unsigned int, unsigned int) = wine_server_get_ptr( call->timer.func );
+        if (user_sigset) pthread_sigmask( SIG_SETMASK, user_sigset, NULL );
         func( wine_server_get_ptr( call->timer.arg ),
               (DWORD)call->timer.time, (DWORD)(call->timer.time >> 32) );
+        if (user_sigset) pthread_sigmask( SIG_BLOCK, &server_block_set, user_sigset );
         user_apc = TRUE;
         break;
     }
@@ -598,10 +603,12 @@ unsigned int server_select( const select_op_t *select_op, data_size_t size, UINT
     obj_handle_t apc_handle = 0;
     apc_call_t call;
     apc_result_t result;
+    sigset_t old_set;
     timeout_t abs_timeout = timeout ? timeout->QuadPart : TIMEOUT_INFINITE;
 
     memset( &result, 0, sizeof(result) );
 
+    pthread_sigmask( SIG_BLOCK, &server_block_set, &old_set );
     for (;;)
     {
         SERVER_START_REQ( select )
@@ -618,9 +625,14 @@ unsigned int server_select( const select_op_t *select_op, data_size_t size, UINT
             call        = reply->call;
         }
         SERVER_END_REQ;
-        if (ret == STATUS_PENDING) ret = wait_select_reply( &cookie );
+        if (ret == STATUS_PENDING)
+        {
+            pthread_sigmask( SIG_SETMASK, &old_set, NULL );
+            ret = wait_select_reply( &cookie );
+            pthread_sigmask( SIG_BLOCK, &server_block_set, &old_set );
+        }
         if (ret != STATUS_USER_APC) break;
-        if (invoke_apc( &call, &result ))
+        if (invoke_apc( &call, &result, &old_set ))
         {
             /* if we ran a user apc we have to check once more if additional apcs are queued,
              * but we don't want to wait */
@@ -633,6 +645,7 @@ unsigned int server_select( const select_op_t *select_op, data_size_t size, UINT
         if (size >= sizeof(select_op->signal_and_wait) && select_op->op == SELECT_SIGNAL_AND_WAIT)
             size = offsetof( select_op_t, signal_and_wait.signal );
     }
+    pthread_sigmask( SIG_SETMASK, &old_set, NULL );
 
     if (ret == STATUS_TIMEOUT && user_apc) ret = STATUS_USER_APC;
 
@@ -671,7 +684,7 @@ unsigned int server_queue_process_apc( HANDLE process, const apc_call_t *call, a
 
         if (self)
         {
-            invoke_apc( call, result );
+            invoke_apc( call, result, NULL );
         }
         else
         {
