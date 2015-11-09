@@ -557,6 +557,7 @@ enum loadorder get_load_order( const WCHAR *app_name, const WCHAR *path )
     enum loadorder ret = LO_INVALID;
     HANDLE std_key, app_key = 0;
     WCHAR *module, *basename;
+    WCHAR default_rule[] = {'*',0};
 
     if (!init_done) init_load_order();
     std_key = get_override_standard_key();
@@ -587,6 +588,10 @@ enum loadorder get_load_order( const WCHAR *app_name, const WCHAR *path )
         TRACE( "got main exe default %s for %s\n", debugstr_loadorder(ret), debugstr_w(path) );
         goto done;
     }
+
+    /* default rule '*' (used for purist mode) */
+    if ((ret = get_load_order_value( std_key, app_key, default_rule )) != LO_INVALID)
+        goto done;
 
     /* and last the hard-coded default */
     ret = LO_DEFAULT;
