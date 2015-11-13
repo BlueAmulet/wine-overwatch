@@ -58,6 +58,7 @@ struct notify_event
 
 struct notify
 {
+    unsigned int      refcount; /* number of references */
     struct list       entry;    /* entry in list of notifications */
     struct list       events;   /* list of events to set when changing this key */
     int               subtree;  /* true if subtree notification */
@@ -322,6 +323,14 @@ static void do_notification( struct key *key, struct notify *notify, int del )
 {
     void *ptr;
 
+    if (del)
+        list_remove( &notify->entry );
+    else
+    {
+        assert( notify->refcount < INT_MAX );
+        notify->refcount++;
+    }
+
     while ((ptr = list_head( &notify->events )))
     {
         struct notify_event *notify_event = LIST_ENTRY( ptr, struct notify_event, entry );
@@ -331,11 +340,9 @@ static void do_notification( struct key *key, struct notify *notify, int del )
         free( notify_event );
     }
 
-    if (del)
-    {
-        list_remove( &notify->entry );
+    assert( notify->refcount );
+    if (!--notify->refcount)
         free( notify );
-    }
 }
 
 static inline struct notify *find_notify( struct key *key, struct process *process, obj_handle_t hkey )
@@ -2292,6 +2299,7 @@ DECL_HANDLER(set_registry_notification)
             notify = find_notify( key, current->process, req->hkey );
             if (!notify && (notify = mem_alloc( sizeof(*notify) )))
             {
+                notify->refcount = 1;
                 list_init( &notify->events );
                 notify->subtree = req->subtree;
                 notify->filter  = req->filter;
