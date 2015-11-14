@@ -1555,6 +1555,10 @@ static void test_typelibmarshal(void)
         "EXCEPINFO differs from expected: wCode = 0x%x, scode = 0x%08x\n",
         excepinfo.wCode, excepinfo.scode);
     VariantClear(&varresult);
+
+    /* call CoClass (direct) */
+    hr = IWidget_Coclass(pWidget, (void *)V_DISPATCH(&vararg[0]));
+    ok_ole_success(hr, IWidget_Coclass);
     VariantClear(&vararg[0]);
 
     /* call Value with a VT_VARIANT|VT_BYREF type */
