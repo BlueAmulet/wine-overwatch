@@ -853,7 +853,9 @@ serialize_param(
                         return hres;
                     }
                     ITypeInfo_GetTypeAttr(tinfo2,&tattr);
-                    derefhere = (tattr->typekind != TKIND_DISPATCH && tattr->typekind != TKIND_INTERFACE);
+                    derefhere = (tattr->typekind != TKIND_DISPATCH &&
+                                 tattr->typekind != TKIND_INTERFACE &&
+                                 tattr->typekind != TKIND_COCLASS);
                 }
                 break;
 	    case TKIND_ENUM:	/* confirmed */
@@ -861,6 +863,7 @@ serialize_param(
 		break;
 	    case TKIND_DISPATCH:	/* will be done in VT_USERDEFINED case */
 	    case TKIND_INTERFACE:	/* will be done in VT_USERDEFINED case */
+            case TKIND_COCLASS:         /* will be done in VT_USERDEFINED case */
 		derefhere=FALSE;
 		break;
 	    default:
@@ -922,6 +925,36 @@ serialize_param(
 	    if (dealloc)
 	        IUnknown_Release((LPUNKNOWN)arg);
 	    break;
+        case TKIND_COCLASS: {
+            GUID iid = tattr->guid;
+            unsigned int i;
+            int type_flags;
+
+            for(i = 0; i < tattr->cImplTypes; i++) {
+                if(SUCCEEDED(ITypeInfo_GetImplTypeFlags(tinfo2, i, &type_flags)) &&
+                   type_flags == (IMPLTYPEFLAG_FSOURCE|IMPLTYPEFLAG_FDEFAULT)) {
+                    ITypeInfo *tinfo3;
+                    TYPEATTR *tattr2;
+                    HREFTYPE href;
+                    if(FAILED(ITypeInfo_GetRefTypeOfImplType(tinfo2, i, &href)))
+                        break;
+                    if(FAILED(ITypeInfo_GetRefTypeInfo(tinfo2, href, &tinfo3)))
+                        break;
+                    if(SUCCEEDED(ITypeInfo_GetTypeAttr(tinfo3, &tattr2))) {
+                        iid = tattr2->guid;
+                        ITypeInfo_ReleaseTypeAttr(tinfo3, tattr2);
+                    }
+                    ITypeInfo_Release(tinfo3);
+                    break;
+                }
+            }
+
+            if(writeit)
+                hres=_marshal_interface(buf, &iid, (LPUNKNOWN)arg);
+            if(dealloc)
+                IUnknown_Release((LPUNKNOWN)arg);
+            break;
+        }
 	case TKIND_RECORD: {
 	    int i;
 	    if (debugout) TRACE_(olerelay)("{");
@@ -1131,7 +1164,9 @@ deserialize_param(
                             return hres;
                         }
                         ITypeInfo_GetTypeAttr(tinfo2,&tattr);
-                        derefhere = (tattr->typekind != TKIND_DISPATCH && tattr->typekind != TKIND_INTERFACE);
+                        derefhere = (tattr->typekind != TKIND_DISPATCH &&
+                                     tattr->typekind != TKIND_INTERFACE &&
+                                     tattr->typekind != TKIND_COCLASS);
                     }
                     break;
 		case TKIND_ENUM:	/* confirmed */
@@ -1139,6 +1174,7 @@ deserialize_param(
 		    break;
 		case TKIND_DISPATCH:	/* will be done in VT_USERDEFINED case */
 		case TKIND_INTERFACE:	/* will be done in VT_USERDEFINED case */
+                case TKIND_COCLASS:     /* will be done in VT_USERDEFINED case */
 		    derefhere=FALSE;
 		    break;
 		default:
@@ -1213,6 +1249,34 @@ deserialize_param(
 		    if (readit)
 			hres = _unmarshal_interface(buf,&(tattr->guid),(LPUNKNOWN*)arg);
 		    break;
+                case TKIND_COCLASS: {
+                    GUID iid = tattr->guid;
+                    unsigned int i;
+                    int type_flags;
+
+                    for(i = 0; i < tattr->cImplTypes; i++) {
+                        if(SUCCEEDED(ITypeInfo_GetImplTypeFlags(tinfo2, i, &type_flags)) &&
+                           type_flags == (IMPLTYPEFLAG_FSOURCE|IMPLTYPEFLAG_FDEFAULT)) {
+                            ITypeInfo *tinfo3;
+                            TYPEATTR *tattr2;
+                            HREFTYPE href;
+                            if(FAILED(ITypeInfo_GetRefTypeOfImplType(tinfo2, i, &href)))
+                                break;
+                            if(FAILED(ITypeInfo_GetRefTypeInfo(tinfo2, href, &tinfo3)))
+                                break;
+                            if(SUCCEEDED(ITypeInfo_GetTypeAttr(tinfo3, &tattr2))) {
+                                iid = tattr2->guid;
+                                ITypeInfo_ReleaseTypeAttr(tinfo3, tattr2);
+                            }
+                            ITypeInfo_Release(tinfo3);
+                            break;
+                        }
+                    }
+
+                    if(readit)
+                        hres = _unmarshal_interface(buf, &iid, (LPUNKNOWN*)arg);
+                    break;
+                }
 		case TKIND_RECORD: {
 		    int i;
 
