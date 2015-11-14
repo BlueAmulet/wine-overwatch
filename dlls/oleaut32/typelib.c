@@ -6620,6 +6620,21 @@ static HRESULT get_iface_guid(ITypeInfo *tinfo, HREFTYPE href, GUID *guid)
         *guid = tattr->guid;
         break;
 
+    case TKIND_COCLASS: {
+        unsigned int i;
+        int type_flags;
+
+        for(i = 0; i < tattr->cImplTypes; i++)
+            if(SUCCEEDED(ITypeInfo_GetImplTypeFlags(tinfo2, i, &type_flags)) &&
+               type_flags == (IMPLTYPEFLAG_FSOURCE|IMPLTYPEFLAG_FDEFAULT)) break;
+
+        if(i < tattr->cImplTypes) {
+            hres = ITypeInfo_GetRefTypeOfImplType(tinfo2, i, &href);
+            if(SUCCEEDED(hres)) hres = get_iface_guid(tinfo2, href, guid);
+        } else hres = E_UNEXPECTED;
+        break;
+    }
+
     default:
         ERR("Unexpected typekind %d\n", tattr->typekind);
         hres = E_UNEXPECTED;
