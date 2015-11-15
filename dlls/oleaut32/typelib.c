@@ -6388,15 +6388,15 @@ static double (* const call_double_method)(void*,int,const DWORD*,int*) = (void 
  * Invokes a method, or accesses a property of an object, that implements the
  * interface described by the type description.
  */
-DWORD
-_invoke(FARPROC func,CALLCONV callconv, int nrargs, DWORD *args) {
+DWORD _invoke(FARPROC func, CALLCONV callconv, int nrargs, DWORD_PTR *args)
+{
     DWORD res;
     int stack_offset;
 
     if (TRACE_ON(ole)) {
 	int i;
 	TRACE("Calling %p(",func);
-	for (i=0;i<min(nrargs,30);i++) TRACE("%08x,",args[i]);
+	for (i=0;i<min(nrargs,30);i++) TRACE("%08lx,",args[i]);
 	if (nrargs > 30) TRACE("...");
 	TRACE(")\n");
     }
@@ -6404,7 +6404,7 @@ _invoke(FARPROC func,CALLCONV callconv, int nrargs, DWORD *args) {
     switch (callconv) {
     case CC_STDCALL:
     case CC_CDECL:
-        res = call_method( func, nrargs, args, &stack_offset );
+        res = call_method(func, nrargs, (DWORD *)args, &stack_offset);
 	break;
     default:
 	FIXME("unsupported calling convention %d\n",callconv);
