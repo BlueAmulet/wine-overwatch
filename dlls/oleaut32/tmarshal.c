@@ -492,7 +492,6 @@ static HRESULT num_of_funcs(ITypeInfo *tinfo, unsigned int *num,
 #ifdef __i386__
 
 #include "pshpack1.h"
-
 typedef struct _TMAsmProxy {
     DWORD	lealeax;
     BYTE	pushleax;
@@ -504,10 +503,33 @@ typedef struct _TMAsmProxy {
     WORD	bytestopop;
     WORD	nop;
 } TMAsmProxy;
-
 #include "poppack.h"
 
-#else /* __i386__ */
+#elif defined(__x86_64__)
+
+#include "pshpack1.h"
+typedef struct _TMAsmProxy {
+    BYTE    pushq_rbp;
+    BYTE    movq_rsp_rbp[3];
+    DWORD   subq_0x20_rsp;
+    DWORD   movq_rcx_0x10rbp;
+    DWORD   movq_rdx_0x18rbp;
+    DWORD   movq_r8_0x20rbp;
+    DWORD   movq_r9_0x28rbp;
+    BYTE    movq_rcx[3];
+    DWORD   nr;
+    DWORD   leaq_0x10rbp_rdx;
+    WORD    movq_rax;
+    void   *xcall;
+    WORD    callq_rax;
+    BYTE    movq_rbp_rsp[3];
+    BYTE    popq_rbp;
+    BYTE    ret;
+    DWORD   nop;
+} TMAsmProxy;
+#include "poppack.h"
+
+#else
 # warning You need to implement stubless proxies for your architecture
 typedef struct _TMAsmProxy {
 } TMAsmProxy;
@@ -1911,6 +1933,34 @@ static HRESULT init_proxy_entry_point(TMProxyImpl *proxy, unsigned int num)
     xasm->bytestopop    = nrofargs * 4;
     xasm->nop           = 0x9090;
     proxy->lpvtbl[fdesc->oVft / sizeof(void *)] = xasm;
+
+#elif defined(__x86_64__)
+
+    xasm->pushq_rbp         = 0x55;         /* pushq %rbp */
+    xasm->movq_rsp_rbp[0]   = 0x48;         /* movq %rsp,%rbp */
+    xasm->movq_rsp_rbp[1]   = 0x89;
+    xasm->movq_rsp_rbp[2]   = 0xe5;
+    xasm->subq_0x20_rsp     = 0x20ec8348;   /* subq 0x20,%rsp */
+    xasm->movq_rcx_0x10rbp  = 0x104d8948;   /* movq %rcx,0x10(%rbp) */
+    xasm->movq_rdx_0x18rbp  = 0x18558948;   /* movq %rdx,0x18(%rbp) */
+    xasm->movq_r8_0x20rbp   = 0x2045894c;   /* movq %r8,0x20(%rbp) */
+    xasm->movq_r9_0x28rbp   = 0x284d894c;   /* movq %r9,0x28(%rbp) */
+    xasm->movq_rcx[0]       = 0x48;         /* movq <num>,%rcx */
+    xasm->movq_rcx[1]       = 0xc7;
+    xasm->movq_rcx[2]       = 0xc1;
+    xasm->nr                = num;
+    xasm->leaq_0x10rbp_rdx  = 0x10558d48;   /* leaq 0x10(%rbp),%rdx */
+    xasm->movq_rax          = 0xb848;       /* movq <xCall>,%rax */
+    xasm->xcall             = xCall;
+    xasm->callq_rax         = 0xd0ff;       /* callq *%rax */
+    xasm->movq_rbp_rsp[0]   = 0x48;         /* movq %rbp,%rsp */
+    xasm->movq_rbp_rsp[1]   = 0x89;
+    xasm->movq_rbp_rsp[2]   = 0xec;
+    xasm->popq_rbp          = 0x5d;         /* popq %rbp */
+    xasm->ret               = 0xc3;         /* ret */
+    xasm->nop               = 0x90909090;   /* nop */
+    proxy->lpvtbl[fdesc->oVft / sizeof(void *)] = xasm;
+
 #else
     FIXME("not implemented on non i386\n");
     return E_FAIL;
