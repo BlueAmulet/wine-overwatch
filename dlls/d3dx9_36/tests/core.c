@@ -321,6 +321,8 @@ static void test_ID3DXFont(IDirect3DDevice9 *device)
         { 12, 256, 5 },
         { 72, 256, 8 }
     };
+    static const WCHAR testW[] = {'t','e','s','t',0};
+    static const char testA[] = "test";
 
 
     /* D3DXCreateFont */
@@ -463,7 +465,6 @@ static void test_ID3DXFont(IDirect3DDevice9 *device)
     /* ID3DXFont_PreloadText */
     hr = D3DXCreateFontA(device, 12, 0, FW_DONTCARE, 0, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, "Arial", &font);
     if(SUCCEEDED(hr)) {
-        const WCHAR testW[] = {'t','e','s','t',0};
 
         todo_wine {
         hr = ID3DXFont_PreloadTextA(font, NULL, -1);
@@ -589,6 +590,49 @@ static void test_ID3DXFont(IDirect3DDevice9 *device)
 
             IDirect3DTexture9_Release(texture);
         }
+        ID3DXFont_Release(font);
+    }
+
+    /* ID3DXFont_DrawTextA, ID3DXFont_DrawTextW */
+    hr = D3DXCreateFontA(device, 12, 0, FW_DONTCARE, 0, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, "Arial", &font);
+    if (SUCCEEDED(hr)) {
+        RECT rect;
+        int height;
+
+        SetRect(&rect, 10, 10, 200, 200);
+
+        height = ID3DXFont_DrawTextA(font, NULL, testA, -2, &rect, 0, 0xFF00FF);
+        ok(height == 12, "DrawTextA returned %d, expected 12.\n", height);
+
+        height = ID3DXFont_DrawTextA(font, NULL, testA, -1, &rect, 0, 0xFF00FF);
+        ok(height == 12, "DrawTextA returned %d, expected 12.\n", height);
+
+        height = ID3DXFont_DrawTextA(font, NULL, testA, 0, &rect, 0, 0xFF00FF);
+        ok(height == 0, "DrawTextA returned %d, expected 0.\n", height);
+
+        height = ID3DXFont_DrawTextA(font, NULL, testA, 1, &rect, 0, 0xFF00FF);
+        ok(height == 12, "DrawTextA returned %d, expected 12.\n", height);
+
+        height = ID3DXFont_DrawTextA(font, NULL, testA, 2, &rect, 0, 0xFF00FF);
+        ok(height == 12, "DrawTextA returned %d, expected 12.\n", height);
+
+if (0) { /* Causes a lockup on windows 7. */
+        height = ID3DXFont_DrawTextW(font, NULL, testW, -2, &rect, 0, 0xFF00FF);
+        ok(height == 12, "DrawTextW returned %d, expected 12.\n", height);
+}
+
+        height = ID3DXFont_DrawTextW(font, NULL, testW, -1, &rect, 0, 0xFF00FF);
+        ok(height == 12, "DrawTextW returned %d, expected 12.\n", height);
+
+        height = ID3DXFont_DrawTextW(font, NULL, testW, 0, &rect, 0, 0xFF00FF);
+        ok(height == 0, "DrawTextW returned %d, expected 0.\n", height);
+
+        height = ID3DXFont_DrawTextW(font, NULL, testW, 1, &rect, 0, 0xFF00FF);
+        ok(height == 12, "DrawTextW returned %d, expected 12.\n", height);
+
+        height = ID3DXFont_DrawTextW(font, NULL, testW, 2, &rect, 0, 0xFF00FF);
+        ok(height == 12, "DrawTextW returned %d, expected 12.\n", height);
+
         ID3DXFont_Release(font);
     }
 }
