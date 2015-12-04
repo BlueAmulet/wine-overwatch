@@ -89,8 +89,10 @@ struct object_ops
     /* open a file object to access this object */
     struct object *(*open_file)(struct object *, unsigned int access, unsigned int sharing,
                                 unsigned int options);
+    /* allocate a handle to this object */
+    void (*alloc_handle)(struct object *, struct process *, obj_handle_t);
     /* close a handle to this object */
-    int (*close_handle)(struct object *,struct process *,obj_handle_t);
+    int (*close_handle)(struct object *, struct process *, obj_handle_t);
     /* destroy on refcount == 0 */
     void (*destroy)(struct object *);
 };
@@ -163,6 +165,7 @@ extern int no_link_name( struct object *obj, struct object_name *name, struct ob
 extern void default_unlink_name( struct object *obj, struct object_name *name );
 extern struct object *no_open_file( struct object *obj, unsigned int access, unsigned int sharing,
                                     unsigned int options );
+extern void no_alloc_handle( struct object *obj, struct process *process, obj_handle_t handle );
 extern int no_close_handle( struct object *obj, struct process *process, obj_handle_t handle );
 extern void no_destroy( struct object *obj );
 #ifdef DEBUG_OBJECTS
