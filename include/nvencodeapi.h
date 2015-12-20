@@ -27,6 +27,12 @@
 #define NVENCAPI_VERSION ((NVENCAPI_MAJOR_VERSION << 4) | (NVENCAPI_MINOR_VERSION))
 #define NVENCAPI_STRUCT_VERSION(type, version) (uint32_t)(sizeof(type) | ((version)<<16) | (NVENCAPI_VERSION << 24))
 
+/* the version scheme changed between 5.0 and 6.0 */
+#define NVENCAPI_MAJOR_VERSION_6 6
+#define NVENCAPI_MINOR_VERSION_0 0
+#define NVENCAPI_VERSION_6_0 (NVENCAPI_MAJOR_VERSION_6 | (NVENCAPI_MINOR_VERSION_0 << 24))
+#define NVENCAPI_STRUCT_VERSION_6_0(ver) ((uint32_t)NVENCAPI_VERSION_6_0 | ((ver)<<16) | (0x7 << 28))
+
 #define NVENCSTATUS int
 #define NV_ENC_SUCCESS 0
 #define NV_ENC_ERR_INVALID_PTR 6
@@ -59,6 +65,8 @@ typedef struct _NV_ENC_EVENT_PARAMS NV_ENC_EVENT_PARAMS;
 typedef struct _NV_ENC_OPEN_ENCODE_SESSIONEX_PARAMS NV_ENC_OPEN_ENCODE_SESSIONEX_PARAMS;
 typedef struct _NV_ENC_BUFFER_FORMAT NV_ENC_BUFFER_FORMAT;
 typedef struct _NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS;
+typedef struct _NV_ENC_CREATE_MV_BUFFER NV_ENC_CREATE_MV_BUFFER;
+typedef struct _NV_ENC_MEONLY_PARAMS NV_ENC_MEONLY_PARAMS;
 
 typedef struct _NVENC_EXTERNAL_ME_HINT_COUNTS_PER_BLOCKTYPE
 {
@@ -230,10 +238,15 @@ typedef struct __NV_ENCODE_API_FUNCTION_LIST
     NVENCSTATUS (WINAPI *nvEncRegisterResource)(void *encoder, NV_ENC_REGISTER_RESOURCE *registerResParams);
     NVENCSTATUS (WINAPI *nvEncUnregisterResource)(void *encoder, NV_ENC_REGISTERED_PTR registeredRes);
     NVENCSTATUS (WINAPI *nvEncReconfigureEncoder)(void *encoder, NV_ENC_RECONFIGURE_PARAMS *reInitEncodeParams);
-    void *reserved2[285];
+    void *reserved1;
+    NVENCSTATUS (WINAPI *nvEncCreateMVBuffer)(void *encoder, NV_ENC_CREATE_MV_BUFFER *createMVBufferParams);
+    NVENCSTATUS (WINAPI *nvEncDestroyMVBuffer)(void *encoder, NV_ENC_OUTPUT_PTR MVBuffer);
+    NVENCSTATUS (WINAPI *nvEncRunMotionEstimationOnly)(void *encoder, NV_ENC_MEONLY_PARAMS *MEOnlyParams);
+    void *reserved2[281];
 } NV_ENCODE_API_FUNCTION_LIST;
 
 #define NV_ENCODE_API_FUNCTION_LIST_VER NVENCAPI_STRUCT_VERSION(NV_ENCODE_API_FUNCTION_LIST, 2)
+#define NV_ENCODE_API_FUNCTION_LIST_VER_6_0 NVENCAPI_STRUCT_VERSION_6_0(2)
 
 typedef struct __LINUX_NV_ENCODE_API_FUNCTION_LIST
 {
@@ -275,7 +288,11 @@ typedef struct __LINUX_NV_ENCODE_API_FUNCTION_LIST
     NVENCSTATUS (*nvEncRegisterResource)(void *encoder, NV_ENC_REGISTER_RESOURCE *registerResParams);
     NVENCSTATUS (*nvEncUnregisterResource)(void *encoder, NV_ENC_REGISTERED_PTR registeredRes);
     NVENCSTATUS (*nvEncReconfigureEncoder)(void *encoder, NV_ENC_RECONFIGURE_PARAMS *reInitEncodeParams);
-    void *reserved2[285];
+    void *reserved1;
+    NVENCSTATUS (*nvEncCreateMVBuffer)(void *encoder, NV_ENC_CREATE_MV_BUFFER *createMVBufferParams);
+    NVENCSTATUS (*nvEncDestroyMVBuffer)(void *encoder, NV_ENC_OUTPUT_PTR MVBuffer);
+    NVENCSTATUS (*nvEncRunMotionEstimationOnly)(void *encoder, NV_ENC_MEONLY_PARAMS *MEOnlyParams);
+    void *reserved2[281];
 } LINUX_NV_ENCODE_API_FUNCTION_LIST;
 
 #endif /* __WINE_NVENCODEAPI_H */

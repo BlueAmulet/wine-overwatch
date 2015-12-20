@@ -264,18 +264,50 @@ static NVENCSTATUS WINAPI NvEncReconfigureEncoder(void *encoder, NV_ENC_RECONFIG
     return origFunctions.nvEncReconfigureEncoder(encoder, reInitEncodeParams);
 }
 
+static NVENCSTATUS WINAPI NvEncCreateMVBuffer(void *encoder, NV_ENC_CREATE_MV_BUFFER *createMVBufferParams)
+{
+    TRACE("(%p, %p)\n", encoder, createMVBufferParams);
+    return origFunctions.nvEncCreateMVBuffer(encoder, createMVBufferParams);
+}
+
+static NVENCSTATUS WINAPI NvEncDestroyMVBuffer(void *encoder, NV_ENC_OUTPUT_PTR MVBuffer)
+{
+    TRACE("(%p, %p)\n", encoder, MVBuffer);
+    return origFunctions.nvEncDestroyMVBuffer(encoder, MVBuffer);
+}
+
+static NVENCSTATUS WINAPI NvEncRunMotionEstimationOnly(void *encoder, NV_ENC_MEONLY_PARAMS *MEOnlyParams)
+{
+    TRACE("(%p, %p)\n", encoder, MEOnlyParams);
+    return origFunctions.nvEncRunMotionEstimationOnly(encoder, MEOnlyParams);
+}
 
 NVENCSTATUS WINAPI NvEncodeAPICreateInstance(NV_ENCODE_API_FUNCTION_LIST *functionList)
 {
+    NVENCSTATUS status;
+
     TRACE("(%p)\n", functionList);
 
     if (!functionList)
         return NV_ENC_ERR_INVALID_PTR;
 
-    /* FIXME: Provide forward/backwards compatibility */
-    if (functionList->version != NV_ENCODE_API_FUNCTION_LIST_VER)
-        FIXME("Application expects nvencodeapi version %x, but wrapper only supports version %x\n",
-              functionList->version, NV_ENCODE_API_FUNCTION_LIST_VER);
+    /* we currently support 5.0 and 6.0 */
+    if (functionList->version != NV_ENCODE_API_FUNCTION_LIST_VER &&
+        functionList->version != NV_ENCODE_API_FUNCTION_LIST_VER_6_0)
+    {
+        FIXME("Application requested nvencodeapi version %x which is not supported yet\n",
+              functionList->version);
+        return NV_ENC_ERR_INVALID_VERSION;
+    }
+
+    memset(&origFunctions, 0, sizeof(origFunctions));
+    origFunctions.version = functionList->version;
+    status = pNvEncodeAPICreateInstance(&origFunctions);
+    if (status)
+    {
+        FIXME("Failed to create native encoder for version %x\n", functionList->version);
+        return status;
+    }
 
     /* set all function points and reserved values to zero */
     memset(functionList, 0, sizeof(*functionList));
@@ -316,6 +348,9 @@ NVENCSTATUS WINAPI NvEncodeAPICreateInstance(NV_ENCODE_API_FUNCTION_LIST *functi
     SET_FUNCPTR(EncRegisterResource);
     SET_FUNCPTR(EncUnregisterResource);
     SET_FUNCPTR(EncReconfigureEncoder);
+    SET_FUNCPTR(EncCreateMVBuffer);             /* available since 6.0 */
+    SET_FUNCPTR(EncDestroyMVBuffer);            /* available since 6.0 */
+    SET_FUNCPTR(EncRunMotionEstimationOnly);    /* available since 6.0 */
 
     #undef SET_FUNCPTR
 
@@ -351,14 +386,6 @@ static BOOL load_nvencode(void)
     if (!pNvEncodeAPICreateInstance)
     {
         FIXME("Can't find symbol NvEncodeAPICreateInstance.\n");
-        return FALSE;
-    }
-
-    memset(&origFunctions, 0, sizeof(origFunctions));
-    origFunctions.version = NV_ENCODE_API_FUNCTION_LIST_VER;
-    if (pNvEncodeAPICreateInstance(&origFunctions))
-    {
-        FIXME("Failed to get function pointers.\n");
         return FALSE;
     }
 
