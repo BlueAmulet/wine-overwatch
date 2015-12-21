@@ -998,6 +998,12 @@ static BOOL install_msu(WCHAR *filename, struct installer_state *state)
         }
     }
 
+    if (list_empty(&state->updates))
+    {
+        WINE_ERR("No updates found, probably incompatible MSU file format?\n");
+        goto done;
+    }
+
     /* perform dryrun */
     set_assembly_status(&state->assemblies, ASSEMBLY_STATUS_NONE);
     if (!install_updates(state, TRUE))
