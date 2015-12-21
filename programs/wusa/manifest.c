@@ -449,6 +449,7 @@ error:
 static BOOL read_registry_key(IXMLDOMElement *child, WCHAR *tagname, void *context)
 {
     static const WCHAR securityDescriptorW[] = {'s','e','c','u','r','i','t','y','D','e','s','c','r','i','p','t','o','r',0};
+    static const WCHAR systemProtectionW[] = {'s','y','s','t','e','m','P','r','o','t','e','c','t','i','o','n',0};
     static const WCHAR registryValueW[] = {'r','e','g','i','s','t','r','y','V','a','l','u','e',0};
     static const WCHAR nameW[] = {'n','a','m','e',0};
     static const WCHAR valueTypeW[] = {'v','a','l','u','e','T','y','p','e',0};
@@ -457,6 +458,7 @@ static BOOL read_registry_key(IXMLDOMElement *child, WCHAR *tagname, void *conte
     struct registrykv_entry *entry;
 
     if (!strcmpW(tagname, securityDescriptorW)) return TRUE;
+    if (!strcmpW(tagname, systemProtectionW)) return TRUE;
     if (strcmpW(tagname, registryValueW))
     {
         WINE_FIXME("Ignoring unexpected tag %s\n", debugstr_w(tagname));
