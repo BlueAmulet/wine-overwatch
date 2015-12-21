@@ -66,6 +66,12 @@ struct installer_state
     struct list updates;
 };
 
+#if defined(__x86_64__)
+static const WCHAR x86W[] = {'x','8','6',0};
+#elif defined(__i386__)
+static const WCHAR amd64W[] = {'a','m','d','6','4',0};
+#endif
+
 static BOOL strbuf_init(struct strbuf *buf)
 {
     buf->pos = 0;
@@ -375,6 +381,14 @@ static WCHAR *lookup_expression(struct assembly_entry *assembly, const WCHAR *ke
 
     if (!strcmpW(key, runtime_system32))
     {
+    #if defined(__x86_64__)
+        if (!strcmpW(assembly->identity.architecture, x86W))
+        {
+            GetSystemWow64DirectoryW(path, sizeof(path)/sizeof(path[0]));
+            return strdupW(path);
+        }
+    #endif
+
         GetSystemDirectoryW(path, sizeof(path)/sizeof(path[0]));
         return strdupW(path);
     }
@@ -691,7 +705,12 @@ static BOOL install_registry(struct assembly_entry *assembly, BOOL dryrun)
     struct registrykv_entry *registrykv;
     HKEY root, subkey;
     WCHAR *path;
+    REGSAM sam = KEY_ALL_ACCESS;
     BOOL ret = TRUE;
+
+#if defined(__x86_64__)
+    if (!strcmpW(assembly->identity.architecture, x86W)) sam |= KEY_WOW64_32KEY;
+#endif
 
     LIST_FOR_EACH_ENTRY(registryop, &assembly->registryops, struct registryop_entry, entry)
     {
@@ -701,7 +720,7 @@ static BOOL install_registry(struct assembly_entry *assembly, BOOL dryrun)
             break;
         }
 
-        if (!dryrun && RegCreateKeyExW(root, path, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &subkey, NULL))
+        if (!dryrun && RegCreateKeyExW(root, path, 0, NULL, REG_OPTION_NON_VOLATILE, sam, NULL, &subkey, NULL))
         {
             WINE_ERR("Failed to open registry key %s\n", debugstr_w(registryop->key));
             ret = FALSE;
@@ -771,6 +790,14 @@ static BOOL install_assembly(struct list *manifest_list, struct assembly_identit
         WINE_ERR("Assembly %s caused circular dependency\n", debugstr_w(name));
         return FALSE;
     }
+
+#if defined(__i386__)
+    if (!strcmpW(assembly->identity.architecture, amd64W))
+    {
+        WINE_ERR("Can not install amd64 assembly in 32 bit prefix\n");
+        return FALSE;
+    }
+#endif
 
     assembly->status = ASSEMBLY_STATUS_IN_PROGRESS;
 
@@ -1027,6 +1054,37 @@ done:
     return ret;
 }
 
+static void restart_as_x86_64(void)
+{
+    WCHAR filename[MAX_PATH];
+    PROCESS_INFORMATION pi;
+    STARTUPINFOW si;
+    DWORD exit_code = 1;
+    BOOL is_wow64;
+    void *redir;
+
+    if (!IsWow64Process(GetCurrentProcess(), &is_wow64) || !is_wow64)
+        return;
+
+    memset(&si, 0, sizeof(si));
+    si.cb = sizeof(si);
+    GetModuleFileNameW(0, filename, MAX_PATH);
+
+    Wow64DisableWow64FsRedirection(&redir);
+    if (CreateProcessW(filename, GetCommandLineW(), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi))
+    {
+        WINE_TRACE("Restarting %s\n", wine_dbgstr_w(filename));
+        WaitForSingleObject(pi.hProcess, INFINITE);
+        GetExitCodeProcess(pi.hProcess, &exit_code);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+    }
+    else WINE_ERR("Failed to restart 64-bit %s, err %d\n", wine_dbgstr_w(filename), GetLastError());
+    Wow64RevertWow64FsRedirection(redir);
+
+    ExitProcess(exit_code);
+}
+
 int wmain(int argc, WCHAR *argv[])
 {
     static const WCHAR norestartW[] = {'/','n','o','r','e','s','t','a','r','t',0};
@@ -1034,6 +1092,8 @@ int wmain(int argc, WCHAR *argv[])
     struct installer_state state;
     WCHAR *filename = NULL;
     int i;
+
+    restart_as_x86_64();
 
     state.norestart = FALSE;
     state.quiet = FALSE;
