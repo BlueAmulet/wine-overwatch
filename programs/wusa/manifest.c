@@ -704,3 +704,25 @@ done:
     IXMLDOMElement_Release(root);
     return ret;
 }
+
+BOOL queue_update(struct assembly_entry *assembly, struct list *update_list)
+{
+    struct dependency_entry *entry;
+
+    if (!(entry = alloc_dependency()))
+        return FALSE;
+
+    if (!(entry->identity.name          = strdupW(assembly->identity.name))) goto error;
+    if (!(entry->identity.version       = strdupW(assembly->identity.version))) goto error;
+    if (!(entry->identity.architecture  = strdupW(assembly->identity.architecture))) goto error;
+    if (!(entry->identity.language      = strdupW(assembly->identity.language))) goto error;
+    if (!(entry->identity.pubkey_token  = strdupW(assembly->identity.pubkey_token))) goto error;
+
+    WINE_TRACE("Queued update %s\n", debugstr_w(entry->identity.name));
+    list_add_tail(update_list, &entry->entry);
+    return TRUE;
+
+error:
+    free_dependency(entry);
+    return FALSE;
+}
