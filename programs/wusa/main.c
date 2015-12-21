@@ -895,6 +895,7 @@ static void installer_cleanup(struct installer_state *state)
 
 static BOOL load_assemblies_from_cab(const WCHAR *filename, struct installer_state *state)
 {
+    static const WCHAR manifest_cix_xmlW[] = {'_','m','a','n','i','f','e','s','t','_','.','c','i','x','.','x','m','l',0};
     static const WCHAR manifestW[] = {'.','m','a','n','i','f','e','s','t',0};
     static const WCHAR mumW[] = {'.','m','u','m',0};
     static const WCHAR starW[] = {'*',0};
@@ -912,6 +913,14 @@ static BOOL load_assemblies_from_cab(const WCHAR *filename, struct installer_sta
         WINE_ERR("Failed to extract %s\n", debugstr_w(filename));
         return FALSE;
     }
+
+    if (!(path = path_combine(temp_path, manifest_cix_xmlW))) return FALSE;
+    if (GetFileAttributesW(path) != INVALID_FILE_ATTRIBUTES)
+    {
+        WINE_FIXME("Cabinet uses proprietary msdelta file compression which is not (yet) supported.\n");
+        WINE_FIXME("Installation of msu file will most likely fail.\n");
+    }
+    heap_free(path);
 
     if (!(path = path_combine(temp_path, starW))) return FALSE;
     search = FindFirstFileW(path, &data);
