@@ -182,8 +182,10 @@ void put_stereo2surround51(const IDirectSoundBufferImpl *dsb, DWORD pos, DWORD c
 void put_surround512stereo(const IDirectSoundBufferImpl *dsb, DWORD pos, DWORD channel, float value) DECLSPEC_HIDDEN;
 void put_quad2stereo(const IDirectSoundBufferImpl *dsb, DWORD pos, DWORD channel, float value) DECLSPEC_HIDDEN;
 
-HRESULT secondarybuffer_create(DirectSoundDevice *device, const DSBUFFERDESC *dsbd,
-        IDirectSoundBuffer **buffer) DECLSPEC_HIDDEN;
+HRESULT IDirectSoundBufferImpl_Create(
+    DirectSoundDevice *device,
+    IDirectSoundBufferImpl **ppdsb,
+    LPCDSBUFFERDESC dsbd) DECLSPEC_HIDDEN;
 HRESULT IDirectSoundBufferImpl_Duplicate(
     DirectSoundDevice *device,
     IDirectSoundBufferImpl **ppdsb,

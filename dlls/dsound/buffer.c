@@ -983,15 +983,19 @@ static const IDirectSoundBuffer8Vtbl dsbvt =
 	IDirectSoundBufferImpl_GetObjectInPath
 };
 
-HRESULT secondarybuffer_create(DirectSoundDevice *device, const DSBUFFERDESC *dsbd,
-        IDirectSoundBuffer **buffer)
+HRESULT IDirectSoundBufferImpl_Create(
+	DirectSoundDevice * device,
+	IDirectSoundBufferImpl **pdsb,
+	LPCDSBUFFERDESC dsbd)
 {
 	IDirectSoundBufferImpl *dsb;
 	LPWAVEFORMATEX wfex = dsbd->lpwfxFormat;
 	HRESULT err = DS_OK;
 	DWORD capf = 0;
 
-        TRACE("(%p,%p,%p)\n", device, dsbd, buffer);
+	TRACE("(%p,%p,%p)\n",device,pdsb,dsbd);
+
+        *pdsb = NULL;
 
 	if (dsbd->dwBufferBytes < DSBSIZE_MIN || dsbd->dwBufferBytes > DSBSIZE_MAX) {
 		WARN("invalid parameter: dsbd->dwBufferBytes = %d\n", dsbd->dwBufferBytes);
@@ -1103,12 +1107,14 @@ HRESULT secondarybuffer_create(DirectSoundDevice *device, const DSBUFFERDESC *ds
 
 	RtlInitializeResource(&dsb->lock);
 
-        /* register buffer */
-        err = DirectSoundDevice_AddBuffer(device, dsb);
-        if (err == DS_OK)
-                *buffer = (IDirectSoundBuffer*)&dsb->IDirectSoundBuffer8_iface;
-        else
-                IDirectSoundBuffer8_Release(&dsb->IDirectSoundBuffer8_iface);
+	/* register buffer if not primary */
+	if (!(dsbd->dwFlags & DSBCAPS_PRIMARYBUFFER)) {
+		err = DirectSoundDevice_AddBuffer(device, dsb);
+                if (err == DS_OK)
+                        *pdsb = dsb;
+                else
+                        IDirectSoundBuffer8_Release(&dsb->IDirectSoundBuffer8_iface);
+	}
 
 	return err;
 }
