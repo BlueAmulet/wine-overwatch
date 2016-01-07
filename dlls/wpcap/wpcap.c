@@ -336,3 +336,13 @@ int CDECL wine_wsockinit(void)
     if (WSAStartup(MAKEWORD(1,1), &wsadata)) return -1;
     return 0;
 }
+
+pcap_dumper_t* CDECL wine_pcap_dump_open(pcap_t *p, const char *fname)
+{
+    return pcap_dump_open(p, fname);
+}
+
+void CDECL wine_pcap_dump(u_char *user, const struct pcap_pkthdr *h, const u_char *sp)
+{
+    return pcap_dump(user, h, sp);
+}
