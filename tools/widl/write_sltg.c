@@ -232,7 +232,7 @@ static void init_library(struct sltg_typelib *sltg)
     sltg->library.name = add_name(sltg, sltg->typelib->name);
     sltg->library.helpstring = NULL;
     sltg->library.helpcontext = 0;
-    sltg->library.syskind = SYS_WIN32;
+    sltg->library.syskind = typelib_kind;
     sltg->library.lcid = 0x0409;
     sltg->library.libflags = 0;
     sltg->library.version = 0;
