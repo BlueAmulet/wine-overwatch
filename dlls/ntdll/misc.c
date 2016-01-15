@@ -453,3 +453,14 @@ ULONG WINAPI EtwRegisterTraceGuidsA( WMIDPREQUEST RequestAddress,
           debugstr_a(MofResourceName), RegistrationHandle);
     return ERROR_SUCCESS;
 }
+
+/*********************************************************************
+ *                  ApiSetQueryApiSetPresence   (NTDLL.@)
+ */
+BOOL WINAPI ApiSetQueryApiSetPresence(const UNICODE_STRING *namespace, BOOLEAN *present)
+{
+    FIXME("(%s, %p) stub!\n", debugstr_us(namespace), present);
+
+    *present = TRUE;
+    return TRUE;
+}
