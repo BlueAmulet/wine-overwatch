@@ -249,6 +249,7 @@ my @dll_groups =
  [
   "kernel32",
   "advapi32",
+  "shlwapi",
   "user32",
   "kernelbase",
   "api-ms-win-core-bem-l1-1-0",
