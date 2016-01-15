@@ -225,6 +225,7 @@
 @ stdcall ClearCommError(long ptr ptr)
 @ stdcall CloseConsoleHandle(long)
 @ stdcall CloseHandle(long)
+@ stub ClosePackageInfo
 # @ stub ClosePrivateNamespace
 @ stdcall CloseProfileUserMapping()
 @ stub CloseSystemHandle
@@ -506,6 +507,7 @@
 @ stdcall FindNextVolumeW(long ptr long)
 # @ stub FindNLSString
 # @ stub FindNLSStringEx
+@ stub FindPackagesByPackageFamily
 @ stdcall FindResourceA(long str str)
 @ stdcall FindResourceExA(long str str long)
 @ stdcall FindResourceExW(long wstr wstr long)
@@ -524,6 +526,7 @@
 @ stdcall FlushViewOfFile(ptr long)
 @ stdcall FoldStringA(long str long ptr long)
 @ stdcall FoldStringW(long wstr long ptr long)
+@ stub FormatApplicationUserModelId
 @ stdcall FormatMessageA(long ptr long long ptr long ptr)
 @ stdcall FormatMessageW(long ptr long long ptr long ptr)
 @ stdcall FreeConsole()
@@ -544,6 +547,8 @@
 # @ stub GetActiveProcessorGroupCount
 # @ stub GetApplicationRecoveryCallback
 # @ stub GetApplicationRestartSettings
+@ stub GetApplicationUserModelId
+@ stub GetApplicationUserModelIdFromToken
 @ stdcall GetAtomNameA(long ptr long)
 @ stdcall GetAtomNameW(long ptr long)
 @ stdcall GetBinaryType(str ptr) GetBinaryTypeA
@@ -624,11 +629,16 @@
 # @ stub GetCurrencyFormatEx
 @ stdcall GetCurrencyFormatW(long long str ptr str long)
 @ stdcall GetCurrentActCtx(ptr)
+@ stub GetCurrentApplicationUserModelId
 @ stdcall GetCurrentConsoleFont(long long ptr)
 # @ stub GetCurrentConsoleFontEx
 @ stdcall GetCurrentDirectoryA(long ptr)
 @ stdcall GetCurrentDirectoryW(long ptr)
+@ stdcall GetCurrentPackageFamilyName(ptr ptr)
+@ stub GetCurrentPackageFullName
 @ stdcall GetCurrentPackageId(ptr ptr)
+@ stub GetCurrentPackageInfo
+@ stub GetCurrentPackagePath
 @ stdcall -norelay GetCurrentProcess()
 @ stdcall -norelay GetCurrentProcessId()
 @ stdcall GetCurrentProcessorNumber() ntdll.NtGetCurrentProcessorNumber
@@ -759,6 +769,16 @@
 @ stdcall GetOEMCP()
 @ stdcall GetOverlappedResult(long ptr ptr long)
 @ stdcall GetUserPreferredUILanguages(long ptr ptr ptr)
+@ stub GetPackageApplicationIds
+@ stub GetPackageFamilyName
+@ stub GetPackageFamilyNameFromToken
+@ stub GetPackageFullName
+@ stub GetPackageFullNameFromToken
+@ stub GetPackageId
+@ stub GetPackageInfo
+@ stub GetPackagePath
+@ stub GetPackagePathByFullName
+@ stub GetPackagesByPackageFamily
 @ stdcall GetPhysicallyInstalledSystemMemory(ptr)
 @ stdcall GetPriorityClass(long)
 @ stdcall GetPrivateProfileIntA(str str long str)
@@ -805,6 +825,8 @@
 @ stub -i386 GetSLCallbackTemplate
 @ stdcall GetShortPathNameA(str ptr long)
 @ stdcall GetShortPathNameW(wstr ptr long)
+@ stub GetStagedPackageOrigin
+@ stub GetStagedPackagePathByFullName
 @ stdcall GetStartupInfoA(ptr)
 @ stdcall GetStartupInfoW(ptr)
 @ stdcall GetStdHandle(long)
@@ -1118,6 +1140,8 @@
 @ stdcall OpenJobObjectW(long long wstr)
 @ stdcall OpenMutexA(long long str)
 @ stdcall OpenMutexW(long long wstr)
+@ stub OpenPackageInfoByFullName
+@ stub OpenPackageInfoByFullNameForUser
 # @ stub OpenPrivateNamespaceA
 # @ stub OpenPrivateNamespaceW
 @ stdcall OpenProcess(long long long)
@@ -1132,6 +1156,12 @@
 @ stdcall OpenWaitableTimerW(long long wstr)
 @ stdcall OutputDebugStringA(str)
 @ stdcall OutputDebugStringW(wstr)
+@ stub PackageFamilyNameFromFullName
+@ stub PackageFamilyNameFromId
+@ stub PackageFullNameFromId
+@ stub PackageIdFromFullName
+@ stub PackageNameAndPublisherIdFromFamilyName
+@ stub ParseApplicationUserModelId
 @ stdcall PeekConsoleInputA(ptr ptr long ptr)
 @ stdcall PeekConsoleInputW(ptr ptr long ptr)
 @ stdcall PeekNamedPipe(long ptr long ptr ptr ptr)
@@ -1548,7 +1578,12 @@
 @ stdcall VerLanguageNameA(long str long)
 @ stdcall VerLanguageNameW(long wstr long)
 @ stdcall -ret64 VerSetConditionMask(long long long long) ntdll.VerSetConditionMask
+@ stub VerifyApplicationUserModelId
 @ stdcall VerifyConsoleIoHandle(long)
+@ stub VerifyPackageFamilyName
+@ stub VerifyPackageFullName
+@ stub VerifyPackageId
+@ stub VerifyPackageRelativeApplicationId
 # @ stub VerifyScripts
 @ stdcall VerifyVersionInfoA(long long int64)
 @ stdcall VerifyVersionInfoW(long long int64)
