@@ -284,6 +284,11 @@ my @dll_groups =
   "api-ms-win-core-url-l1-1-0",
  ],
  [
+  "shell32",
+  "shlwapi",
+  "shcore",
+ ],
+ [
   "user32",
   "api-ms-win-core-stringansi-l1-1-0",
   "api-ms-win-core-string-l2-1-0",
