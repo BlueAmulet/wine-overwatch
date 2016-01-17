@@ -247,3 +247,19 @@ HRESULT WINAPI RoGetServerActivatableClasses(HSTRING name, HSTRING **classes, DW
     *count = 0;
     return S_OK;
 }
+
+/***********************************************************************
+ *      RoRegisterActivationFactories (combase.@)
+ */
+HRESULT WINAPI RoRegisterActivationFactories(HSTRING *classes, PFNGETACTIVATIONFACTORY *callbacks,
+                                             UINT32 count, RO_REGISTRATION_COOKIE *cookie)
+{
+    UINT32 i;
+
+    FIXME("(%p, %p, %d, %p): stub\n", classes, callbacks, count, cookie);
+
+    for (i = 0; i < count; i++)
+        FIXME("  %s\n", debugstr_hstring(classes[i]));
+
+    return S_OK;
+}
