@@ -254,7 +254,7 @@
 @ stub RoGetErrorReportingFlags
 @ stub RoGetMatchingRestrictedErrorInfo
 @ stub RoGetParameterizedTypeInstanceIID
-@ stub RoGetServerActivatableClasses
+@ stdcall RoGetServerActivatableClasses(ptr ptr ptr)
 @ stdcall RoInitialize(long)
 @ stub RoInspectCapturedStackBackTrace
 @ stub RoInspectThreadErrorInfo
