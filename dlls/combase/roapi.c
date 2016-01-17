@@ -184,3 +184,23 @@ done:
     if (module) FreeLibrary(module);
     return hr;
 }
+
+/***********************************************************************
+ *      RoActivateInstance (combase.@)
+ */
+HRESULT WINAPI RoActivateInstance(HSTRING classid, IInspectable **instance)
+{
+    IActivationFactory *factory;
+    HRESULT hr;
+
+    FIXME("(%s, %p): semi-stub\n", debugstr_hstring(classid), instance);
+
+    hr = RoGetActivationFactory(classid, &IID_IActivationFactory, (void **)&factory);
+    if (SUCCEEDED(hr))
+    {
+        hr = IActivationFactory_ActivateInstance(factory, instance);
+        IActivationFactory_Release(factory);
+    }
+
+    return hr;
+}
