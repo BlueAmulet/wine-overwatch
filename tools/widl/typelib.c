@@ -249,7 +249,7 @@ void end_typelib(void)
 {
     if (!typelib) return;
 
-    if (do_typelib == 2)
+    if (do_old_typelib)
         create_sltg_typelib(typelib);
     else
         create_msft_typelib(typelib);

@@ -103,6 +103,7 @@ int do_everything = 1;
 static int preprocess_only = 0;
 int do_header = 0;
 int do_typelib = 0;
+int do_old_typelib = 0;
 int do_proxies = 0;
 int do_client = 0;
 int do_server = 0;
@@ -308,6 +309,7 @@ static void set_everything(int x)
 {
   do_header = x;
   do_typelib = x;
+  do_old_typelib = x;
   do_proxies = x;
   do_client = x;
   do_server = x;
@@ -682,8 +684,7 @@ int main(int argc,char *argv[])
       do_typelib = 1;
       break;
     case OLD_TYPELIB_OPTION:
-      do_everything = 0;
-      do_typelib = 2;
+      do_old_typelib = 1;
       break;
     case 'T':
       typelib_name = xstrdup(optarg);
