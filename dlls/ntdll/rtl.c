@@ -45,6 +45,7 @@
 #include "wine/unicode.h"
 #include "ntdll_misc.h"
 #include "inaddr.h"
+#include "in6addr.h"
 #include "ddk/ntddk.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(ntdll);
@@ -893,11 +894,24 @@ void WINAPI RtlCopyLuidAndAttributesArray(
     for (i = 0; i < Count; i++) Dest[i] = Src[i];
 }
 
+/***********************************************************************
+ * RtlIpv4StringToAddressExW [NTDLL.@]
+ */
 NTSTATUS WINAPI RtlIpv4StringToAddressExW(LPCWSTR str, BOOLEAN strict, IN_ADDR *address, PUSHORT port)
 {
     FIXME("(%s, %u, %p, %p): stub\n", debugstr_w(str), strict, address, port);
 
     return STATUS_SUCCESS;
+}
+
+/***********************************************************************
+ * RtlIpv6StringToAddressExW [NTDLL.@]
+ */
+NTSTATUS NTAPI RtlIpv6StringToAddressExW(LPCWSTR str, IN6_ADDR *address, PULONG scope, PUSHORT port)
+{
+    FIXME("(%s, %p, %p, %p): stub\n", debugstr_w(str), address, scope, port);
+
+    return STATUS_INVALID_PARAMETER;
 }
 
 /***********************************************************************
