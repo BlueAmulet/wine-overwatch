@@ -33,3 +33,11 @@ BOOL WINAPI XamlBehaviorEnabled(void *unknown)
     FIXME("(%p): stub\n", unknown);
     return TRUE;
 }
+
+HRESULT WINAPI GetThemeServices(void **interface)
+{
+    FIXME("(%p): stub\n", interface);
+
+    *interface = NULL;
+    return E_NOTIMPL;
+}

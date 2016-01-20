@@ -1,6 +1,6 @@
 @ stub CreatePhoneAppBarProxy
 @ stub CreateWinTextBoxProxy
-@ stub GetThemeServices
+@ stdcall GetThemeServices(ptr)
 @ stdcall XamlBehaviorEnabled(ptr)
 @ stub XamlPalInitialize
 @ stub XamlPalUninitialize
