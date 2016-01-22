@@ -147,6 +147,7 @@ IDL_SRCS = \
 	shtypes.idl \
 	srcrst.idl \
 	stdole2.idl \
+	stdole32.idl \
 	strmif.idl \
 	structuredquerycondition.idl \
 	taskschd.idl \
