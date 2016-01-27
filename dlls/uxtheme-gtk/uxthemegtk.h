@@ -44,8 +44,8 @@ struct _uxgtk_theme_vtable
 
 struct _uxgtk_theme
 {
+    DWORD magic;
     const uxgtk_theme_vtable_t *vtable;
-
     GtkWidget *window;
     GtkWidget *layout;
 };
