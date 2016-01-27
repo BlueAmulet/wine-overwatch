@@ -519,7 +519,7 @@ HTHEME WINAPI OpenThemeDataEx(HWND hwnd, LPCWSTR classlist, DWORD flags)
     /* comctl32.dll likes to send NULL */
     if (classlist == NULL)
     {
-        SetLastError(ERROR_INVALID_PARAMETER);
+        SetLastError(E_POINTER);
         return NULL;
     }
 
@@ -578,7 +578,7 @@ HRESULT WINAPI SetWindowTheme(HWND hwnd, LPCWSTR sub_app_name,
     FIXME("(%p, %s, %s)\n", hwnd, debugstr_w(sub_app_name),
           debugstr_w(sub_id_list));
 
-    return E_NOTIMPL;
+    return S_OK;
 }
 
 HRESULT WINAPI GetThemeBool(HTHEME htheme, int part_id, int state_id,
@@ -1145,7 +1145,7 @@ BOOL WINAPI IsThemePartDefined(HTHEME htheme, int part_id, int state_id)
 
     if (theme == NULL || theme->vtable == NULL)
     {
-        SetLastError(ERROR_INVALID_HANDLE);
+        SetLastError(E_HANDLE);
         return FALSE;
     }
 
