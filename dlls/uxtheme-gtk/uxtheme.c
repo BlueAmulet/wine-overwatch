@@ -501,14 +501,14 @@ BOOL WINAPI IsThemeDialogTextureEnabled(HWND hwnd)
     return TRUE; /* Always enabled */
 }
 
-HTHEME WINAPI OpenThemeData(HWND hwnd, LPCWSTR classlist)
+HTHEME WINAPI OpenThemeDataEx(HWND hwnd, LPCWSTR classlist, DWORD flags)
 {
     WCHAR *start, *tok, buf[CLASSLIST_MAXLEN];
     uxgtk_theme_t *theme;
     WORD fpu_flags;
     int i;
 
-    TRACE("(%p, %s)\n", hwnd, debugstr_w(classlist));
+    TRACE("(%p, %s, %x)\n", hwnd, debugstr_w(classlist), flags);
 
     if (libgtk3 == NULL)
     {
@@ -560,6 +560,11 @@ found:
         SetPropW(hwnd, THEME_PROPERTY, theme);
 
     return theme;
+}
+
+HTHEME WINAPI OpenThemeData(HWND hwnd, LPCWSTR classlist)
+{
+    return OpenThemeDataEx(hwnd, classlist, 0);
 }
 
 void WINAPI SetThemeAppProperties(DWORD flags)
