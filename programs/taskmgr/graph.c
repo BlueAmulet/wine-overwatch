@@ -44,6 +44,7 @@ static void Graph_DrawCpuUsageGraph(HDC hDC, HWND hWnd)
     RECT            rcClient;
     RECT            rcBarLeft;
     RECT            rcBarRight;
+    RECT            rcText;
     WCHAR            Text[256];
     ULONG            CpuUsage;
     ULONG            CpuKernelUsage;
@@ -97,7 +98,11 @@ static void Graph_DrawCpuUsageGraph(HDC hDC, HWND hWnd)
      * Draw the font text onto the graph
      * The bottom 20 pixels are reserved for the text
      */
-    Font_DrawText(hDC, Text, ((rcClient.right - rcClient.left) - 32) / 2, rcClient.bottom - 11 - 5);
+    CopyRect(&rcText, &rcClient);
+    rcText.top = rcText.bottom - 19;
+
+    SetTextColor(hDC, BRIGHT_GREEN);
+    DrawTextW(hDC, Text, -1, &rcText, DT_CENTER);
 
     /*
      * Now we have to draw the graph
@@ -224,6 +229,7 @@ static void Graph_DrawMemUsageGraph(HDC hDC, HWND hWnd)
     RECT            rcClient;
     RECT            rcBarLeft;
     RECT            rcBarRight;
+    RECT            rcText;
     WCHAR            Text[256];
     ULONGLONG        CommitChargeTotal;
     ULONGLONG        CommitChargeLimit;
@@ -258,7 +264,11 @@ static void Graph_DrawMemUsageGraph(HDC hDC, HWND hWnd)
      * Draw the font text onto the graph
      * The bottom 20 pixels are reserved for the text
      */
-    Font_DrawText(hDC, Text, ((rcClient.right - rcClient.left) - (strlenW(Text) * 8)) / 2, rcClient.bottom - 11 - 5);
+    CopyRect(&rcText, &rcClient);
+    rcText.top = rcText.bottom - 19;
+
+    SetTextColor(hDC, BRIGHT_GREEN);
+    DrawTextW(hDC, Text, -1, &rcText, DT_CENTER);
 
     /*
      * Now we have to draw the graph
