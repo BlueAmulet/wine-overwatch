@@ -30,6 +30,9 @@
 #ifdef HAVE_SYS_SYSCTL_H
 # include <sys/sysctl.h>
 #endif
+#ifdef HAVE_SYS_SYSINFO_H
+# include <sys/sysinfo.h>
+#endif
 #ifdef HAVE_MACHINE_CPU_H
 # include <machine/cpu.h>
 #endif
@@ -1887,6 +1890,9 @@ NTSTATUS WINAPI NtQuerySystemInformation(
             SYSTEM_PERFORMANCE_INFORMATION spi;
             static BOOL fixme_written = FALSE;
             FILE *fp;
+        #ifdef HAVE_SYSINFO
+            struct sysinfo sinfo;
+        #endif
 
             memset(&spi, 0 , sizeof(spi));
             len = sizeof(spi);
@@ -1907,6 +1913,35 @@ NTSTATUS WINAPI NtQuerySystemInformation(
                 /* many programs expect IdleTime to change so fake change */
                 spi.IdleTime.QuadPart = ++idle;
             }
+
+        #ifdef HAVE_SYSINFO
+            if (!sysinfo(&sinfo))
+            {
+                ULONG64 freeram   = (ULONG64)sinfo.freeram * sinfo.mem_unit;
+                ULONG64 totalram  = (ULONG64)sinfo.totalram * sinfo.mem_unit;
+                ULONG64 totalswap = (ULONG64)sinfo.totalswap * sinfo.mem_unit;
+                ULONG64 freeswap  = (ULONG64)sinfo.freeswap * sinfo.mem_unit;
+
+                if ((fp = fopen("/proc/meminfo", "r")))
+                {
+                    unsigned long long available;
+                    char line[64];
+                    while (fgets(line, sizeof(line), fp))
+                    {
+                        if (sscanf(line, "MemAvailable: %llu kB", &available) == 1)
+                        {
+                            freeram = min(available * 1024, totalram);
+                            break;
+                        }
+                    }
+                    fclose(fp);
+                }
+
+                spi.AvailablePages      = freeram / page_size;
+                spi.TotalCommittedPages = (totalram + totalswap - freeram - freeswap) / page_size;
+                spi.TotalCommitLimit    = (totalram + totalswap) / page_size;
+            }
+        #endif
 
             if (Length >= len)
             {
