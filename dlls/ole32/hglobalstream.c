@@ -100,7 +100,7 @@ static HRESULT handle_setsize(struct handle_wrapper *handle, ULONG size)
 
     if (handle->size != size)
     {
-        HGLOBAL hglobal = GlobalReAlloc(handle->hglobal, size, 0);
+        HGLOBAL hglobal = GlobalReAlloc(handle->hglobal, size, GMEM_MOVEABLE);
         if (hglobal)
         {
             handle->hglobal = hglobal;
