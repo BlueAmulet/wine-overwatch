@@ -35,3 +35,13 @@ BOOL WINAPI QuirkIsEnabled(void *arg)
     FIXME("(%p): stub\n", arg);
     return FALSE;
 }
+
+/***********************************************************************
+ *           QuirkIsEnabled3   (KERNELBASE.@)
+ */
+BOOL WINAPI QuirkIsEnabled3(void *arg1, void *arg2)
+{
+    static int once;
+    if (!once++) FIXME("(%p, %p): stub\n", arg1, arg2);
+    return FALSE;
+}
