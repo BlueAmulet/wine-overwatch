@@ -48,6 +48,7 @@ static struct enum_device_entry
     char interface_name[100];
     char device_name[100];
     const GUID *device_guid;
+    DWORD remove_caps;
 } device_list7[] =
 {
     /* T&L HAL device */
@@ -55,6 +56,7 @@ static struct enum_device_entry
         "WINE Direct3D7 Hardware Transform and Lighting acceleration using WineD3D",
         "Wine D3D7 T&L HAL",
         &IID_IDirect3DTnLHalDevice,
+        0,
     },
 
     /* HAL device */
@@ -62,6 +64,7 @@ static struct enum_device_entry
         "WINE Direct3D7 Hardware acceleration using WineD3D",
         "Direct3D HAL",
         &IID_IDirect3DHALDevice,
+        0,
     },
 
     /* RGB device */
@@ -69,6 +72,7 @@ static struct enum_device_entry
         "WINE Direct3D7 RGB Software Emulation using WineD3D",
         "Wine D3D7 RGB",
         &IID_IDirect3DRGBDevice,
+        D3DDEVCAPS_HWTRANSFORMANDLIGHT,
     },
 };
 
@@ -3594,6 +3598,7 @@ static HRESULT WINAPI d3d7_EnumDevices(IDirect3D7 *iface, LPD3DENUMDEVICESCALLBA
 {
     struct ddraw *ddraw = impl_from_IDirect3D7(iface);
     D3DDEVICEDESC7 device_desc7;
+    DWORD dev_caps;
     HRESULT hr;
     size_t i;
 
@@ -3610,11 +3615,15 @@ static HRESULT WINAPI d3d7_EnumDevices(IDirect3D7 *iface, LPD3DENUMDEVICESCALLBA
         return hr;
     }
 
+    dev_caps = device_desc7.dwDevCaps;
+
     for (i = 0; i < sizeof(device_list7)/sizeof(device_list7[0]); i++)
     {
         HRESULT ret;
 
         device_desc7.deviceGUID = *device_list7[i].device_guid;
+        device_desc7.dwDevCaps  = dev_caps & ~device_list7[i].remove_caps;
+
         ret = callback(device_list7[i].interface_name, device_list7[i].device_name, &device_desc7, context);
         if (ret != DDENUMRET_OK)
         {
