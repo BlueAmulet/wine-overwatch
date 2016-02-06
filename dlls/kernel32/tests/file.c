@@ -2514,11 +2514,85 @@ static char get_windows_drive(void)
     return windowsdir[0];
 }
 
+struct
+{
+    const char *path;
+    BOOL expected;
+}
+static const invalid_char_tests[] =
+{
+    { "./test-dir",                     TRUE },
+    { "./test-dir/",                    FALSE },
+    { ".\\test-dir",                    TRUE },
+    { ".\\test-dir\\",                  FALSE },
+    { "/>test-dir",                     FALSE },
+    { "<\"test->dir",                   FALSE },
+    { "<test->dir",                     FALSE },
+    { "><test->dir",                    FALSE },
+    { ">>test-dir",                     FALSE },
+    { ">test->dir",                     FALSE },
+    { ">test-dir",                      FALSE },
+    { "\"test-dir\"",                   FALSE },
+    { "\"test-file\"",                  FALSE },
+    { "test-/>dir",                     FALSE },
+    { "test-dir/",                      FALSE },
+    { "test-dir//",                     FALSE },
+    { "test-dir/:",                     FALSE },
+    { "test-dir/<",                     TRUE },
+    { "test-dir/>",                     TRUE },
+    { "test-dir/\"",                    TRUE },
+    { "test-dir/\\",                    FALSE },
+    { "test-dir/|",                     FALSE },
+    { "test-dir<",                      TRUE },
+    { "test-dir</",                     FALSE },
+    { "test-dir<<",                     TRUE },
+    { "test-dir<<<><><>\"\"\"\"<<<>",   TRUE },
+    { "test-dir<>",                     TRUE },
+    { "test-dir<\"",                    TRUE },
+    { "test-dir>",                      TRUE },
+    { "test-dir>/",                     FALSE },
+    { "test-dir><",                     TRUE },
+    { "test-dir>>",                     TRUE },
+    { "test-dir>\"",                    TRUE },
+    { "test-dir\"",                     TRUE },
+    { "test-dir\"/",                    FALSE },
+    { "test-dir\"<",                    TRUE },
+    { "test-dir\">",                    TRUE },
+    { "test-dir\"\"",                   TRUE },
+    { "test-dir\"\"\"\"\"",             TRUE },
+    { "test-dir\\",                     FALSE },
+    { "test-dir\\/",                    FALSE },
+    { "test-dir\\<",                    TRUE },
+    { "test-dir\\>",                    TRUE },
+    { "test-dir\\\"",                   TRUE },
+    { "test-dir\\\\",                   FALSE },
+    { "test-file/",                     FALSE },
+    { "test-file/<",                    FALSE },
+    { "test-file/>",                    FALSE },
+    { "test-file/\"",                   FALSE },
+    { "test-file<",                     TRUE },
+    { "test-file<<",                    TRUE },
+    { "test-file<>",                    TRUE },
+    { "test-file<\"",                   TRUE },
+    { "test-file>",                     TRUE },
+    { "test-file><",                    TRUE },
+    { "test-file>>",                    TRUE },
+    { "test-file>\"",                   TRUE },
+    { "test-file\"",                    TRUE },
+    { "test-file\"<",                   TRUE },
+    { "test-file\">",                   TRUE },
+    { "test-file\"\"",                  TRUE },
+    { "test-file\\",                    FALSE },
+    { "test-file\\<",                   FALSE },
+    { "test-file\\>",                   FALSE },
+    { "test-file\\\"",                  FALSE },
+};
+
 static void test_FindFirstFileA(void)
 {
     HANDLE handle;
     WIN32_FIND_DATAA data;
-    int err;
+    int err, i;
     char buffer[5] = "C:\\";
     char buffer2[100];
     char nonexistent[MAX_PATH];
@@ -2686,6 +2760,30 @@ static void test_FindFirstFileA(void)
     err = GetLastError();
     ok ( handle == INVALID_HANDLE_VALUE, "FindFirstFile on %s should fail\n", buffer2 );
     ok ( err == ERROR_PATH_NOT_FOUND, "Bad Error number %d\n", err );
+
+    /* try FindFirstFileA with invalid characters */
+    CreateDirectoryA("test-dir", NULL);
+    _lclose(_lcreat("test-file", 0));
+
+    for (i = 0; i < sizeof(invalid_char_tests) / sizeof(invalid_char_tests[0]); i++)
+    {
+        handle = FindFirstFileA(invalid_char_tests[i].path, &data);
+        if (invalid_char_tests[i].expected)
+        {
+            ok(handle != INVALID_HANDLE_VALUE, "FindFirstFileA on %s should succeed\n",
+               invalid_char_tests[i].path);
+        }
+        else
+        {
+            ok(handle == INVALID_HANDLE_VALUE, "FindFirstFileA on %s should fail\n",
+               invalid_char_tests[i].path);
+        }
+        if (handle != INVALID_HANDLE_VALUE)
+            FindClose(handle);
+    }
+
+    DeleteFileA("test-file");
+    RemoveDirectoryA("test-dir");
 }
 
 static void test_FindNextFileA(void)
