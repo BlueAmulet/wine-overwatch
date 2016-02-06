@@ -8,7 +8,7 @@
 @ stdcall GetCurrentProcessExplicitAppUserModelID(ptr) shell32.GetCurrentProcessExplicitAppUserModelID
 @ stdcall GetDpiForMonitor(long long ptr ptr)
 @ stub GetDpiForShellUIComponent
-@ stub GetProcessDpiAwareness
+@ stdcall GetProcessDpiAwareness(long ptr)
 @ stub GetProcessReference
 @ stub GetScaleFactorForDevice
 @ stub GetScaleFactorForMonitor
