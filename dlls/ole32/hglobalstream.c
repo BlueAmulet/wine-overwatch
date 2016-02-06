@@ -77,16 +77,6 @@ static void handle_release(struct handle_wrapper *handle)
     }
 }
 
-static void *handle_lock(struct handle_wrapper *handle)
-{
-    return GlobalLock(handle->hglobal);
-}
-
-static void handle_unlock(struct handle_wrapper *handle)
-{
-    GlobalUnlock(handle->hglobal);
-}
-
 static ULONG handle_read(struct handle_wrapper *handle, ULONG *pos, void *dest, ULONG len)
 {
     void *source;
@@ -111,6 +101,48 @@ static ULONG handle_read(struct handle_wrapper *handle, ULONG *pos, void *dest, 
         len = 0;
     }
 
+    LeaveCriticalSection(&handle->lock);
+    return len;
+}
+
+static ULONG handle_write(struct handle_wrapper *handle, ULONG *pos, const void *source, ULONG len)
+{
+    void *dest;
+
+    if (!len)
+        return 0;
+
+    EnterCriticalSection(&handle->lock);
+
+    if (*pos + len > handle->size)
+    {
+        HGLOBAL hglobal = GlobalReAlloc(handle->hglobal, *pos + len, GMEM_MOVEABLE);
+        if (hglobal)
+        {
+            handle->hglobal = hglobal;
+            handle->size = *pos + len;
+        }
+        else
+        {
+            len = 0;
+            goto done;
+        }
+    }
+
+    dest = GlobalLock(handle->hglobal);
+    if (dest)
+    {
+        memcpy((char *)dest + *pos, source, len);
+        *pos += len;
+        GlobalUnlock(handle->hglobal);
+    }
+    else
+    {
+        WARN("write to invalid hglobal %p\n", handle->hglobal);
+        /* len = 0; */
+    }
+
+done:
     LeaveCriticalSection(&handle->lock);
     return len;
 }
@@ -277,71 +309,14 @@ static HRESULT WINAPI HGLOBALStreamImpl_Write(
 		  ULONG*         pcbWritten)  /* [out] */
 {
   HGLOBALStreamImpl* This = impl_from_IStream(iface);
-
-  void*          supportBuffer;
-  ULARGE_INTEGER newSize;
-  ULONG          bytesWritten = 0;
+  ULONG num_bytes;
 
   TRACE("(%p, %p, %d, %p)\n", iface, pv, cb, pcbWritten);
 
-  /*
-   * If the caller is not interested in the number of bytes written,
-   * we use another buffer to avoid "if" statements in the code.
-   */
-  if (pcbWritten == 0)
-    pcbWritten = &bytesWritten;
+  num_bytes = handle_write(This->handle, &This->currentPosition.u.LowPart, pv, cb);
+  if (pcbWritten) *pcbWritten = num_bytes;
 
-  if (cb == 0)
-    goto out;
-
-  *pcbWritten = 0;
-
-  newSize.u.HighPart = 0;
-  newSize.u.LowPart = This->currentPosition.u.LowPart + cb;
-
-  /*
-   * Verify if we need to grow the stream
-   */
-  if (newSize.u.LowPart > handle_getsize(This->handle))
-  {
-    /* grow stream */
-    HRESULT hr = IStream_SetSize(iface, newSize);
-    if (FAILED(hr))
-    {
-      ERR("IStream_SetSize failed with error 0x%08x\n", hr);
-      return hr;
-    }
-  }
-
-  /*
-   * Lock the buffer in position and copy the data.
-   */
-  supportBuffer = handle_lock(This->handle);
-  if (!supportBuffer)
-  {
-      WARN("write to invalid hglobal %p\n", handle_gethglobal(This->handle));
-      return S_OK;
-  }
-
-  memcpy((char *) supportBuffer+This->currentPosition.u.LowPart, pv, cb);
-
-  /*
-   * Move the current position to the new position
-   */
-  This->currentPosition.u.LowPart+=cb;
-
-  /*
-   * Cleanup
-   */
-  handle_unlock(This->handle);
-
-out:
-  /*
-   * Return the number of bytes read.
-   */
-  *pcbWritten = cb;
-
-  return S_OK;
+  return (num_bytes < cb) ? E_OUTOFMEMORY : S_OK;
 }
 
 /***
