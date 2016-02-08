@@ -3914,6 +3914,14 @@ INT WINAPI WS_getsockopt(SOCKET s, INT level,
                 SetLastError(wsaErrno());
                 ret = SOCKET_ERROR;
             }
+        #ifdef __linux__
+            else if (optname == SO_RCVBUF || optname == SO_SNDBUF)
+            {
+                /* For SO_RCVBUF / SO_SNDBUF, the Linux kernel always sets twice the value.
+                 * Divide by two to ensure applications do not get confused by the result. */
+                *(int *)optval /= 2;
+            }
+        #endif
             release_sock_fd( s, fd );
             return ret;
         case WS_SO_ACCEPTCONN:
