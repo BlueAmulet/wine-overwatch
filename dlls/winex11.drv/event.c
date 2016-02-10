@@ -597,6 +597,9 @@ static void set_focus( Display *display, HWND hwnd, Time time )
     Window win;
     GUITHREADINFO threadinfo;
 
+    /* prevent recursion */
+    x11drv_thread_data()->active_window = hwnd;
+
     TRACE( "setting foreground window to %p\n", hwnd );
     SetForegroundWindow( hwnd );
 
@@ -818,6 +821,8 @@ static BOOL X11DRV_FocusIn( HWND hwnd, XEvent *xev )
 
     if (!focus_win)
     {
+        x11drv_thread_data()->active_window = 0;
+
         /* Abey : 6-Oct-99. Check again if the focus out window is the
            Foreground window, because in most cases the messages sent
            above must have already changed the foreground window, in which

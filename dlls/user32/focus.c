@@ -158,6 +158,8 @@ static BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus )
             PostMessageW( GetDesktopWindow(), WM_PARENTNOTIFY, WM_NCACTIVATE, (LPARAM)hwnd );
     }
 
+    USER_Driver->pSetActiveWindow( hwnd );
+
     /* now change focus if necessary */
     if (focus)
     {
