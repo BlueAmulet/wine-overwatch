@@ -2376,8 +2376,30 @@ static void SETUPDI_EnumerateDevices(HDEVINFO DeviceInfoSet, const GUID *class,
                     &enumStrKey);
             if (!l)
             {
-                SETUPDI_EnumerateMatchingDevices(DeviceInfoSet, enumstr,
-                        enumStrKey, class, flags);
+                WCHAR *bus, *device;
+                HKEY devKey;
+
+                if (!strchrW(enumstr, '\\'))
+                {
+                    SETUPDI_EnumerateMatchingDevices(DeviceInfoSet, enumstr,
+                                                     enumStrKey, class, flags);
+                }
+                else if ((bus = strdupW(enumstr)))
+                {
+                    device = strchrW(bus, '\\');
+                    *device++ = 0;
+
+                    l = RegOpenKeyExW(enumKey, enumstr, 0, KEY_READ, &devKey);
+                    if (!l)
+                    {
+                        SETUPDI_EnumerateMatchingDeviceInstances(DeviceInfoSet, bus, device,
+                                                                 devKey, class, flags);
+                        RegCloseKey(devKey);
+                    }
+
+                    HeapFree(GetProcessHeap(), 0, bus);
+                }
+
                 RegCloseKey(enumStrKey);
             }
         }
