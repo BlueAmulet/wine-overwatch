@@ -111,9 +111,30 @@ static const struct object_ops desktop_ops =
 static struct winstation *create_winstation( struct object *root, const struct unicode_str *name,
                                              unsigned int attr, unsigned int flags )
 {
+    static const WCHAR formatW[] = {'S','e','r','v','i','c','e','-','0','x','0','-','%','x','$',0};
+    static unsigned int id = 0x10000;
     struct winstation *winstation;
+    struct unicode_str default_name;
+    WCHAR buffer[32];
 
-    if ((winstation = create_named_object( root, &winstation_ops, name, attr, NULL )))
+    if (name->len)
+    {
+        winstation = create_named_object( root, &winstation_ops, name, attr, NULL );
+        goto done;
+    }
+
+    do
+    {
+        if (!++id) id = 1;  /* avoid an id of 0 */
+        sprintfW( buffer, formatW, id );
+        default_name.str = buffer;
+        default_name.len = strlenW( buffer ) * sizeof(WCHAR);
+        winstation = create_named_object( root, &winstation_ops, &default_name, attr & ~OBJ_OPENIF, NULL );
+    }
+    while (!winstation && get_error() == STATUS_OBJECT_NAME_COLLISION);
+
+done:
+    if (winstation)
     {
         if (get_error() != STATUS_OBJECT_NAME_EXISTS)
         {
@@ -131,6 +152,7 @@ static struct winstation *create_winstation( struct object *root, const struct u
         }
         else clear_error();
     }
+
     return winstation;
 }
 
