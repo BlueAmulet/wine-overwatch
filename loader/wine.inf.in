@@ -500,6 +500,8 @@ HKLM,%CurrentVersion%\PreviewHandlers,,16
 HKLM,%CurrentVersion%\Run,,16
 HKLM,%CurrentVersion%\Setup,"BootDir",,"%30%"
 HKLM,%CurrentVersion%\Setup,"SharedDir",,"%25%"
+HKLM,%CurrentVersion%\Setup\WindowsFeatures\WindowsMediaVersion,,,"12.0.7601.18840"
+HKLM,%CurrentVersion%\Setup\WindowsFeatures\WindowsMediaVersion,"Version",1,00,00,0c,00,98,49,b1,1d
 HKLM,%CurrentVersion%\Shell Extensions\Approved,,16
 HKLM,%CurrentVersion%\Uninstall,,16
 HKLM,%CurrentVersion%\Winlogon,,16
