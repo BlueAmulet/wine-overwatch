@@ -369,7 +369,7 @@ HFILE16 WINAPI _lclose16( HFILE16 hFile )
     }
     TRACE("%d (handle32=%p)\n", hFile, dos_handles[hFile] );
     CloseHandle( dos_handles[hFile] );
-    dos_handles[hFile] = 0;
+    dos_handles[hFile] = (hFile < 5) ? INVALID_HANDLE_VALUE : 0;
     return 0;
 }
 
