@@ -2796,7 +2796,7 @@ __ASM_GLOBAL_FUNC(call_thread_func_wrapper,
                   __ASM_CFI(".cfi_rel_offset %ebp,0\n\t")
                   "movl %esp,%ebp\n\t"
                   __ASM_CFI(".cfi_def_cfa_register %ebp\n\t")
-                  "subl $4,%esp\n\t"
+                  "subl $20,%esp\n\t"
                   "pushl 12(%ebp)\n\t"
                   "call *8(%ebp)\n\t"
                   "leal -4(%ebp),%esp\n\t"
