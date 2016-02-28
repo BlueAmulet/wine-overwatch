@@ -2933,6 +2933,8 @@ static void FindDevice(void)
 
     D3DFINDDEVICESEARCH search = {0};
     D3DFINDDEVICERESULT result = {0};
+    D3DFINDDEVICERESULT1 result1 = {0};
+    D3DFINDDEVICERESULT2 result2 = {0};
     IDirect3DDevice *d3dhal;
     HRESULT hr;
     int i;
@@ -2970,6 +2972,18 @@ static void FindDevice(void)
     result.dwSize = sizeof(result);
 
     hr = IDirect3D_FindDevice(Direct3D1, &search, &result);
+    ok(hr == D3D_OK,
+       "Expected IDirect3D1::FindDevice to return D3D_OK, got 0x%08x\n", hr);
+
+    result1.dwSize = sizeof(result1);
+
+    hr = IDirect3D_FindDevice(Direct3D1, &search, (D3DFINDDEVICERESULT *)&result1);
+    ok(hr == D3D_OK,
+       "Expected IDirect3D1::FindDevice to return D3D_OK, got 0x%08x\n", hr);
+
+    result2.dwSize = sizeof(result2);
+
+    hr = IDirect3D_FindDevice(Direct3D1, &search, (D3DFINDDEVICERESULT *)&result2);
     ok(hr == D3D_OK,
        "Expected IDirect3D1::FindDevice to return D3D_OK, got 0x%08x\n", hr);
 

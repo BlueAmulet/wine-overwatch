@@ -4012,8 +4012,8 @@ static HRESULT WINAPI d3d3_FindDevice(IDirect3D3 *iface, D3DFINDDEVICESEARCH *fd
 
     if (!fds || !fdr) return DDERR_INVALIDPARAMS;
 
-    if (fds->dwSize != sizeof(D3DFINDDEVICESEARCH)
-            || fdr->dwSize != sizeof(D3DFINDDEVICERESULT))
+    if (fds->dwSize != sizeof(D3DFINDDEVICESEARCH) || (fdr->dwSize != sizeof(D3DFINDDEVICERESULT1) &&
+        fdr->dwSize != sizeof(D3DFINDDEVICERESULT2) && fdr->dwSize != sizeof(D3DFINDDEVICERESULT)))
         return DDERR_INVALIDPARAMS;
 
     if ((fds->dwFlags & D3DFDS_COLORMODEL)
@@ -4042,8 +4042,24 @@ static HRESULT WINAPI d3d3_FindDevice(IDirect3D3 *iface, D3DFINDDEVICESEARCH *fd
     /* Now return our own GUID */
     ddraw_d3dcaps1_from_7(&desc1, &desc7);
     fdr->guid = IID_D3DDEVICE_WineD3D;
-    fdr->ddHwDesc = desc1;
-    fdr->ddSwDesc = desc1;
+
+    if (fdr->dwSize == sizeof(D3DFINDDEVICERESULT1))
+    {
+        D3DFINDDEVICERESULT1 *fdr1 = (D3DFINDDEVICERESULT1 *)fdr;
+        memcpy(&fdr1->ddHwDesc, &desc1, sizeof(fdr1->ddHwDesc));
+        memcpy(&fdr1->ddSwDesc, &desc1, sizeof(fdr1->ddSwDesc));
+    }
+    else if (fdr->dwSize == sizeof(D3DFINDDEVICERESULT2))
+    {
+        D3DFINDDEVICERESULT2 *fdr2 = (D3DFINDDEVICERESULT2 *)fdr;
+        memcpy(&fdr2->ddHwDesc, &desc1, sizeof(fdr2->ddHwDesc));
+        memcpy(&fdr2->ddSwDesc, &desc1, sizeof(fdr2->ddSwDesc));
+    }
+    else
+    {
+        fdr->ddHwDesc = desc1;
+        fdr->ddSwDesc = desc1;
+    }
 
     TRACE("Returning Wine's wined3d device with (undumped) capabilities.\n");
 
