@@ -72,6 +72,8 @@ SVG_SRCS = \
 	floppy.svg \
 	folder.svg \
 	folder_open.svg \
+	ietoolbar.svg \
+	ietoolbar_small.svg \
 	mycomputer.svg \
 	mydocs.svg \
 	netdrive.svg \

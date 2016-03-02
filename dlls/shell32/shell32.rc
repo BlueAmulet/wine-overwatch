@@ -678,6 +678,14 @@ IDB_TB_SMALL_LIGHT BITMAP idb_tb_small.bmp
 /* @makedep: idb_tb_small.bmp */
 IDB_TB_SMALL_DARK BITMAP idb_tb_small.bmp
 
+/* @makedep: ietoolbar.bmp */
+204 BITMAP ietoolbar.bmp
+205 BITMAP ietoolbar.bmp
+
+/* @makedep: ietoolbar_small.bmp */
+206 BITMAP ietoolbar_small.bmp
+207 BITMAP ietoolbar_small.bmp
+
 /* @makedep: searching.avi */
 IDR_AVI_SEARCHING AVI searching.avi
 
