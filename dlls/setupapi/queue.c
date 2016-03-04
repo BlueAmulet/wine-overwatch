@@ -335,7 +335,7 @@ static void get_src_file_info( HINF hinf, struct file_op *op )
  *
  * Retrieve the destination dir for a given section.
  */
-static WCHAR *get_destination_dir( HINF hinf, const WCHAR *section )
+WCHAR *get_destination_dir( HINF hinf, const WCHAR *section )
 {
     static const WCHAR Dest[] = {'D','e','s','t','i','n','a','t','i','o','n','D','i','r','s',0};
     static const WCHAR Def[]  = {'D','e','f','a','u','l','t','D','e','s','t','D','i','r',0};
