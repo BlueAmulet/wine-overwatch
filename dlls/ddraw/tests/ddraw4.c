@@ -12728,6 +12728,31 @@ static void test_surface_desc_size(void)
     ok(!refcount, "DirectDraw has %u references left.\n", refcount);
 }
 
+static void test_caps(void)
+{
+    IDirectDraw4 *ddraw;
+    DDCAPS caps, caps2;
+    HRESULT hr;
+
+    ddraw = create_ddraw();
+    ok(!!ddraw, "Failed to create a ddraw object.\n");
+
+    caps.dwSize = sizeof(caps);
+    caps2.dwSize = sizeof(caps2);
+    hr = IDirectDraw4_GetCaps(ddraw, &caps, &caps2);
+    ok(SUCCEEDED(hr), "Failed to query for caps, hr %#x.\n", hr);
+
+    ok(caps.ddsOldCaps.dwCaps == caps.ddsCaps.dwCaps,
+       "Expected hal ddsOldCaps and ddsCaps to be identical (%x vs %x).\n",
+       caps.ddsOldCaps.dwCaps, caps.ddsCaps.dwCaps);
+
+    ok(caps2.ddsOldCaps.dwCaps == caps2.ddsCaps.dwCaps,
+       "Expected hel ddsOldCaps and ddsCaps to be identical (%x vs %x).\n",
+       caps2.ddsOldCaps.dwCaps, caps2.ddsCaps.dwCaps);
+
+    IDirectDraw4_Release(ddraw);
+}
+
 START_TEST(ddraw4)
 {
     IDirectDraw4 *ddraw;
@@ -12830,4 +12855,5 @@ START_TEST(ddraw4)
     test_transform_vertices();
     test_display_mode_surface_pixel_format();
     test_surface_desc_size();
+    test_caps();
 }
