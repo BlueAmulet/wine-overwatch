@@ -1169,7 +1169,12 @@ static HRESULT copypixels_to_8bppGray(struct FormatConverter *This, const WICRec
             {
                 float gray = (bgr[2] * 0.2126f + bgr[1] * 0.7152f + bgr[0] * 0.0722f) / 255.0f;
 
-                gray = to_sRGB_component(gray) * 255.0f;
+                /* conversion from 32bppGrayFloat to 24bppBGR has already applied sRGB gamma */
+                if (source_format == format_32bppGrayFloat)
+                    gray *= 255.0f;
+                else
+                    gray = to_sRGB_component(gray) * 255.0f;
+
                 dst[x] = (BYTE)floorf(gray + 0.51f);
                 bgr += 3;
             }
