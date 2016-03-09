@@ -540,8 +540,9 @@ static struct object *create_mapping( struct object *root, const struct unicode_
 
         if (flags & SEC_RESERVE)
         {
-            set_error( STATUS_INVALID_PARAMETER );
-            goto error;
+            if (!(mapping->committed = mem_alloc( offsetof(struct ranges, ranges[8]) ))) goto error;
+            mapping->committed->count = 0;
+            mapping->committed->max   = 8;
         }
         if (!(file = get_file_obj( current->process, handle, access ))) goto error;
         fd = get_obj_fd( (struct object *)file );
