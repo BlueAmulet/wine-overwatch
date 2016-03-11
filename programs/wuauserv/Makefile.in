@@ -1,0 +1,6 @@
+MODULE    = wuauserv.exe
+APPMODE   = -mconsole
+IMPORTS   = advapi32
+
+C_SRCS = \
+	main.c
