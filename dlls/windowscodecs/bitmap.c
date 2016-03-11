@@ -45,6 +45,7 @@ typedef struct BitmapImpl {
     int palette_set;
     LONG lock; /* 0 if not locked, -1 if locked for writing, count if locked for reading */
     BYTE *data;
+    BOOL is_section; /* TRUE if data is a section created by an application */
     UINT width, height;
     UINT stride;
     UINT bpp;
@@ -287,7 +288,10 @@ static ULONG WINAPI BitmapImpl_Release(IWICBitmap *iface)
         if (This->palette) IWICPalette_Release(This->palette);
         This->cs.DebugInfo->Spare[0] = 0;
         DeleteCriticalSection(&This->cs);
-        HeapFree(GetProcessHeap(), 0, This->data);
+        if (This->is_section)
+            UnmapViewOfFile(This->data);
+        else
+            HeapFree(GetProcessHeap(), 0, This->data);
         HeapFree(GetProcessHeap(), 0, This);
     }
 
@@ -802,13 +806,12 @@ static const IMILUnknown2Vtbl IMILUnknown2Impl_Vtbl =
 };
 
 HRESULT BitmapImpl_Create(UINT uiWidth, UINT uiHeight,
-    UINT stride, UINT datasize, BYTE *bits,
+    UINT stride, UINT datasize, BYTE *data,
     REFWICPixelFormatGUID pixelFormat, WICBitmapCreateCacheOption option,
     IWICBitmap **ppIBitmap)
 {
     HRESULT hr;
     BitmapImpl *This;
-    BYTE *data;
     UINT bpp;
 
     hr = get_pixelformat_bpp(pixelFormat, &bpp);
@@ -821,14 +824,20 @@ HRESULT BitmapImpl_Create(UINT uiWidth, UINT uiHeight,
     if (stride < ((bpp*uiWidth)+7)/8) return E_INVALIDARG;
 
     This = HeapAlloc(GetProcessHeap(), 0, sizeof(BitmapImpl));
-    data = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, datasize);
-    if (!This || !data)
+    if (!This) return E_OUTOFMEMORY;
+
+    if (!data)
     {
-        HeapFree(GetProcessHeap(), 0, This);
-        HeapFree(GetProcessHeap(), 0, data);
-        return E_OUTOFMEMORY;
+        data = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, datasize);
+        if (!data)
+        {
+            HeapFree(GetProcessHeap(), 0, This);
+            return E_OUTOFMEMORY;
+        }
+        This->is_section = FALSE;
     }
-    if (bits) memcpy(data, bits, datasize);
+    else
+        This->is_section = TRUE;
 
     This->IWICBitmap_iface.lpVtbl = &BitmapImpl_Vtbl;
     This->IMILBitmapSource_iface.lpVtbl = &IMILBitmapImpl_Vtbl;
