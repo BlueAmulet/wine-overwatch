@@ -83,6 +83,8 @@ AC_ARG_WITH(xcomposite,AS_HELP_STRING([--without-xcomposite],[do not use the Xco
             [if test "x$withval" = "xno"; then ac_cv_header_X11_extensions_Xcomposite_h=no; fi])
 AC_ARG_WITH(xcursor,   AS_HELP_STRING([--without-xcursor],[do not use the Xcursor extension]),
             [if test "x$withval" = "xno"; then ac_cv_header_X11_Xcursor_Xcursor_h=no; fi])
+AC_ARG_WITH(xcb,       AS_HELP_STRING([--without-xcb],[do not use X11 XCB extension]),
+            [if test "x$withval" = "xno"; then ac_cv_header_X11_Xlib_xcb_h=no; fi])
 AC_ARG_WITH(xinerama,  AS_HELP_STRING([--without-xinerama],[do not use Xinerama (multi-monitor support)]),
             [if test "x$withval" = "xno"; then ac_cv_header_X11_extensions_Xinerama_h=no; fi])
 AC_ARG_WITH(xinput,    AS_HELP_STRING([--without-xinput],[do not use the Xinput extension]),
@@ -1016,6 +1018,7 @@ then
 
     dnl *** All of the following tests require X11/Xlib.h
     AC_CHECK_HEADERS([X11/Xlib.h \
+                      X11/Xlib-xcb.h \
                       X11/XKBlib.h \
                       X11/Xutil.h \
                       X11/Xcursor/Xcursor.h \
@@ -1139,6 +1142,14 @@ then
         WINE_NOTICE_WITH(xcomposite,[test "x$ac_cv_lib_soname_Xcomposite" = "x"],
                          [libxcomposite ${notice_platform}development files not found, Xcomposite won't be supported.])
 
+        dnl *** Check for XCB extension
+        if test "$ac_cv_header_X11_Xlib_xcb_h" = "yes"
+        then
+            WINE_CHECK_SONAME(X11-xcb,XGetXCBConnection,,,[$X_LIBS $X_EXTRA_LIBS])
+        fi
+        WINE_NOTICE_WITH(xcb,[test "x$ac_cv_lib_soname_X11_xcb" = "x"],
+                         [X11-xcb ${notice_platform}development files not found, the XCB extension won't be supported.])
+
         dnl *** Check for XICCallback struct
         AC_CHECK_MEMBERS([XICCallback.callback, XEvent.xcookie],,,
 [#ifdef HAVE_X11_XLIB_H
@@ -1205,6 +1216,9 @@ WINE_ERROR_WITH(x,[test "x$X_LIBS" = "x"],[X ${notice_platform}development files
 without X support, which probably isn't what you want. You will need
 to install ${notice_platform}development packages of Xlib/Xfree86 at the very least.],
 [enable_winex11_drv])
+
+test "x$X_LIBS" = "x" && enable_vulkan=${enable_vulkan:-no}
+test "x$X_LIBS" = "x" && enable_vulkan_1=${enable_vulkan_1:-no}
 
 test "x$ac_cv_lib_GLU_gluLookAt" != xyes && enable_glu32=${enable_glu32:-no}
 
@@ -3517,6 +3531,8 @@ WINE_CONFIG_DLL(vnbt.vxd,enable_win16)
 WINE_CONFIG_DLL(vnetbios.vxd,enable_win16)
 WINE_CONFIG_DLL(vssapi)
 WINE_CONFIG_DLL(vtdapi.vxd,enable_win16)
+WINE_CONFIG_DLL(vulkan-1)
+WINE_CONFIG_DLL(vulkan)
 WINE_CONFIG_DLL(vwin32.vxd,enable_win16)
 WINE_CONFIG_DLL(w32skrnl,enable_win16)
 WINE_CONFIG_DLL(w32sys.dll16,enable_win16)
