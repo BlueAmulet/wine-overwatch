@@ -379,7 +379,7 @@
 @ stub IoGetBootDiskInformation
 @ stdcall IoGetConfigurationInformation()
 @ stdcall IoGetCurrentProcess()
-@ stub IoGetDeviceAttachmentBaseRef
+@ stdcall IoGetDeviceAttachmentBaseRef(ptr)
 @ stub IoGetDeviceInterfaceAlias
 @ stdcall IoGetDeviceInterfaces(ptr ptr long ptr)
 @ stdcall IoGetDeviceObjectPointer(ptr long ptr ptr)
