@@ -3844,6 +3844,23 @@ static VkResult null_vkGetPhysicalDeviceSurfaceSupportKHR( VkPhysicalDevice phys
     return VK_ERROR_INCOMPATIBLE_DRIVER;
 }
 
+static VkBool32 null_vkGetPhysicalDeviceXcbPresentationSupportKHR( VkPhysicalDevice physicalDevice,
+        uint32_t queueFamilyIndex, xcb_connection_t *connection, xcb_visualid_t visual_id )
+{
+    FIXME( "(%p, %u, %p, %u) not supported\n", physicalDevice, queueFamilyIndex, connection,
+            visual_id );
+    return VK_FALSE;
+}
+
+static VkBool32 null_vkGetPhysicalDeviceXlibPresentationSupportKHR(
+        VkPhysicalDevice physicalDevice, uint32_t queueFamilyIndex, Display *dpy,
+        VisualID visualID )
+{
+    FIXME( "(%p, %u, %p, %u) not supported\n", physicalDevice, queueFamilyIndex, dpy,
+            (uint32_t)visualID );
+    return VK_FALSE;
+}
+
 static VkResult null_vkGetPipelineCacheData( VkDevice device, VkPipelineCache pipelineCache,
         size_t *pDataSize, void *pData )
 {
@@ -4265,6 +4282,10 @@ VkResult (*p_vkGetPhysicalDeviceSurfacePresentModesKHR)( VkPhysicalDevice, VkSur
         uint32_t *, VkPresentModeKHR * ) = null_vkGetPhysicalDeviceSurfacePresentModesKHR;
 VkResult (*p_vkGetPhysicalDeviceSurfaceSupportKHR)( VkPhysicalDevice, uint32_t, VkSurfaceKHR,
         VkBool32 * ) = null_vkGetPhysicalDeviceSurfaceSupportKHR;
+VkBool32 (*p_vkGetPhysicalDeviceXcbPresentationSupportKHR)( VkPhysicalDevice, uint32_t,
+        xcb_connection_t *, xcb_visualid_t ) = null_vkGetPhysicalDeviceXcbPresentationSupportKHR;
+VkBool32 (*p_vkGetPhysicalDeviceXlibPresentationSupportKHR)( VkPhysicalDevice, uint32_t, Display *,
+        VisualID ) = null_vkGetPhysicalDeviceXlibPresentationSupportKHR;
 VkResult (*p_vkGetPipelineCacheData)( VkDevice, VkPipelineCache, size_t *, void * ) =
         null_vkGetPipelineCacheData;
 VkResult (*p_vkGetQueryPoolResults)( VkDevice, VkQueryPool, uint32_t, uint32_t, size_t, void *,
@@ -6520,6 +6541,8 @@ function_table[] =
     DEFINE_FUNCTION( vkGetPhysicalDeviceSurfaceFormatsKHR )
     DEFINE_FUNCTION( vkGetPhysicalDeviceSurfacePresentModesKHR )
     DEFINE_FUNCTION( vkGetPhysicalDeviceSurfaceSupportKHR )
+    DEFINE_FUNCTION( vkGetPhysicalDeviceXcbPresentationSupportKHR )
+    DEFINE_FUNCTION( vkGetPhysicalDeviceXlibPresentationSupportKHR )
     DEFINE_FUNCTION( vkGetPipelineCacheData )
     DEFINE_FUNCTION( vkGetQueryPoolResults )
     DEFINE_FUNCTION( vkGetRenderAreaGranularity )

@@ -44,6 +44,9 @@ static Display *display;
 WINE_DECLARE_DEBUG_CHANNEL(winediag);
 
 static void *libx11_xcb_handle;
+static typeof(xcb_get_setup) *pxcb_get_setup;
+static typeof(xcb_screen_next) *pxcb_screen_next;
+static typeof(xcb_setup_roots_iterator) *pxcb_setup_roots_iterator;
 static typeof(XGetXCBConnection) *pXGetXCBConnection;
 
 static BOOL init_x11_xcb( void )
@@ -54,7 +57,11 @@ static BOOL init_x11_xcb( void )
         return FALSE;
     }
 
-    pXGetXCBConnection = wine_dlsym( libx11_xcb_handle, "XGetXCBConnection", NULL, 0 );
+    pxcb_get_setup              = wine_dlsym( libx11_xcb_handle, "xcb_get_setup", NULL, 0 );
+    pxcb_screen_next            = wine_dlsym( libx11_xcb_handle, "xcb_screen_next", NULL, 0 );
+    pxcb_setup_roots_iterator   = wine_dlsym( libx11_xcb_handle, "xcb_setup_roots_iterator", NULL, 0 );
+    pXGetXCBConnection          = wine_dlsym( libx11_xcb_handle, "XGetXCBConnection", NULL, 0 );
+
     return TRUE;
 }
 
@@ -242,14 +249,56 @@ VkResult WINAPI vkCreateWin32SurfaceKHR( VkInstance instance,
     return res;
 }
 
+#if defined(HAVE_X11_XLIB_H) && defined(SONAME_LIBX11_XCB)
+static xcb_screen_t *get_xcb_screen( xcb_connection_t *connection, int screen )
+{
+    xcb_screen_iterator_t iter = pxcb_setup_roots_iterator( pxcb_get_setup(connection) );
+    for (; iter.rem; screen--)
+    {
+        if (!screen) return iter.data;
+        pxcb_screen_next( &iter );
+    }
+    return NULL;
+}
+#endif
+
 /***********************************************************************
  *              vkGetPhysicalDeviceWin32PresentationSupportKHR (VULKAN.@)
  */
 VkBool32 WINAPI vkGetPhysicalDeviceWin32PresentationSupportKHR( VkPhysicalDevice physicalDevice,
         uint32_t queueFamilyIndex )
 {
-    FIXME( "(%p, %u): stub\n", physicalDevice, queueFamilyIndex );
-    return VK_FALSE;
+    VkResult res = VK_ERROR_INCOMPATIBLE_DRIVER;
+
+    TRACE( "(%p, %u)\n", physicalDevice, queueFamilyIndex );
+
+#if defined(HAVE_X11_XLIB_H) && defined(SONAME_LIBX11_XCB)
+    if (pxcb_get_setup && pxcb_screen_next && pxcb_setup_roots_iterator &&
+        pXGetXCBConnection && res == VK_ERROR_INCOMPATIBLE_DRIVER)
+    {
+        xcb_connection_t *connection = pXGetXCBConnection( display );
+        xcb_screen_t *screen = get_xcb_screen( connection, XDefaultScreen(display) );
+        if (screen)
+        {
+            res = p_vkGetPhysicalDeviceXcbPresentationSupportKHR( physicalDevice, queueFamilyIndex,
+                    connection, screen->root_visual );
+        }
+        else
+            ERR( "failed to find default screen\n" );
+    }
+#endif
+
+#if defined(HAVE_X11_XLIB_H)
+    if (res == VK_ERROR_INCOMPATIBLE_DRIVER)
+    {
+        Visual *visual = XDefaultVisual( display, XDefaultScreen(display) );
+        VisualID visual_id = XVisualIDFromVisual( visual );
+        res = p_vkGetPhysicalDeviceXlibPresentationSupportKHR( physicalDevice, queueFamilyIndex,
+                display, visual_id );
+    }
+#endif
+
+    return res;
 }
 
 /***********************************************************************

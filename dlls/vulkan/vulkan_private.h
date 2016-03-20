@@ -63,6 +63,9 @@ typedef void *PFN_vkVoidFunction;
 typedef void *PFN_vkVoidFunction_host;
 typedef void *VK_DEFINE_HANDLE;
 typedef uint64_t VK_DEFINE_NON_DISPATCHABLE_HANDLE;
+#if !defined(HAVE_X11_XLIB_H)
+typedef uint32_t VisualID;
+#endif
 typedef uint32_t VkAccessFlags;
 typedef uint32_t VkAttachmentDescriptionFlags;
 typedef int VkAttachmentLoadOp;
@@ -209,6 +212,9 @@ typedef uint32_t VkXlibSurfaceCreateFlagsKHR_host;
 typedef unsigned long int Window;
 #if !defined(HAVE_X11_XLIB_XCB_H)
 typedef struct xcb_connection_t xcb_connection_t;
+#endif
+#if !defined(HAVE_X11_XLIB_XCB_H)
+typedef uint32_t xcb_visualid_t;
 #endif
 #if !defined(HAVE_X11_XLIB_XCB_H)
 typedef uint32_t xcb_window_t;
@@ -2352,6 +2358,10 @@ extern VkResult (*p_vkGetPhysicalDeviceSurfacePresentModesKHR)( VkPhysicalDevice
         uint32_t *, VkPresentModeKHR * ) DECLSPEC_HIDDEN;
 extern VkResult (*p_vkGetPhysicalDeviceSurfaceSupportKHR)( VkPhysicalDevice, uint32_t,
         VkSurfaceKHR, VkBool32 * ) DECLSPEC_HIDDEN;
+extern VkBool32 (*p_vkGetPhysicalDeviceXcbPresentationSupportKHR)( VkPhysicalDevice, uint32_t,
+        xcb_connection_t *, xcb_visualid_t ) DECLSPEC_HIDDEN;
+extern VkBool32 (*p_vkGetPhysicalDeviceXlibPresentationSupportKHR)( VkPhysicalDevice, uint32_t,
+        Display *, VisualID ) DECLSPEC_HIDDEN;
 extern VkResult (*p_vkGetPipelineCacheData)( VkDevice, VkPipelineCache, size_t *,
         void * ) DECLSPEC_HIDDEN;
 extern VkResult (*p_vkGetQueryPoolResults)( VkDevice, VkQueryPool, uint32_t, uint32_t, size_t,
