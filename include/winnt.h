@@ -756,8 +756,14 @@ typedef struct _MEMORY_BASIC_INFORMATION
 
 #define FIELD_OFFSET(type, field) ((LONG)offsetof(type, field))
 
-#define CONTAINING_RECORD(address, type, field) \
-  ((type *)((PCHAR)(address) - offsetof(type, field)))
+#ifdef __GNUC__
+# define CONTAINING_RECORD(address, type, field) ({     \
+   const typeof(((type *)0)->field) *__ptr = (address); \
+   (type *)((PCHAR)__ptr - offsetof(type, field)); })
+#else
+# define CONTAINING_RECORD(address, type, field) \
+   ((type *)((PCHAR)(address) - offsetof(type, field)))
+#endif
 
 /* Types */
 
