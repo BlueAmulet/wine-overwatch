@@ -6392,15 +6392,17 @@ VkResult WINAPI vkWaitForFences( VkDevice device, uint32_t fenceCount, const VkF
     return p_vkWaitForFences( device, fenceCount, pFences, waitAll, timeout );
 }
 
-static const struct
+struct function_entry
 {
     const char *name;
     void **host_func;
     void *null_func;
-}
-function_table[] =
+};
+
+static const struct function_entry function_table[] =
 {
 #define DEFINE_FUNCTION( f ) { #f, (void **)&p_##f, null_##f },
+    /* functions must be sorted alphabetically */
     DEFINE_FUNCTION( vkAcquireNextImageKHR )
     DEFINE_FUNCTION( vkAllocateCommandBuffers )
     DEFINE_FUNCTION( vkAllocateDescriptorSets )
@@ -6594,17 +6596,20 @@ BOOL init_vulkan( void )
     return TRUE;
 }
 
+static int compare_function_entry( const void *a, const void *b )
+{
+    return strcmp( ((struct function_entry *)a)->name, ((struct function_entry *)b)->name );
+}
+
 BOOL is_null_func( const char *name )
 {
-    int i;
+    struct function_entry search = { name, NULL, NULL };
+    struct function_entry *found;
 
-    for (i = 0; i < ARRAY_SIZE(function_table); i++)
-    {
-        if (strcmp( function_table[i].name, name )) continue;
-        return (*function_table[i].host_func == function_table[i].null_func);
-    }
+    found = bsearch( &search, function_table, ARRAY_SIZE(function_table),
+            sizeof(function_table[0]), compare_function_entry );
 
-    return FALSE;
+    return found ? (*found->host_func == found->null_func) : FALSE;
 }
 
 void free_vulkan( void )
