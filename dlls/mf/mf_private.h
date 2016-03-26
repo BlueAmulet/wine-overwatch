@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Austin English
+ * Copyright (C) 2016 Michael Müller
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -15,39 +15,14 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
-#include "config.h"
 
-#include <stdarg.h>
+#ifndef __WINE_MF_MF_PRIVATE_H
+#define __WINE_MF_MF_PRIVATE_H
 
 #include "windef.h"
 #include "winbase.h"
-#include "wine/debug.h"
+#include "mfidl.h"
 
-#include "initguid.h"
-#include "mf_private.h"
+HRESULT create_session(IMFMediaSession **iface);
 
-WINE_DEFAULT_DEBUG_CHANNEL(mf);
-
-/***********************************************************************
- *      MFCreateMediaSession (mf.@)
- */
-HRESULT WINAPI MFCreateMediaSession(IMFAttributes *configuration, IMFMediaSession **ms)
-{
-    FIXME("(%p, %p): stub\n", configuration, ms);
-
-    return create_session(ms);
-}
-
-BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
-{
-    switch (reason)
-    {
-        case DLL_WINE_PREATTACH:
-            return FALSE;    /* prefer native version */
-        case DLL_PROCESS_ATTACH:
-            DisableThreadLibraryCalls(instance);
-            break;
-    }
-
-    return TRUE;
-}
+#endif /* __WINE_MF_MF_PRIVATE_H */
