@@ -745,8 +745,8 @@ HIC VFWAPI ICGetDisplayFormat(
     screen_depth = GetDeviceCaps(hdc, BITSPIXEL) * GetDeviceCaps(hdc, PLANES);
     ReleaseDC(0, hdc);
 
-    if (!dx) dx = lpbiIn->biWidth;
-    if (!dy) dy = lpbiIn->biHeight;
+    if (dx <= 0) dx = lpbiIn->biWidth;
+    if (dy <= 0) dy = lpbiIn->biHeight;
     if (!depth) depth = screen_depth;
 
 	/* Can we decompress it ? */

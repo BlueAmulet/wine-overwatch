@@ -357,9 +357,19 @@ static struct msg_result expected_msgs[] =
     {34,  ICM_DECOMPRESS_GET_FORMAT,  TRUE,  320, 240, 16,       BI_RGB,          ICERR_OK, FALSE},
     {35,  ICM_DECOMPRESS_QUERY,       TRUE,  800, 600, 32,       BI_RGB,          ICERR_OK, FALSE},
 
+    /* test 9 */
+    {36,  ICM_DECOMPRESS_QUERY,       FALSE,   0,   0,  0,            0,          ICERR_OK, FALSE},
+    {37,  ICM_DECOMPRESS_GET_FORMAT,  TRUE,  320, 240, 16,       BI_RGB,          ICERR_OK, FALSE},
+    {38,  ICM_DECOMPRESS_QUERY,       TRUE,  640, 480, 32,       BI_RGB,          ICERR_OK, FALSE},
+
+    /* test 10 */
+    {39,  ICM_DECOMPRESS_QUERY,       FALSE,   0,   0,  0,            0,          ICERR_OK, FALSE},
+    {40,  ICM_DECOMPRESS_GET_FORMAT,  TRUE,  320, 240, 16,       BI_RGB,          ICERR_OK, FALSE},
+    {41,  ICM_DECOMPRESS_QUERY,       TRUE,  640, 480, 32,       BI_RGB,          ICERR_OK, FALSE},
+
     /* Wine bug - shouldn't be called */
-    {36,  DRV_DISABLE,                FALSE,   0,   0,  0,            0,          ICERR_OK, TRUE},
-    {36,  DRV_FREE,                   FALSE,   0,   0,  0,            0,          ICERR_OK, TRUE},
+    {42,  DRV_DISABLE,                FALSE,   0,   0,  0,            0,          ICERR_OK, TRUE},
+    {42,  DRV_FREE,                   FALSE,   0,   0,  0,            0,          ICERR_OK, TRUE},
 };
 
 static int msg_index = 0;
@@ -481,6 +491,8 @@ void test_ICGetDisplayFormat(void)
         { 0, 32,   0, 640,   0, 480, 28},
         { 9, 64,   0, 640,   0, 480, 33},
         {32, 32, 800, 800, 600, 600, 36},
+        {32, 32,  -1, 640,  -1, 480, 39},
+        {32, 32, -90, 640, -60, 480, 42},
     };
 
     HIC ic, ic2;
