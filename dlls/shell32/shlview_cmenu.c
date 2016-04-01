@@ -764,7 +764,8 @@ static BOOL DoPaste(ContextMenu *This)
 	      /* do the copy/move */
 	      if (psfhlpdst && psfhlpsrc)
 	      {
-	        ISFHelper_CopyItems(psfhlpdst, psfFrom, lpcida->cidl, (LPCITEMIDLIST*)apidl);
+                if (SUCCEEDED(ISFHelper_CopyItems(psfhlpdst, psfFrom, lpcida->cidl, (LPCITEMIDLIST*)apidl)))
+                    bSuccess = TRUE;
 		/* FIXME handle move
 		ISFHelper_DeleteItems(psfhlpsrc, lpcida->cidl, apidl);
 		*/
