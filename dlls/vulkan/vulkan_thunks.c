@@ -6572,13 +6572,24 @@ static void *libvulkan_handle;
 
 BOOL init_vulkan( void )
 {
+    static const char *libname[] =
+    {
+        "libvulkan.so.1",
+        "libvulkan.so",
+    };
     void *ptr;
     int i;
 
     if (!(function_heap = HeapCreate( HEAP_CREATE_ENABLE_EXECUTE, 0, 0 )))
         return FALSE;
 
-    if (!(libvulkan_handle = wine_dlopen( "libvulkan.so", RTLD_NOW, NULL, 0 )))
+    for (i = 0; i < ARRAY_SIZE(libname); i++)
+    {
+        libvulkan_handle = wine_dlopen( libname[i], RTLD_NOW, NULL, 0 );
+        if (libvulkan_handle) break;
+    }
+
+    if (!libvulkan_handle)
     {
         ERR_(winediag)( "failed to load libvulkan.so, no support for vulkan\n" );
         HeapDestroy( function_heap );
