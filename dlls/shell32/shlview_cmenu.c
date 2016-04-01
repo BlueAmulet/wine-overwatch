@@ -739,6 +739,13 @@ static BOOL DoPaste(ContextMenu *This)
 
 	    apidl = _ILCopyCidaToaPidl(&pidl, lpcida);
 
+            /*
+             * In case source is a file we need to remove the last component
+             * to obtain a IShellFolder of the parent.
+             */
+            if (_ILIsValue(pidl))
+                ILRemoveLastID(pidl);
+
 	    /* bind to the source shellfolder */
 	    SHGetDesktopFolder(&psfDesktop);
 	    if(psfDesktop)
