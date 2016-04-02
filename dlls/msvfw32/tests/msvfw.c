@@ -429,9 +429,12 @@ LRESULT WINAPI driver_proc_test(DWORD_PTR dwDriverId, HDRVR hdrvr, UINT msg,
                "Expected biBitCount %d, got %d\n", expected->bits, out->biBitCount);
             ok(out->biCompression == expected->compression,
                "Expected compression %d, got %d\n", expected->compression, out->biCompression);
+            ok(out->biSizeImage == (out->biWidth * out->biHeight * out->biBitCount) / 8,
+               "Expected biSizeImage %d, got %d\n", (out->biWidth * out->biHeight * out->biBitCount) / 8,
+                out->biSizeImage);
 
-            trace("query -> width: %d, height: %d, bit: %d, compression: %d\n",
-                  out->biWidth, out->biHeight, out->biBitCount, out->biCompression);
+            trace("query -> width: %d, height: %d, bit: %d, compression: %d, size: %d\n",
+                  out->biWidth, out->biHeight, out->biBitCount, out->biCompression, out->biSizeImage);
             break;
         }
 
@@ -456,8 +459,8 @@ LRESULT WINAPI driver_proc_test(DWORD_PTR dwDriverId, HDRVR hdrvr, UINT msg,
             ok(out->biCompression == expected->compression,
                "Expected compression %d, got %d\n", expected->compression, out->biCompression);
 
-            trace("format -> width: %d, height: %d, bit: %d, compression: %d\n",
-                  out->biWidth, out->biHeight, out->biBitCount, out->biCompression);
+            trace("format -> width: %d, height: %d, bit: %d, compression: %d, size: %d\n",
+                  out->biWidth, out->biHeight, out->biBitCount, out->biCompression, out->biSizeImage);
 
             out->biBitCount = 64;
             break;
@@ -498,6 +501,7 @@ void test_ICGetDisplayFormat(void)
     HIC ic, ic2;
     BITMAPINFOHEADER in;
     BITMAPINFOHEADER out;
+    int real_depth;
     int i;
 
     ic = ICOpenFunction(ICTYPE_VIDEO, 0xdeadbeef, ICMODE_DECOMPRESS, driver_proc_test);
@@ -529,6 +533,9 @@ void test_ICGetDisplayFormat(void)
            "Expected biWidth %d, got %d\n", tests[i].width_expected, out.biWidth);
         ok(out.biHeight == tests[i].height_expected,
            "Expected biHeight %d, got %d\n", tests[i].height_expected, out.biHeight);
+        real_depth = (out.biBitCount > 32) ? 4 : out.biBitCount / 8;
+        ok(out.biSizeImage == out.biWidth * out.biHeight * real_depth,
+           "Expected biSizeImage %d, got %d\n", out.biWidth * out.biHeight * real_depth, out.biSizeImage);
         ok(msg_index == tests[i].msg_index,
            "Expected msg_index %d, got %d\n", tests[i].msg_index, msg_index);
     }

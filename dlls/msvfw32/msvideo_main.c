@@ -759,7 +759,6 @@ HIC VFWAPI ICGetDisplayFormat(
     lpbiOut->biWidth = dx;
     lpbiOut->biHeight = dy;
     lpbiOut->biPlanes = 1;
-    lpbiOut->biSizeImage = 0;
 
     for (i = 0; i < sizeof(try_depths) / sizeof(try_depths[0]); i++)
     {
@@ -769,6 +768,7 @@ HIC VFWAPI ICGetDisplayFormat(
         found = TRUE;
         lpbiOut->biBitCount = try_depths[i].depth;
         lpbiOut->biCompression = try_depths[i].compression;
+        lpbiOut->biSizeImage = dx * dy * lpbiOut->biBitCount / 8;
 
         if (ICDecompressQuery(tmphic, lpbiIn, lpbiOut) == ICERR_OK)
             goto success;
@@ -778,11 +778,13 @@ HIC VFWAPI ICGetDisplayFormat(
     {
         lpbiOut->biBitCount = depth;
         lpbiOut->biCompression = BI_RGB;
+        lpbiOut->biSizeImage = (dx * dy * depth) / 8;
         if (ICDecompressQuery(tmphic, lpbiIn, lpbiOut) == ICERR_OK)
             goto success;
 
         lpbiOut->biBitCount = screen_depth;
         lpbiOut->biCompression = BI_RGB;
+        lpbiOut->biSizeImage = dx * dy * screen_depth / 8;
         if (ICDecompressQuery(tmphic, lpbiIn, lpbiOut) == ICERR_OK)
             goto success;
     }
