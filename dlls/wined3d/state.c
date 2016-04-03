@@ -338,8 +338,11 @@ static GLenum gl_blend_op(const struct wined3d_gl_info *gl_info, enum wined3d_bl
         case WINED3D_BLEND_OP_MAX:
             return gl_info->supported[EXT_BLEND_MINMAX] ? GL_MAX : GL_FUNC_ADD;
         default:
-            FIXME("Unhandled blend op %#x.\n", op);
+        {
+            static int once;
+            if (op || !once++) FIXME("Unhandled blend op %#x.\n", op);
             return GL_FUNC_ADD;
+        }
     }
 }
 
