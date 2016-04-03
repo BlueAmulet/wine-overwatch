@@ -98,6 +98,11 @@ static const char *wine_dbgstr_icerr( int ret )
     return str;
 }
 
+static inline int get_stride(int width, int depth)
+{
+    return ((depth * width + 31) >> 3) & ~3;
+}
+
 static WINE_HIC*        MSVIDEO_FirstHic /* = NULL */;
 
 typedef struct _reg_driver reg_driver;
@@ -768,23 +773,27 @@ HIC VFWAPI ICGetDisplayFormat(
         found = TRUE;
         lpbiOut->biBitCount = try_depths[i].depth;
         lpbiOut->biCompression = try_depths[i].compression;
-        lpbiOut->biSizeImage = dx * dy * lpbiOut->biBitCount / 8;
+        lpbiOut->biSizeImage = dx * get_stride(dy, lpbiOut->biBitCount);
 
         if (ICDecompressQuery(tmphic, lpbiIn, lpbiOut) == ICERR_OK)
+        {
+            if (try_depths[i].depth == 8)
+                ICDecompressGetPalette(tmphic, lpbiIn, lpbiOut);
             goto success;
+        }
     }
 
     if (!found)
     {
         lpbiOut->biBitCount = depth;
         lpbiOut->biCompression = BI_RGB;
-        lpbiOut->biSizeImage = (dx * dy * depth) / 8;
+        lpbiOut->biSizeImage = dx * get_stride(dy, lpbiOut->biBitCount);
         if (ICDecompressQuery(tmphic, lpbiIn, lpbiOut) == ICERR_OK)
             goto success;
 
         lpbiOut->biBitCount = screen_depth;
         lpbiOut->biCompression = BI_RGB;
-        lpbiOut->biSizeImage = dx * dy * screen_depth / 8;
+        lpbiOut->biSizeImage = dx * get_stride(dy, lpbiOut->biBitCount);
         if (ICDecompressQuery(tmphic, lpbiIn, lpbiOut) == ICERR_OK)
             goto success;
     }
