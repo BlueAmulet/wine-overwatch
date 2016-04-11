@@ -19,6 +19,8 @@
 #ifndef _INC_UIAUTOMATIONCOREAPI
 #define _INC_UIAUTOMATIONCOREAPI
 
+#include "uiautomationcore.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -34,6 +36,16 @@ extern "C" {
 #define UiaAppendRuntimeId  3
 #define UiaRootObjectId     -25
 
+typedef enum AutomationIdentifierType
+{
+    AutomationIdentifierType_Property,
+    AutomationIdentifierType_Pattern,
+    AutomationIdentifierType_Event,
+    AutomationIdentifierType_ControlType,
+    AutomationIdentifierType_TextAttribute,
+    AutomationIdentifierType_LandmarkType,
+} AutomationIdentifierType;
+
 DECLARE_HANDLE(HUIANODE);
 DECLARE_HANDLE(HUIAPATTERNOBJECT);
 DECLARE_HANDLE(HUIATEXTRANGE);
@@ -41,6 +53,10 @@ DECLARE_HANDLE(HUIAEVENT);
 
 BOOL WINAPI UiaPatternRelease(HUIAPATTERNOBJECT hobj);
 BOOL WINAPI UiaTextRangeRelease(HUIATEXTRANGE hobj);
+int WINAPI UiaLookupId(AutomationIdentifierType type, const GUID *guid);
+HRESULT WINAPI UiaGetReservedMixedAttributeValue(IUnknown **value);
+HRESULT WINAPI UiaGetReservedNotSupportedValue(IUnknown **value);
+LRESULT WINAPI UiaReturnRawElementProvider(HWND hwnd, WPARAM wparam, LPARAM lparam, IRawElementProviderSimple *provider);
 
 #ifdef __cplusplus
 }
