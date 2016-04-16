@@ -1764,7 +1764,6 @@ static EXCEPTION_RECORD *setup_exception_record( ucontext_t *sigcontext, void *s
         DWORD             ebp;
         DWORD             eip;
     } *stack = stack_ptr;
-    DWORD exception_code = 0;
 
     /* stack sanity checks */
 
@@ -1800,8 +1799,7 @@ static EXCEPTION_RECORD *setup_exception_record( ucontext_t *sigcontext, void *s
     else if ((char *)(stack - 1) < (char *)NtCurrentTeb()->Tib.StackLimit)
     {
         /* stack access below stack limit, may be recoverable */
-        if (virtual_handle_stack_fault( stack - 1 )) exception_code = EXCEPTION_STACK_OVERFLOW;
-        else
+        if (!virtual_handle_stack_fault( stack - 1 ))
         {
             UINT diff = (char *)NtCurrentTeb()->Tib.StackLimit - (char *)(stack - 1);
             WINE_ERR( "stack overflow %u bytes in thread %04x eip %08x esp %08x stack %p-%p-%p\n",
@@ -1823,7 +1821,7 @@ static EXCEPTION_RECORD *setup_exception_record( ucontext_t *sigcontext, void *s
     stack->context_ptr  = &stack->context;
 
     stack->rec.ExceptionRecord  = NULL;
-    stack->rec.ExceptionCode    = exception_code;
+    stack->rec.ExceptionCode    = STATUS_SUCCESS;
     stack->rec.ExceptionFlags   = EXCEPTION_CONTINUABLE;
     stack->rec.ExceptionAddress = (LPVOID)EIP_sig(sigcontext);
     stack->rec.NumberParameters = 0;
@@ -2092,7 +2090,6 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
     }
 
     rec = setup_exception_record( context, stack, fs, gs, raise_segv_exception );
-    if (rec->ExceptionCode == EXCEPTION_STACK_OVERFLOW) return;
 
     switch(get_trap_code(context))
     {
