@@ -2616,8 +2616,9 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
         virtual_handle_stack_fault( siginfo->si_addr ))
     {
         /* check if this was the last guard page */
-        if ((char *)siginfo->si_addr < (char *)NtCurrentTeb()->DeallocationStack + 2*4096)
+        if ((char *)siginfo->si_addr < (char *)NtCurrentTeb()->DeallocationStack + 3*4096)
         {
+            virtual_handle_stack_fault( (char *)siginfo->si_addr - 4096 );
             rec = setup_exception( sigcontext, raise_segv_exception );
             rec->ExceptionCode = EXCEPTION_STACK_OVERFLOW;
         }
