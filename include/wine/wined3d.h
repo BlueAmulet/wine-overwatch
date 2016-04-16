@@ -710,6 +710,12 @@ struct wined3d_query_data_timestamp_disjoint
     BOOL disjoint;
 };
 
+struct wined3d_query_data_so_statistics
+{
+    UINT64 written;
+    UINT64 needed;
+};
+
 #define WINED3DISSUE_BEGIN                                      (1u << 1)
 #define WINED3DISSUE_END                                        (1u << 0)
 #define WINED3DGETDATA_FLUSH                                    (1u << 0)
