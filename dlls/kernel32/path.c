@@ -43,6 +43,7 @@ WINE_DEFAULT_DEBUG_CHANNEL(file);
 
 #define MAX_PATHNAME_LEN        1024
 
+static const WCHAR wildcardsW[] = {'*','?',0};
 
 /* check if a file name is for an executable file (.exe or .com) */
 static inline BOOL is_executable( const WCHAR *name )
@@ -444,7 +445,7 @@ DWORD WINAPI GetShortPathNameW( LPCWSTR longpath, LPWSTR shortpath, DWORD shortl
     WIN32_FIND_DATAW    wfd;
     HANDLE              goit;
 
-    TRACE("%s\n", debugstr_w(longpath));
+    TRACE("%s,%p,%u\n", debugstr_w(longpath), shortpath, shortlen);
 
     if (!longpath)
     {
@@ -471,6 +472,13 @@ DWORD WINAPI GetShortPathNameW( LPCWSTR longpath, LPWSTR shortpath, DWORD shortl
     {
         memcpy(tmpshortpath, longpath, 4 * sizeof(WCHAR));
         sp = lp = 4;
+    }
+
+    if (strpbrkW(longpath + lp, wildcardsW))
+    {
+        HeapFree(GetProcessHeap(), 0, tmpshortpath);
+        SetLastError(ERROR_INVALID_NAME);
+        return 0;
     }
 
     /* check for drive letter */
