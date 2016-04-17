@@ -295,6 +295,8 @@ DWORD WINAPI GetLongPathNameW( LPCWSTR shortpath, LPWSTR longpath, DWORD longlen
     HANDLE              goit;
     BOOL                is_legal_8dot3;
 
+    TRACE("%s,%p,%u\n", debugstr_w(shortpath), longpath, longlen);
+
     if (!shortpath)
     {
         SetLastError(ERROR_INVALID_PARAMETER);
@@ -305,8 +307,6 @@ DWORD WINAPI GetLongPathNameW( LPCWSTR shortpath, LPWSTR longpath, DWORD longlen
         SetLastError(ERROR_PATH_NOT_FOUND);
         return 0;
     }
-
-    TRACE("%s,%p,%d\n", debugstr_w(shortpath), longpath, longlen);
 
     if (shortpath[0] == '\\' && shortpath[1] == '\\')
     {
@@ -329,6 +329,12 @@ DWORD WINAPI GetLongPathNameW( LPCWSTR shortpath, LPWSTR longpath, DWORD longlen
         tmplongpath[0] = shortpath[0];
         tmplongpath[1] = ':';
         lp = sp = 2;
+    }
+
+    if (strpbrkW(shortpath + sp, wildcardsW))
+    {
+        SetLastError(ERROR_INVALID_NAME);
+        return 0;
     }
 
     while (shortpath[sp])
