@@ -835,11 +835,13 @@ INT_PTR WINAPI DialogBoxParamA( HINSTANCE hInst, LPCSTR name,
     HRSRC hrsrc;
     LPCDLGTEMPLATEA ptr;
 
+    if (owner && !IsWindow(owner)) return 0;
+
     if (!(hrsrc = FindResourceA( hInst, name, (LPSTR)RT_DIALOG ))) return -1;
     if (!(ptr = LoadResource(hInst, hrsrc))) return -1;
     hwnd = DIALOG_CreateIndirect( hInst, ptr, owner, dlgProc, param, FALSE, &owner );
     if (hwnd) return DIALOG_DoDialogBox( hwnd, owner );
-    return 0;
+    return -1;
 }
 
 
@@ -853,11 +855,13 @@ INT_PTR WINAPI DialogBoxParamW( HINSTANCE hInst, LPCWSTR name,
     HRSRC hrsrc;
     LPCDLGTEMPLATEW ptr;
 
+    if (owner && !IsWindow(owner)) return 0;
+
     if (!(hrsrc = FindResourceW( hInst, name, (LPWSTR)RT_DIALOG ))) return -1;
     if (!(ptr = LoadResource(hInst, hrsrc))) return -1;
     hwnd = DIALOG_CreateIndirect( hInst, ptr, owner, dlgProc, param, TRUE, &owner );
     if (hwnd) return DIALOG_DoDialogBox( hwnd, owner );
-    return 0;
+    return -1;
 }
 
 
