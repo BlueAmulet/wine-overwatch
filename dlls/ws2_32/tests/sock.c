@@ -2583,6 +2583,7 @@ static void test_WSASocket(void)
     if (sock == INVALID_SOCKET)
     {
         err = WSAGetLastError();
+        todo_wine_if (err == WSAEPROTONOSUPPORT)
         ok(err == WSAEAFNOSUPPORT || broken(err == WSAEPROTONOSUPPORT), "Expected 10047, received %d\n", err);
         skip("IPX is not supported\n");
     }
@@ -2852,13 +2853,13 @@ static void test_WSAEnumNetworkEvents(void)
                     "Test[%d]: WSAEnumNetworkEvents failed\n", i);
                 if (i >= 1 && j == 0) /* FD_WRITE is SET on first try for UDP and connected TCP */
                 {
-                    todo_wine_if (i == 0) /* Remove when fixed */
+                    todo_wine_if (i == 0 || net_events.lNetworkEvents == 0)
                         ok (net_events.lNetworkEvents == FD_WRITE, "Test[%d]: expected 2, got %d\n",
                             i, net_events.lNetworkEvents);
                 }
                 else
                 {
-                    todo_wine_if (i != 0) /* Remove when fixed */
+                    todo_wine_if (i != 0 && net_events.lNetworkEvents != 0)
                         ok (net_events.lNetworkEvents == 0, "Test[%d]: expected 0, got %d\n",
                             i, net_events.lNetworkEvents);
                 }
