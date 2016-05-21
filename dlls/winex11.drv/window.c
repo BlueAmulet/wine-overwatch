@@ -2754,17 +2754,6 @@ LRESULT CDECL X11DRV_SysCommand( HWND hwnd, WPARAM wparam, LPARAM lparam )
         default:               dir = _NET_WM_MOVERESIZE_SIZE_KEYBOARD; break;
         }
         break;
-
-    case SC_KEYMENU:
-        /* prevent a simple ALT press+release from activating the system menu,
-         * as that can get confusing on managed windows */
-        if ((WCHAR)lparam) goto failed;  /* got an explicit char */
-        if (GetMenu( hwnd )) goto failed;  /* window has a real menu */
-        if (!(GetWindowLongW( hwnd, GWL_STYLE ) & WS_SYSMENU)) goto failed;  /* no system menu */
-        TRACE( "ignoring SC_KEYMENU wp %lx lp %lx\n", wparam, lparam );
-        release_win_data( data );
-        return 0;
-
     default:
         goto failed;
     }
