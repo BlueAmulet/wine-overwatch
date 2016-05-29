@@ -704,9 +704,18 @@ NTSTATUS WINAPI IoInitializeTimer(PDEVICE_OBJECT DeviceObject,
 /***********************************************************************
  *           IoStartTimer   (NTOSKRNL.EXE.@)
  */
-void WINAPI IoStartTimer(PDEVICE_OBJECT DeviceObject)
+void WINAPI IoStartTimer( DEVICE_OBJECT *dev )
 {
-    FIXME( "stub: %p\n", DeviceObject );
+    FIXME( "stub: %p\n", dev );
+}
+
+
+/***********************************************************************
+ *           IoStopTimer   (NTOSKRNL.EXE.@)
+ */
+void WINAPI IoStopTimer( DEVICE_OBJECT *dev )
+{
+    FIXME( "stub: %p\n", dev );
 }
 
 
