@@ -364,7 +364,7 @@ LRESULT WINAPI DefDlgProcA( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
     LRESULT result = 0;
 
     /* Perform DIALOGINFO initialization if not done */
-    if(!(dlgInfo = DIALOG_get_info( hwnd, TRUE ))) return 0;
+    if (!(dlgInfo = DIALOG_get_info( hwnd, msg == WM_NCCREATE ))) return 0;
 
     SetWindowLongPtrW( hwnd, DWLP_MSGRESULT, 0 );
 
@@ -422,7 +422,7 @@ LRESULT WINAPI DefDlgProcW( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
     LRESULT result = 0;
 
     /* Perform DIALOGINFO initialization if not done */
-    if(!(dlgInfo = DIALOG_get_info( hwnd, TRUE ))) return 0;
+    if (!(dlgInfo = DIALOG_get_info( hwnd, msg == WM_NCCREATE ))) return 0;
 
     SetWindowLongPtrW( hwnd, DWLP_MSGRESULT, 0 );
 
