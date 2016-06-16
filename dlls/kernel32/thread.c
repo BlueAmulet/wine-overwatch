@@ -113,6 +113,18 @@ HANDLE WINAPI CreateRemoteThread( HANDLE hProcess, SECURITY_ATTRIBUTES *sa, SIZE
 }
 
 
+/***************************************************************************
+ *                  CreateRemoteThreadEx   (KERNEL32.@)
+ */
+HANDLE WINAPI CreateRemoteThreadEx( HANDLE hProcess, SECURITY_ATTRIBUTES *sa, SIZE_T stack,
+                                    LPTHREAD_START_ROUTINE start, LPVOID param, DWORD flags,
+                                    LPPROC_THREAD_ATTRIBUTE_LIST attrs, LPDWORD id )
+{
+    FIXME( "attribute list ignored\n" );
+    return CreateRemoteThread( hProcess, sa, stack, start, param, flags, id );
+}
+
+
 /***********************************************************************
  * OpenThread  [KERNEL32.@]   Retrieves a handle to a thread from its thread id
  */

@@ -85,7 +85,7 @@
 @ stdcall CreatePrivateObjectSecurityEx(ptr ptr ptr ptr long long long ptr) advapi32.CreatePrivateObjectSecurityEx
 @ stdcall CreatePrivateObjectSecurityWithMultipleInheritance(ptr ptr ptr ptr long long long long ptr) advapi32.CreatePrivateObjectSecurityWithMultipleInheritance
 @ stdcall CreateRemoteThread(long ptr long ptr long long ptr) kernel32.CreateRemoteThread
-@ stub CreateRemoteThreadEx
+@ stdcall CreateRemoteThreadEx(long ptr long ptr long long ptr ptr) kernel32.CreateRemoteThreadEx
 @ stdcall CreateRestrictedToken(long long long ptr long ptr long ptr ptr) advapi32.CreateRestrictedToken
 @ stdcall CreateSemaphoreExW(ptr long long wstr long long) kernel32.CreateSemaphoreExW
 @ stdcall CreateThread(ptr long ptr long long ptr) kernel32.CreateThread
