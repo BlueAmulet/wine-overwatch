@@ -1531,6 +1531,7 @@ void context_bind_dummy_textures(const struct wined3d_device *device, const stru
         GL_EXTCALL(glActiveTexture(GL_TEXTURE0 + i));
         checkGLcall("glActiveTexture");
 
+        gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_1D, device->dummy_textures.tex_1d);
         gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_2D, device->dummy_textures.tex_2d);
 
         if (gl_info->supported[ARB_TEXTURE_RECTANGLE])
@@ -1543,7 +1544,10 @@ void context_bind_dummy_textures(const struct wined3d_device *device, const stru
             gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_CUBE_MAP, device->dummy_textures.tex_cube);
 
         if (gl_info->supported[EXT_TEXTURE_ARRAY])
+        {
+            gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_1D_ARRAY, device->dummy_textures.tex_1d_array);
             gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_2D_ARRAY, device->dummy_textures.tex_2d_array);
+        }
 
         checkGLcall("Bind dummy textures");
     }
@@ -2423,6 +2427,14 @@ void context_bind_texture(struct wined3d_context *context, GLenum target, GLuint
         {
             case GL_NONE:
                 /* nothing to do */
+                break;
+            case GL_TEXTURE_1D:
+                gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_1D, device->dummy_textures.tex_1d);
+                checkGLcall("glBindTexture");
+                break;
+            case GL_TEXTURE_1D_ARRAY:
+                gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_1D_ARRAY, device->dummy_textures.tex_1d_array);
+                checkGLcall("glBindTexture");
                 break;
             case GL_TEXTURE_2D:
                 gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_2D, device->dummy_textures.tex_2d);
