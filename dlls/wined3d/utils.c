@@ -4015,6 +4015,7 @@ const char *debug_d3dresourcetype(enum wined3d_resource_type resource_type)
     {
 #define WINED3D_TO_STR(x) case x: return #x
         WINED3D_TO_STR(WINED3D_RTYPE_BUFFER);
+        WINED3D_TO_STR(WINED3D_RTYPE_TEXTURE_1D);
         WINED3D_TO_STR(WINED3D_RTYPE_TEXTURE_2D);
         WINED3D_TO_STR(WINED3D_RTYPE_TEXTURE_3D);
 #undef WINED3D_TO_STR
