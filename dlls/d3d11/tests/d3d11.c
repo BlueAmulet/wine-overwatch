@@ -3224,6 +3224,7 @@ static void test_create_rendertarget_view(void)
     D3D11_RENDER_TARGET_VIEW_DESC rtv_desc;
     D3D11_TEXTURE3D_DESC texture3d_desc;
     D3D11_TEXTURE2D_DESC texture2d_desc;
+    D3D11_TEXTURE1D_DESC texture1d_desc;
     D3D11_SUBRESOURCE_DATA data = {0};
     ULONG refcount, expected_refcount;
     D3D11_BUFFER_DESC buffer_desc;
@@ -3231,6 +3232,7 @@ static void test_create_rendertarget_view(void)
     ID3D11Device *device, *tmp;
     ID3D11Texture3D *texture3d;
     ID3D11Texture2D *texture2d;
+    ID3D11Texture1D *texture1d;
     ID3D11Resource *texture;
     ID3D11Buffer *buffer;
     IUnknown *iface;
@@ -3261,6 +3263,23 @@ static void test_create_rendertarget_view(void)
     }
     tests[] =
     {
+        {{ 1, 1, RGBA8_UNORM}, {0},                                    {RGBA8_UNORM, TEX_1D,       0}},
+        {{10, 1, RGBA8_UNORM}, {0},                                    {RGBA8_UNORM, TEX_1D,       0}},
+        {{10, 1, RGBA8_UNORM}, {FMT_UNKNOWN, TEX_1D,       0},         {RGBA8_UNORM, TEX_1D,       0}},
+        {{10, 1, RGBA8_UNORM}, {FMT_UNKNOWN, TEX_1D,       1},         {RGBA8_UNORM, TEX_1D,       1}},
+        {{10, 1, RGBA8_UNORM}, {FMT_UNKNOWN, TEX_1D,       9},         {RGBA8_UNORM, TEX_1D,       9}},
+        {{ 1, 1, RGBA8_TL},    {RGBA8_UNORM, TEX_1D,       0},         {RGBA8_UNORM, TEX_1D,       0}},
+        {{10, 1, RGBA8_TL},    {RGBA8_UNORM, TEX_1D,       0},         {RGBA8_UNORM, TEX_1D,       0}},
+        {{ 1, 4, RGBA8_UNORM}, {0},                                    {RGBA8_UNORM, TEX_1D_ARRAY, 0, 0, 4}},
+        {{10, 4, RGBA8_UNORM}, {0},                                    {RGBA8_UNORM, TEX_1D_ARRAY, 0, 0, 4}},
+        {{10, 4, RGBA8_UNORM}, {FMT_UNKNOWN, TEX_1D_ARRAY, 0, 0, ~0u}, {RGBA8_UNORM, TEX_1D_ARRAY, 0, 0, 4}},
+        {{10, 4, RGBA8_UNORM}, {FMT_UNKNOWN, TEX_1D_ARRAY, 1, 0, ~0u}, {RGBA8_UNORM, TEX_1D_ARRAY, 1, 0, 4}},
+        {{10, 4, RGBA8_UNORM}, {FMT_UNKNOWN, TEX_1D_ARRAY, 3, 0, ~0u}, {RGBA8_UNORM, TEX_1D_ARRAY, 3, 0, 4}},
+        {{10, 4, RGBA8_UNORM}, {FMT_UNKNOWN, TEX_1D_ARRAY, 5, 0, ~0u}, {RGBA8_UNORM, TEX_1D_ARRAY, 5, 0, 4}},
+        {{10, 4, RGBA8_UNORM}, {FMT_UNKNOWN, TEX_1D_ARRAY, 9, 0, ~0u}, {RGBA8_UNORM, TEX_1D_ARRAY, 9, 0, 4}},
+        {{10, 4, RGBA8_UNORM}, {FMT_UNKNOWN, TEX_1D_ARRAY, 0, 1, ~0u}, {RGBA8_UNORM, TEX_1D_ARRAY, 0, 1, 3}},
+        {{10, 4, RGBA8_UNORM}, {FMT_UNKNOWN, TEX_1D_ARRAY, 0, 2, ~0u}, {RGBA8_UNORM, TEX_1D_ARRAY, 0, 2, 2}},
+        {{10, 4, RGBA8_UNORM}, {FMT_UNKNOWN, TEX_1D_ARRAY, 0, 3, ~0u}, {RGBA8_UNORM, TEX_1D_ARRAY, 0, 3, 1}},
         {{ 1, 1, RGBA8_UNORM}, {0},                                    {RGBA8_UNORM, TEX_2D,       0}},
         {{10, 1, RGBA8_UNORM}, {0},                                    {RGBA8_UNORM, TEX_2D,       0}},
         {{10, 1, RGBA8_UNORM}, {FMT_UNKNOWN, TEX_2D,       0},         {RGBA8_UNORM, TEX_2D,       0}},
@@ -3425,6 +3444,12 @@ static void test_create_rendertarget_view(void)
     ID3D11RenderTargetView_Release(rtview);
     ID3D11Buffer_Release(buffer);
 
+    texture1d_desc.Width = 512;
+    texture1d_desc.Usage = D3D11_USAGE_DEFAULT;
+    texture1d_desc.BindFlags = D3D11_BIND_RENDER_TARGET;
+    texture1d_desc.CPUAccessFlags = 0;
+    texture1d_desc.MiscFlags = 0;
+
     texture2d_desc.Width = 512;
     texture2d_desc.Height = 512;
     texture2d_desc.SampleDesc.Count = 1;
@@ -3445,7 +3470,21 @@ static void test_create_rendertarget_view(void)
     {
         D3D11_RENDER_TARGET_VIEW_DESC *current_desc;
 
-        if (tests[i].expected_rtv_desc.dimension != D3D11_RTV_DIMENSION_TEXTURE3D)
+        if (tests[i].expected_rtv_desc.dimension == D3D11_RTV_DIMENSION_TEXTURE1D ||
+            tests[i].expected_rtv_desc.dimension == D3D11_RTV_DIMENSION_TEXTURE1DARRAY)
+        {
+            texture1d_desc.MipLevels = tests[i].texture.miplevel_count;
+            texture1d_desc.ArraySize = tests[i].texture.depth_or_array_size;
+            texture1d_desc.Format = tests[i].texture.format;
+
+            hr = ID3D11Device_CreateTexture1D(device, &texture1d_desc, NULL, &texture1d);
+            ok(SUCCEEDED(hr), "Test %u: Failed to create 2d texture, hr %#x.\n", i, hr);
+            texture = (ID3D11Resource *)texture1d;
+        }
+        else if (tests[i].expected_rtv_desc.dimension == D3D11_RTV_DIMENSION_TEXTURE2D ||
+                 tests[i].expected_rtv_desc.dimension == D3D11_RTV_DIMENSION_TEXTURE2DARRAY ||
+                 tests[i].expected_rtv_desc.dimension == D3D11_RTV_DIMENSION_TEXTURE2DMS ||
+                 tests[i].expected_rtv_desc.dimension == D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY)
         {
             texture2d_desc.MipLevels = tests[i].texture.miplevel_count;
             texture2d_desc.ArraySize = tests[i].texture.depth_or_array_size;
