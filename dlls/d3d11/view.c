@@ -344,6 +344,8 @@ static HRESULT normalize_rtv_desc(D3D11_RENDER_TARGET_VIEW_DESC *desc, ID3D11Res
 
         case D3D11_RESOURCE_DIMENSION_TEXTURE1D:
         {
+            const struct d3d_texture1d *texture;
+
             if (desc->ViewDimension != D3D11_RTV_DIMENSION_TEXTURE1D
                     && desc->ViewDimension != D3D11_RTV_DIMENSION_TEXTURE1DARRAY)
             {
@@ -351,8 +353,15 @@ static HRESULT normalize_rtv_desc(D3D11_RENDER_TARGET_VIEW_DESC *desc, ID3D11Res
                 return E_INVALIDARG;
             }
 
-            FIXME("Unhandled 1D texture resource.\n");
-            return S_OK;
+            if (!(texture = unsafe_impl_from_ID3D11Texture1D((ID3D11Texture1D *)resource)))
+            {
+                ERR("Cannot get implementation from ID3D11Texture1D.\n");
+                return E_FAIL;
+            }
+
+            format = texture->desc.Format;
+            layer_count = texture->desc.ArraySize;
+            break;
         }
 
         case D3D11_RESOURCE_DIMENSION_TEXTURE2D:
