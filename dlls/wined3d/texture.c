@@ -1123,6 +1123,12 @@ HRESULT CDECL wined3d_texture_update_desc(struct wined3d_texture *texture, UINT 
         return WINED3DERR_INVALIDCALL;
     }
 
+    if (texture->resource.type == WINED3D_RTYPE_TEXTURE_1D)
+    {
+        FIXME("Not yet supported for 1D textures.\n");
+        return WINED3DERR_INVALIDCALL;
+    }
+
     if (texture->resource.map_count)
     {
         WARN("Texture is mapped.\n");
