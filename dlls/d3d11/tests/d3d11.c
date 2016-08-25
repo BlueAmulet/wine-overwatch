@@ -5883,6 +5883,7 @@ static void test_texture(void)
     struct d3d11_test_context test_context;
     const struct texture *current_texture;
     D3D11_TEXTURE2D_DESC texture2d_desc;
+    D3D11_TEXTURE1D_DESC texture1d_desc;
     D3D11_SAMPLER_DESC sampler_desc;
     const struct shader *current_ps;
     D3D_FEATURE_LEVEL feature_level;
@@ -6564,6 +6565,11 @@ static void test_texture(void)
     texture2d_desc.CPUAccessFlags = 0;
     texture2d_desc.MiscFlags = 0;
 
+    texture1d_desc.Usage = D3D11_USAGE_DEFAULT;
+    texture1d_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    texture1d_desc.CPUAccessFlags = 0;
+    texture1d_desc.MiscFlags = 0;
+
     sampler_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
     sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
     sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
@@ -6642,7 +6648,19 @@ static void test_texture(void)
                     ok(SUCCEEDED(hr), "Test %u: Failed to create 2d texture, hr %#x.\n", i, hr);
                     texture = (ID3D11Resource *)texture2d;
                 }
+                else if (current_texture->dimension == D3D11_RESOURCE_DIMENSION_TEXTURE1D)
+                {
+                    ID3D11Texture1D *texture1d;
 
+                    texture1d_desc.Width = current_texture->width;
+                    texture1d_desc.MipLevels = current_texture->miplevel_count;
+                    texture1d_desc.ArraySize = current_texture->array_size;
+                    texture1d_desc.Format = current_texture->format;
+
+                    hr = ID3D11Device_CreateTexture1D(device, &texture1d_desc, current_texture->data, &texture1d);
+                    ok(SUCCEEDED(hr), "Test %u: Failed to create 2d texture, hr %#x.\n", i, hr);
+                    texture = (ID3D11Resource *)texture1d;
+                }
 
                 hr = ID3D11Device_CreateShaderResourceView(device, texture, NULL, &srv);
                 ok(SUCCEEDED(hr), "Test %u: Failed to create shader resource view, hr %#x.\n", i, hr);
@@ -6685,10 +6703,14 @@ static void test_texture(void)
         get_texture_readback(test_context.backbuffer, 0, &rb);
         for (y = 0; y < 4; ++y)
         {
+            int row = y;
+            if (test->texture && test->texture->dimension == D3D11_RESOURCE_DIMENSION_TEXTURE1D)
+                row = 0;
+
             for (x = 0; x < 4; ++x)
             {
                 color = get_readback_color(&rb, 80 + x * 160, 60 + y * 120);
-                ok(compare_color(color, test->expected_colors[y * 4 + x], 2),
+                ok(compare_color(color, test->expected_colors[row * 4 + x], 2),
                         "Test %u: Got unexpected color 0x%08x at (%u, %u).\n", i, color, x, y);
             }
         }
