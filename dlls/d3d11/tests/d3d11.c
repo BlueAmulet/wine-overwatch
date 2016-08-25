@@ -384,7 +384,25 @@ static void check_rtv_desc_(unsigned int line, const D3D11_RENDER_TARGET_VIEW_DE
     if (desc->ViewDimension != expected_desc->dimension)
         return;
 
-    if (desc->ViewDimension == D3D11_RTV_DIMENSION_TEXTURE2D)
+    if (desc->ViewDimension == D3D11_RTV_DIMENSION_TEXTURE1D)
+    {
+        ok_(__FILE__, line)(U(*desc).Texture1D.MipSlice == expected_desc->miplevel_idx,
+                "Got MipSlice %u, expected %u.\n",
+                U(*desc).Texture1D.MipSlice, expected_desc->miplevel_idx);
+    }
+    else if (desc->ViewDimension == D3D11_RTV_DIMENSION_TEXTURE1DARRAY)
+    {
+        ok_(__FILE__, line)(U(*desc).Texture1DArray.MipSlice == expected_desc->miplevel_idx,
+                "Got MipSlice %u, expected %u.\n",
+                U(*desc).Texture1DArray.MipSlice, expected_desc->miplevel_idx);
+        ok_(__FILE__, line)(U(*desc).Texture1DArray.FirstArraySlice == expected_desc->layer_idx,
+                "Got FirstArraySlice %u, expected %u.\n",
+                U(*desc).Texture1DArray.FirstArraySlice, expected_desc->layer_idx);
+        ok_(__FILE__, line)(U(*desc).Texture1DArray.ArraySize == expected_desc->layer_count,
+                "Got ArraySize %u, expected %u.\n",
+                U(*desc).Texture1DArray.ArraySize, expected_desc->layer_count);
+    }
+    else if (desc->ViewDimension == D3D11_RTV_DIMENSION_TEXTURE2D)
     {
         ok_(__FILE__, line)(U(*desc).Texture2D.MipSlice == expected_desc->miplevel_idx,
                 "Got MipSlice %u, expected %u.\n",
