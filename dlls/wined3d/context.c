@@ -128,7 +128,7 @@ static void context_attach_gl_texture_fbo(struct wined3d_context *context,
         gl_info->fbo_ops.glFramebufferTexture2D(fbo_target, attachment, GL_TEXTURE_2D, 0, 0);
         checkGLcall("glFramebufferTexture2D()");
     }
-    else if (resource->target == GL_TEXTURE_2D_ARRAY)
+    else if (resource->target == GL_TEXTURE_2D_ARRAY || resource->target == GL_TEXTURE_1D_ARRAY)
     {
         if (!gl_info->fbo_ops.glFramebufferTextureLayer)
         {
@@ -139,6 +139,12 @@ static void context_attach_gl_texture_fbo(struct wined3d_context *context,
         gl_info->fbo_ops.glFramebufferTextureLayer(fbo_target, attachment,
                 resource->object, resource->level, resource->layer);
         checkGLcall("glFramebufferTextureLayer()");
+    }
+    else if (resource->target == GL_TEXTURE_1D)
+    {
+        gl_info->fbo_ops.glFramebufferTexture1D(fbo_target, attachment,
+                resource->target, resource->object, resource->level);
+        checkGLcall("glFramebufferTexture1D()");
     }
     else
     {
