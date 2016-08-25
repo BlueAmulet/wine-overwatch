@@ -444,6 +444,9 @@ static HRESULT d3d_texture1d_init(struct d3d_texture1d *texture, struct d3d_devi
     unsigned int levels;
     HRESULT hr;
 
+    if (desc->MiscFlags & D3D11_RESOURCE_MISC_TEXTURECUBE)
+        return E_INVALIDARG;
+
     texture->ID3D11Texture1D_iface.lpVtbl = &d3d11_texture1d_vtbl;
     texture->ID3D10Texture1D_iface.lpVtbl = &d3d10_texture1d_vtbl;
     texture->refcount = 1;
