@@ -166,10 +166,21 @@ static UINT STDMETHODCALLTYPE d3d11_texture1d_GetEvictionPriority(ID3D11Texture1
 static void STDMETHODCALLTYPE d3d11_texture1d_GetDesc(ID3D11Texture1D *iface, D3D11_TEXTURE1D_DESC *desc)
 {
     struct d3d_texture1d *texture = impl_from_ID3D11Texture1D(iface);
+    struct wined3d_resource_desc wined3d_desc;
 
-    FIXME("iface %p, desc %p: semi-stub.\n", iface, desc);
+    TRACE("iface %p, desc %p.\n", iface, desc);
 
     *desc = texture->desc;
+
+    wined3d_mutex_lock();
+    wined3d_resource_get_desc(wined3d_texture_get_resource(texture->wined3d_texture), &wined3d_desc);
+    wined3d_mutex_unlock();
+
+    /* FIXME: Resizing swapchain buffers can cause these to change. We'd like
+     * to get everything from wined3d, but e.g. bind flags don't exist as such
+     * there (yet). */
+    desc->Width = wined3d_desc.width;
+    desc->Format = dxgi_format_from_wined3dformat(wined3d_desc.format);
 }
 
 static const struct ID3D11Texture1DVtbl d3d11_texture1d_vtbl =
