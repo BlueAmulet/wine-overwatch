@@ -1458,8 +1458,74 @@ static void texture1d_upload_data(struct wined3d_texture *texture, unsigned int 
         const struct wined3d_context *context, const struct wined3d_box *box, const struct wined3d_const_bo_address *data,
         unsigned int row_pitch, unsigned int slice_pitch)
 {
-    FIXME("texture %p, sub_resource_idx %u, context %p, box %p, data {%#x:%p}, row_pitch %#x, slice_pitch %#x: stub.\n",
+    struct wined3d_surface *surface = texture->sub_resources[sub_resource_idx].u.surface;
+    const struct wined3d_format *format = texture->resource.format;
+    unsigned int level = sub_resource_idx % texture->level_count;
+    const struct wined3d_gl_info *gl_info = context->gl_info;
+    const void *mem = data->addr;
+    void *converted_mem = NULL;
+    unsigned int width, x, update_w;
+
+    TRACE("texture %p, sub_resource_idx %u, context %p, box %p, data {%#x:%p}, row_pitch %#x, slice_pitch %#x.\n",
             texture, sub_resource_idx, context, box, data->buffer_object, data->addr, row_pitch, slice_pitch);
+
+    width = wined3d_texture_get_level_width(texture, level);
+
+    if (!box)
+    {
+        x = 0;
+        update_w = width;
+    }
+    else
+    {
+        x = box->left;
+        update_w = box->right - box->left;
+    }
+
+    if (format->convert)
+    {
+        unsigned int dst_row_pitch;
+
+        if (data->buffer_object)
+            ERR("Loading a converted texture from a PBO.\n");
+        if (texture->resource.format_flags & WINED3DFMT_FLAG_BLOCKS)
+            ERR("Converting a block-based format.\n");
+
+        dst_row_pitch = update_w * format->conv_byte_count;
+
+        converted_mem = HeapAlloc(GetProcessHeap(), 0, dst_row_pitch);
+        format->convert(data->addr, converted_mem, row_pitch, slice_pitch, dst_row_pitch, dst_row_pitch, update_w, 1, 1);
+        mem = converted_mem;
+    }
+
+    if (data->buffer_object)
+    {
+        GL_EXTCALL(glBindBuffer(GL_PIXEL_UNPACK_BUFFER, data->buffer_object));
+        checkGLcall("glBindBuffer");
+    }
+
+    if (surface->texture_target == GL_TEXTURE_1D_ARRAY)
+    {
+        gl_info->gl_ops.gl.p_glPixelStorei(GL_UNPACK_ROW_LENGTH, row_pitch / format->byte_count);
+
+        gl_info->gl_ops.gl.p_glTexSubImage2D(surface->texture_target, level, x, surface->texture_layer, update_w, 1, format->glFormat, format->glType, mem);
+        checkGLcall("glTexSubImage2D");
+
+        gl_info->gl_ops.gl.p_glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    }
+    else
+    {
+        gl_info->gl_ops.gl.p_glTexSubImage1D(surface->texture_target, level, x, update_w, format->glFormat, format->glType, mem);
+        checkGLcall("glTexSubImage1D");
+    }
+
+    if (data->buffer_object)
+    {
+        GL_EXTCALL(glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0));
+        checkGLcall("glBindBuffer");
+    }
+
+    HeapFree(GetProcessHeap(), 0, converted_mem);
 }
 
 /* Context activation is done by the caller. */
