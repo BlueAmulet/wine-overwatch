@@ -162,9 +162,21 @@ static HRESULT STDMETHODCALLTYPE d3d11_texture1d_SetPrivateData(ID3D11Texture1D 
 static HRESULT STDMETHODCALLTYPE d3d11_texture1d_SetPrivateDataInterface(ID3D11Texture1D *iface,
         REFGUID guid, const IUnknown *data)
 {
-    FIXME("iface %p, guid %s, data %p: stub.\n", iface, debugstr_guid(guid), data);
+    struct d3d_texture1d *texture = impl_from_ID3D11Texture1D(iface);
+    IDXGISurface *dxgi_surface;
+    HRESULT hr;
 
-    return E_FAIL;
+    TRACE("iface %p, guid %s, data %p.\n", iface, debugstr_guid(guid), data);
+
+    if (texture->dxgi_surface
+            && SUCCEEDED(IUnknown_QueryInterface(texture->dxgi_surface, &IID_IDXGISurface, (void **)&dxgi_surface)))
+    {
+        hr = IDXGISurface_SetPrivateDataInterface(dxgi_surface, guid, data);
+        IDXGISurface_Release(dxgi_surface);
+        return hr;
+    }
+
+    return d3d_set_private_data_interface(&texture->private_store, guid, data);
 }
 
 static void STDMETHODCALLTYPE d3d11_texture1d_GetType(ID3D11Texture1D *iface,
