@@ -57,6 +57,12 @@ static HRESULT STDMETHODCALLTYPE d3d11_texture1d_QueryInterface(ID3D11Texture1D 
         return S_OK;
     }
 
+    if (texture->dxgi_surface)
+    {
+        TRACE("Forwarding to dxgi surface.\n");
+        return IUnknown_QueryInterface(texture->dxgi_surface, riid, object);
+    }
+
     WARN("%s not implemented, returning E_NOINTERFACE.\n", debugstr_guid(riid));
 
     *object = NULL;
@@ -339,6 +345,7 @@ static void STDMETHODCALLTYPE d3d_texture1d_wined3d_object_released(void *parent
 {
     struct d3d_texture1d *texture = parent;
 
+    if (texture->dxgi_surface) IUnknown_Release(texture->dxgi_surface);
     wined3d_private_store_cleanup(&texture->private_store);
     HeapFree(GetProcessHeap(), 0, texture);
 }
@@ -388,6 +395,32 @@ static HRESULT d3d_texture1d_init(struct d3d_texture1d *texture, struct d3d_devi
         return hr;
     }
     texture->desc.MipLevels = levels;
+
+    if (desc->MipLevels == 1 && desc->ArraySize == 1)
+    {
+        IWineDXGIDevice *wine_device;
+
+        if (FAILED(hr = ID3D10Device1_QueryInterface(&device->ID3D10Device1_iface, &IID_IWineDXGIDevice,
+                (void **)&wine_device)))
+        {
+            ERR("Device should implement IWineDXGIDevice.\n");
+            wined3d_texture_decref(texture->wined3d_texture);
+            wined3d_mutex_unlock();
+            return E_FAIL;
+        }
+
+        hr = IWineDXGIDevice_create_surface(wine_device, texture->wined3d_texture, 0, NULL,
+                (IUnknown *)&texture->ID3D10Texture1D_iface, (void **)&texture->dxgi_surface);
+        IWineDXGIDevice_Release(wine_device);
+        if (FAILED(hr))
+        {
+            ERR("Failed to create DXGI surface, returning %#x\n", hr);
+            texture->dxgi_surface = NULL;
+            wined3d_texture_decref(texture->wined3d_texture);
+            wined3d_mutex_unlock();
+            return hr;
+        }
+    }
     wined3d_mutex_unlock();
 
     texture->device = &device->ID3D11Device_iface;
