@@ -122,17 +122,41 @@ static void STDMETHODCALLTYPE d3d11_texture1d_GetDevice(ID3D11Texture1D *iface, 
 static HRESULT STDMETHODCALLTYPE d3d11_texture1d_GetPrivateData(ID3D11Texture1D *iface,
         REFGUID guid, UINT *data_size, void *data)
 {
-    FIXME("iface %p, guid %s, data_size %p, data %p: stub.\n", iface, debugstr_guid(guid), data_size, data);
+    struct d3d_texture1d *texture = impl_from_ID3D11Texture1D(iface);
+    IDXGISurface *dxgi_surface;
+    HRESULT hr;
 
-    return E_FAIL;
+    TRACE("iface %p, guid %s, data_size %p, data %p.\n", iface, debugstr_guid(guid), data_size, data);
+
+    if (texture->dxgi_surface
+            && SUCCEEDED(IUnknown_QueryInterface(texture->dxgi_surface, &IID_IDXGISurface, (void **)&dxgi_surface)))
+    {
+        hr = IDXGISurface_GetPrivateData(dxgi_surface, guid, data_size, data);
+        IDXGISurface_Release(dxgi_surface);
+        return hr;
+    }
+
+    return d3d_get_private_data(&texture->private_store, guid, data_size, data);
 }
 
 static HRESULT STDMETHODCALLTYPE d3d11_texture1d_SetPrivateData(ID3D11Texture1D *iface,
         REFGUID guid, UINT data_size, const void *data)
 {
-    FIXME("iface %p, guid %s, data_size %u, data %p: stub.\n", iface, debugstr_guid(guid), data_size, data);
+    struct d3d_texture1d *texture = impl_from_ID3D11Texture1D(iface);
+    IDXGISurface *dxgi_surface;
+    HRESULT hr;
 
-    return E_FAIL;
+    TRACE("iface %p, guid %s, data_size %u, data %p.\n", iface, debugstr_guid(guid), data_size, data);
+
+    if (texture->dxgi_surface
+            && SUCCEEDED(IUnknown_QueryInterface(texture->dxgi_surface, &IID_IDXGISurface, (void **)&dxgi_surface)))
+    {
+        hr = IDXGISurface_SetPrivateData(dxgi_surface, guid, data_size, data);
+        IDXGISurface_Release(dxgi_surface);
+        return hr;
+    }
+
+    return d3d_set_private_data(&texture->private_store, guid, data_size, data);
 }
 
 static HRESULT STDMETHODCALLTYPE d3d11_texture1d_SetPrivateDataInterface(ID3D11Texture1D *iface,
