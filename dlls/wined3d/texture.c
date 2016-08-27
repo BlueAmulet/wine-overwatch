@@ -1599,6 +1599,29 @@ static void texture1d_download_data(struct wined3d_texture *texture, unsigned in
 }
 
 /* Context activation is done by the caller. */
+static void texture1d_srgb_transfer(struct wined3d_texture *texture, unsigned int sub_resource_idx,
+        struct wined3d_context *context, BOOL dest_is_srgb)
+{
+    struct wined3d_texture_sub_resource *sub_resource = &texture->sub_resources[sub_resource_idx];
+    unsigned int row_pitch, slice_pitch;
+    struct wined3d_bo_address data;
+
+    WARN_(d3d_perf)("Performing slow rgb/srgb 1d texture transfer.\n");
+    data.buffer_object = 0;
+    if (!(data.addr = HeapAlloc(GetProcessHeap(), 0, sub_resource->size)))
+        return;
+
+    wined3d_texture_get_pitch(texture, sub_resource_idx, &row_pitch, &slice_pitch);
+    wined3d_texture_bind_and_dirtify(texture, context, !dest_is_srgb);
+    texture1d_download_data(texture, sub_resource_idx, context, &data);
+    wined3d_texture_bind_and_dirtify(texture, context, dest_is_srgb);
+    texture1d_upload_data(texture, sub_resource_idx, context, NULL,
+            wined3d_const_bo_address(&data), row_pitch, slice_pitch);
+
+    HeapFree(GetProcessHeap(), 0, data.addr);
+}
+
+/* Context activation is done by the caller. */
 static BOOL texture1d_load_location(struct wined3d_texture *texture, unsigned int sub_resource_idx,
         struct wined3d_context *context, DWORD location)
 {
@@ -1653,6 +1676,14 @@ static BOOL texture1d_load_location(struct wined3d_texture *texture, unsigned in
                 wined3d_texture_bind_and_dirtify(texture, context, location == WINED3D_LOCATION_TEXTURE_SRGB);
                 wined3d_texture_get_pitch(texture, sub_resource_idx, &row_pitch, &slice_pitch);
                 texture1d_upload_data(texture, sub_resource_idx, context, NULL, &data, row_pitch, slice_pitch);
+            }
+            else if (sub_resource->locations & WINED3D_LOCATION_TEXTURE_RGB)
+            {
+                texture1d_srgb_transfer(texture, sub_resource_idx, context, TRUE);
+            }
+            else if (sub_resource->locations & WINED3D_LOCATION_TEXTURE_SRGB)
+            {
+                texture1d_srgb_transfer(texture, sub_resource_idx, context, FALSE);
             }
             else
             {
