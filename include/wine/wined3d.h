@@ -822,6 +822,37 @@ enum wined3d_display_rotation
     WINED3D_DISPLAY_ROTATION_270            = 4,
 };
 
+enum wined3d_format_support
+{
+    WINED3D_FORMAT_SUPPORT_BUFFER                      = 0x0000001,
+    WINED3D_FORMAT_SUPPORT_IA_VERTEX_BUFFER            = 0x0000002,
+    WINED3D_FORMAT_SUPPORT_IA_INDEX_BUFFER             = 0x0000004,
+    WINED3D_FORMAT_SUPPORT_SO_BUFFER                   = 0x0000008,
+    WINED3D_FORMAT_SUPPORT_TEXTURE1D                   = 0x0000010,
+    WINED3D_FORMAT_SUPPORT_TEXTURE2D                   = 0x0000020,
+    WINED3D_FORMAT_SUPPORT_TEXTURE3D                   = 0x0000040,
+    WINED3D_FORMAT_SUPPORT_TEXTURECUBE                 = 0x0000080,
+    WINED3D_FORMAT_SUPPORT_SHADER_LOAD                 = 0x0000100,
+    WINED3D_FORMAT_SUPPORT_SHADER_SAMPLE               = 0x0000200,
+    WINED3D_FORMAT_SUPPORT_SHADER_SAMPLE_COMPARISON    = 0x0000400,
+    WINED3D_FORMAT_SUPPORT_SHADER_SAMPLE_MONO_TEXT     = 0x0000800,
+    WINED3D_FORMAT_SUPPORT_MIP                         = 0x0001000,
+    WINED3D_FORMAT_SUPPORT_MIP_AUTOGEN                 = 0x0002000,
+    WINED3D_FORMAT_SUPPORT_RENDER_TARGET               = 0x0004000,
+    WINED3D_FORMAT_SUPPORT_BLENDABLE                   = 0x0008000,
+    WINED3D_FORMAT_SUPPORT_DEPTH_STENCIL               = 0x0010000,
+    WINED3D_FORMAT_SUPPORT_CPU_LOCKABLE                = 0x0020000,
+    WINED3D_FORMAT_SUPPORT_MULTISAMPLE_RESOLVE         = 0x0040000,
+    WINED3D_FORMAT_SUPPORT_DISPLAY                     = 0x0080000,
+    WINED3D_FORMAT_SUPPORT_CAST_WITHIN_BIT_LAYOUT      = 0x0100000,
+    WINED3D_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET    = 0x0200000,
+    WINED3D_FORMAT_SUPPORT_MULTISAMPLE_LOAD            = 0x0400000,
+    WINED3D_FORMAT_SUPPORT_SHADER_GATHER               = 0x0800000,
+    WINED3D_FORMAT_SUPPORT_BACK_BUFFER_CAST            = 0x1000000,
+    WINED3D_FORMAT_SUPPORT_TYPED_UNORDERED_ACCESS_VIEW = 0x2000000,
+    WINED3D_FORMAT_SUPPORT_SHADER_GATHER_COMPARISON    = 0x4000000,
+};
+
 #define WINED3DCOLORWRITEENABLE_RED                             (1u << 0)
 #define WINED3DCOLORWRITEENABLE_GREEN                           (1u << 1)
 #define WINED3DCOLORWRITEENABLE_BLUE                            (1u << 2)
@@ -2099,6 +2130,8 @@ HRESULT __cdecl wined3d_check_device_format(const struct wined3d *wined3d, UINT 
 HRESULT __cdecl wined3d_check_device_format_conversion(const struct wined3d *wined3d, UINT adapter_idx,
         enum wined3d_device_type device_type, enum wined3d_format_id source_format_id,
         enum wined3d_format_id target_format_id);
+void CDECL wined3d_check_device_format_support(struct wined3d_device *device,
+        enum wined3d_format_id check_format_id, UINT *support);
 HRESULT __cdecl wined3d_check_device_multisample_type(const struct wined3d *wined3d, UINT adapter_idx,
         enum wined3d_device_type device_type, enum wined3d_format_id surface_format_id, BOOL windowed,
         enum wined3d_multisample_type multisample_type, DWORD *quality_levels);
