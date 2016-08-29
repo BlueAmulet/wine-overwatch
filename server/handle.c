@@ -710,6 +710,52 @@ DECL_HANDLER(set_security_object)
     release_object( obj );
 }
 
+/* extract security labels from SACL */
+static int extract_security_label( ACL **out, const ACL *sacl )
+{
+    const ACE_HEADER *ace;
+    ACE_HEADER *label_ace;
+    size_t size = sizeof(ACL);
+    int i, count = 0;
+    ACL *label_acl;
+
+    *out = NULL;
+    if (!sacl) return 1;
+
+    ace = (const ACE_HEADER *)(sacl + 1);
+    for (i = 0; i < sacl->AceCount; i++, ace = ace_next( ace ))
+    {
+        if (ace->AceType == SYSTEM_MANDATORY_LABEL_ACE_TYPE)
+        {
+            size += ace->AceSize;
+            count++;
+        }
+    }
+
+    label_acl = mem_alloc( size );
+    if (!label_acl) return 0;
+
+    label_acl->AclRevision = sacl->AclRevision;
+    label_acl->Sbz1 = 0;
+    label_acl->AclSize = size;
+    label_acl->AceCount = count;
+    label_acl->Sbz2 = 0;
+    label_ace = (ACE_HEADER *)(label_acl + 1);
+
+    ace = (const ACE_HEADER *)(sacl + 1);
+    for (i = 0; i < sacl->AceCount; i++, ace = ace_next( ace ))
+    {
+        if (ace->AceType == SYSTEM_MANDATORY_LABEL_ACE_TYPE)
+        {
+            memcpy( label_ace, ace, ace->AceSize );
+            label_ace = (ACE_HEADER *)ace_next( label_ace );
+        }
+    }
+
+    *out = label_acl;
+    return 1;
+}
+
 DECL_HANDLER(get_security_object)
 {
     const struct security_descriptor *sd;
@@ -719,6 +765,7 @@ DECL_HANDLER(get_security_object)
     int present;
     const SID *owner, *group;
     const ACL *sacl, *dacl;
+    ACL *label_acl = NULL;
 
     if (req->security_info & SACL_SECURITY_INFORMATION)
         access |= ACCESS_SYSTEM_SECURITY;
@@ -746,6 +793,12 @@ DECL_HANDLER(get_security_object)
         sacl = sd_get_sacl( sd, &present );
         if (req->security_info & SACL_SECURITY_INFORMATION && present)
             req_sd.sacl_len = sd->sacl_len;
+        else if (req->security_info & LABEL_SECURITY_INFORMATION && present)
+        {
+            if (!extract_security_label( &label_acl, sacl )) goto error;
+            req_sd.sacl_len = label_acl ? label_acl->AclSize : 0;
+            sacl = label_acl;
+        }
         else
             req_sd.sacl_len = 0;
 
@@ -776,7 +829,9 @@ DECL_HANDLER(get_security_object)
             set_error(STATUS_BUFFER_TOO_SMALL);
     }
 
+error:
     release_object( obj );
+    free( label_acl );
 }
 
 struct enum_handle_info

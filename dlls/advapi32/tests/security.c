@@ -6435,16 +6435,51 @@ static void test_integrity(void)
     static SID low_level = {SID_REVISION, 1, {SECURITY_MANDATORY_LABEL_AUTHORITY},
                                                     {SECURITY_MANDATORY_LOW_RID}};
     SYSTEM_MANDATORY_LABEL_ACE *ace;
+    char buffer_sd[SECURITY_DESCRIPTOR_MIN_LENGTH];
+    SECURITY_DESCRIPTOR *sd2, *sd = (SECURITY_DESCRIPTOR *)&buffer_sd;
+    SECURITY_ATTRIBUTES sa;
     char buffer_acl[256];
     ACL *pAcl = (ACL*)&buffer_acl;
-    BOOL ret, found;
-    DWORD index;
+    ACL *sAcl;
+    BOOL defaulted, present, ret, found;
+    HANDLE handle;
+    DWORD index, size;
 
     if (!pAddMandatoryAce)
     {
         win_skip("Mandatory integrity labels not supported, skipping test\n");
         return;
     }
+
+    ret = InitializeSecurityDescriptor(sd, SECURITY_DESCRIPTOR_REVISION);
+    ok(ret, "InitializeSecurityDescriptor failed with %u\n", GetLastError());
+
+    sa.nLength              = sizeof(SECURITY_ATTRIBUTES);
+    sa.lpSecurityDescriptor = sd;
+    sa.bInheritHandle       = FALSE;
+
+    handle = CreateEventA(&sa, TRUE, TRUE, "test_event");
+    ok(handle != NULL, "CreateEventA failed with error %u\n", GetLastError());
+
+    ret = GetKernelObjectSecurity(handle, LABEL_SECURITY_INFORMATION, NULL, 0, &size);
+    ok(!ret && GetLastError() == ERROR_INSUFFICIENT_BUFFER,
+       "GetKernelObjectSecurity failed with %u\n", GetLastError());
+
+    sd2 = HeapAlloc(GetProcessHeap(), 0, size);
+    ret = GetKernelObjectSecurity(handle, LABEL_SECURITY_INFORMATION, sd2, size, &size);
+    ok(ret, "GetKernelObjectSecurity failed %u\n", GetLastError());
+
+    sAcl = (void *)0xdeadbeef;
+    present = TRUE;
+    defaulted = TRUE;
+    ret = GetSecurityDescriptorSacl(sd2, &present, &sAcl, &defaulted);
+    ok(ret, "GetSecurityDescriptorSacl failed with %u\n", GetLastError());
+    todo_wine ok(!present, "sAcl is present\n");
+    todo_wine ok(sAcl == (void *)0xdeadbeef, "sAcl is set\n");
+    ok(!defaulted, "sAcl defaulted\n");
+
+    HeapFree(GetProcessHeap(), 0, sd2);
+    CloseHandle(handle);
 
     ret = InitializeAcl(pAcl, 256, ACL_REVISION);
     ok(ret, "InitializeAcl failed with %u\n", GetLastError());
@@ -6470,6 +6505,47 @@ static void test_integrity(void)
         }
     }
     ok(found, "Could not find mandatory label\n");
+
+    ret = SetSecurityDescriptorSacl(sd, TRUE, pAcl, FALSE);
+    ok(ret, "SetSecurityDescriptorSacl failed with %u\n", GetLastError());
+
+    handle = CreateEventA(&sa, TRUE, TRUE, "test_event");
+    ok(handle != NULL, "CreateEventA failed with error %u\n", GetLastError());
+
+    ret = GetKernelObjectSecurity(handle, LABEL_SECURITY_INFORMATION, NULL, 0, &size);
+    ok(!ret && GetLastError() == ERROR_INSUFFICIENT_BUFFER,
+       "GetKernelObjectSecurity failed with %u\n", GetLastError());
+
+    sd2 = HeapAlloc(GetProcessHeap(), 0, size);
+    ret = GetKernelObjectSecurity(handle, LABEL_SECURITY_INFORMATION, sd2, size, &size);
+    ok(ret, "GetKernelObjectSecurity failed %u\n", GetLastError());
+
+    sAcl = (void *)0xdeadbeef;
+    present = FALSE;
+    defaulted = TRUE;
+    ret = GetSecurityDescriptorSacl(sd2, &present, &sAcl, &defaulted);
+    ok(ret, "GetSecurityDescriptorSacl failed with %u\n", GetLastError());
+    ok(present, "sAcl not present\n");
+    ok(sAcl != (void *)0xdeadbeef, "sAcl not set\n");
+    ok(!defaulted, "sAcl defaulted\n");
+
+    index = 0;
+    found = FALSE;
+    while (pGetAce( sAcl, index++, (void **)&ace ))
+    {
+        if (ace->Header.AceType == SYSTEM_MANDATORY_LABEL_ACE_TYPE)
+        {
+            found = TRUE;
+            ok(ace->Header.AceFlags == 0, "Expected 0 as flags, got %x\n", ace->Header.AceFlags);
+            ok(ace->Mask == SYSTEM_MANDATORY_LABEL_NO_WRITE_UP,
+               "Expected SYSTEM_MANDATORY_LABEL_NO_WRITE_UP as flag, got %x\n", ace->Mask);
+            ok(EqualSid(&ace->SidStart, &low_level), "Expected low integrity level\n");
+        }
+    }
+    ok(found, "Could not find mandatory label\n");
+
+    HeapFree(GetProcessHeap(), 0, sd2);
+    CloseHandle(handle);
 }
 
 static void test_AdjustTokenPrivileges(void)
