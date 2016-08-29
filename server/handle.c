@@ -683,12 +683,89 @@ DECL_HANDLER(get_object_info)
     release_object( obj );
 }
 
+/* merge security labels into an existing SACL */
+static int merge_security_labels( ACL **out, const ACL *old_sacl, const ACL *new_sacl )
+{
+    const ACE_HEADER *ace;
+    ACE_HEADER *merged_ace;
+    size_t size = sizeof(ACL);
+    int i, count = 0;
+    BYTE revision = ACL_REVISION;
+    ACL *merged_acl;
+
+    *out = NULL;
+    if (!old_sacl && !new_sacl) return 1;
+
+    if (old_sacl)
+    {
+        revision = max( revision, old_sacl->AclRevision );
+        ace = (const ACE_HEADER *)(old_sacl + 1);
+        for (i = 0; i < old_sacl->AceCount; i++, ace = ace_next( ace ))
+        {
+            if (ace->AceType == SYSTEM_MANDATORY_LABEL_ACE_TYPE) continue;
+            size += ace->AceSize;
+            count++;
+        }
+    }
+
+    if (new_sacl)
+    {
+        revision = max( revision, new_sacl->AclRevision );
+        ace = (const ACE_HEADER *)(new_sacl + 1);
+        for (i = 0; i < new_sacl->AceCount; i++, ace = ace_next( ace ))
+        {
+            /* FIXME: Should this be handled as error? */
+            if (ace->AceType != SYSTEM_MANDATORY_LABEL_ACE_TYPE) continue;
+            size += ace->AceSize;
+            count++;
+        }
+    }
+
+    merged_acl = mem_alloc( size );
+    if (!merged_acl) return 0;
+
+    merged_acl->AclRevision = revision;
+    merged_acl->Sbz1 = 0;
+    merged_acl->AclSize = size;
+    merged_acl->AceCount = count;
+    merged_acl->Sbz2 = 0;
+    merged_ace = (ACE_HEADER *)(merged_acl + 1);
+
+    if (old_sacl)
+    {
+        ace = (const ACE_HEADER *)(old_sacl + 1);
+        for (i = 0; i < old_sacl->AceCount; i++, ace = ace_next( ace ))
+        {
+            if (ace->AceType == SYSTEM_MANDATORY_LABEL_ACE_TYPE) continue;
+            memcpy( merged_ace, ace, ace->AceSize );
+            merged_ace = (ACE_HEADER *)ace_next( merged_ace );
+        }
+    }
+
+    if (new_sacl)
+    {
+        ace = (const ACE_HEADER *)(new_sacl + 1);
+        for (i = 0; i < new_sacl->AceCount; i++, ace = ace_next( ace ))
+        {
+            if (ace->AceType != SYSTEM_MANDATORY_LABEL_ACE_TYPE) continue;
+            memcpy( merged_ace, ace, ace->AceSize );
+            merged_ace = (ACE_HEADER *)ace_next( merged_ace );
+        }
+    }
+
+    *out = merged_acl;
+    return 1;
+}
+
 DECL_HANDLER(set_security_object)
 {
     data_size_t sd_size = get_req_data_size();
     const struct security_descriptor *sd = get_req_data();
+    struct security_descriptor *merged_sd = NULL;
+    ACL *merged_sacl = NULL;
     struct object *obj;
     unsigned int access = 0;
+    unsigned int security_info = req->security_info;
 
     if (!sd_is_valid( sd, sd_size ))
     {
@@ -697,7 +774,8 @@ DECL_HANDLER(set_security_object)
     }
 
     if (req->security_info & OWNER_SECURITY_INFORMATION ||
-        req->security_info & GROUP_SECURITY_INFORMATION)
+        req->security_info & GROUP_SECURITY_INFORMATION ||
+        req->security_info & LABEL_SECURITY_INFORMATION)
         access |= WRITE_OWNER;
     if (req->security_info & SACL_SECURITY_INFORMATION)
         access |= ACCESS_SYSTEM_SECURITY;
@@ -706,8 +784,57 @@ DECL_HANDLER(set_security_object)
 
     if (!(obj = get_handle_obj( current->process, req->handle, access, NULL ))) return;
 
-    obj->ops->set_sd( obj, sd, req->security_info );
+    /* check if we need to merge the security labels with the existing SACLs */
+    if ((security_info & LABEL_SECURITY_INFORMATION) &&
+        !(security_info & SACL_SECURITY_INFORMATION) &&
+        (sd->control & SE_SACL_PRESENT))
+    {
+        const struct security_descriptor *old_sd;
+        const ACL *old_sacl = NULL;
+        int present;
+        char *ptr;
+
+        if ((old_sd = obj->ops->get_sd( obj )))
+        {
+            old_sacl = sd_get_sacl( old_sd, &present );
+            if (!present) old_sacl = NULL;
+        }
+
+        if (!merge_security_labels( &merged_sacl, old_sacl, sd_get_sacl( sd, &present ) )) goto error;
+
+        /* allocate a new SD and replace SACL with merged version */
+        merged_sd = mem_alloc( sizeof(*merged_sd) + sd->owner_len + sd->group_len +
+                               (merged_sacl ? merged_sacl->AclSize : 0) + sd->dacl_len );
+        if (!merged_sd) goto error;
+
+        merged_sd->control   = sd->control;
+        merged_sd->owner_len = sd->owner_len;
+        merged_sd->group_len = sd->group_len;
+        merged_sd->sacl_len  = merged_sacl ? merged_sacl->AclSize : 0;
+        merged_sd->dacl_len  = sd->dacl_len;
+
+        ptr = (char *)(merged_sd + 1);
+        memcpy( ptr, sd_get_owner( sd ), sd->owner_len );
+        ptr += sd->owner_len;
+        memcpy( ptr, sd_get_group( sd ), sd->group_len );
+        ptr += sd->group_len;
+        if (merged_sacl)
+        {
+            memcpy( ptr, merged_sacl, merged_sacl->AclSize );
+            ptr += merged_sacl->AclSize;
+        }
+        memcpy( ptr, sd_get_dacl( sd, &present ), sd->dacl_len );
+
+        security_info |= SACL_SECURITY_INFORMATION;
+        sd = merged_sd;
+    }
+
+    obj->ops->set_sd( obj, sd, security_info );
+
+error:
     release_object( obj );
+    free( merged_sacl );
+    free( merged_sd );
 }
 
 /* extract security labels from SACL */
