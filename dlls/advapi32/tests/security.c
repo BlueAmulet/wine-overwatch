@@ -65,6 +65,7 @@
 static BOOL (WINAPI *pAddAccessAllowedAceEx)(PACL, DWORD, DWORD, DWORD, PSID);
 static BOOL (WINAPI *pAddAccessDeniedAceEx)(PACL, DWORD, DWORD, DWORD, PSID);
 static BOOL (WINAPI *pAddAuditAccessAceEx)(PACL, DWORD, DWORD, DWORD, PSID, BOOL, BOOL);
+static BOOL (WINAPI *pAddMandatoryAce)(PACL,DWORD,DWORD,DWORD,PSID);
 static VOID (WINAPI *pBuildTrusteeWithSidA)( PTRUSTEEA pTrustee, PSID pSid );
 static VOID (WINAPI *pBuildTrusteeWithNameA)( PTRUSTEEA pTrustee, LPSTR pName );
 static VOID (WINAPI *pBuildTrusteeWithObjectsAndNameA)( PTRUSTEEA pTrustee,
@@ -199,6 +200,7 @@ static void init(void)
     pAddAccessAllowedAceEx = (void *)GetProcAddress(hmod, "AddAccessAllowedAceEx");
     pAddAccessDeniedAceEx = (void *)GetProcAddress(hmod, "AddAccessDeniedAceEx");
     pAddAuditAccessAceEx = (void *)GetProcAddress(hmod, "AddAuditAccessAceEx");
+    pAddMandatoryAce = (void *)GetProcAddress(hmod, "AddMandatoryAce");
     pCheckTokenMembership = (void *)GetProcAddress(hmod, "CheckTokenMembership");
     pConvertStringSecurityDescriptorToSecurityDescriptorA =
         (void *)GetProcAddress(hmod, "ConvertStringSecurityDescriptorToSecurityDescriptorA" );
@@ -6070,6 +6072,48 @@ static void test_default_dacl_owner_sid(void)
     CloseHandle( handle );
 }
 
+static void test_integrity(void)
+{
+    static SID low_level = {SID_REVISION, 1, {SECURITY_MANDATORY_LABEL_AUTHORITY},
+                                                    {SECURITY_MANDATORY_LOW_RID}};
+    SYSTEM_MANDATORY_LABEL_ACE *ace;
+    char buffer_acl[256];
+    ACL *pAcl = (ACL*)&buffer_acl;
+    BOOL ret, found;
+    DWORD index;
+
+    if (!pAddMandatoryAce)
+    {
+        win_skip("Mandatory integrity labels not supported, skipping test\n");
+        return;
+    }
+
+    ret = InitializeAcl(pAcl, 256, ACL_REVISION);
+    ok(ret, "InitializeAcl failed with %u\n", GetLastError());
+
+    ret = pAddMandatoryAce(pAcl, ACL_REVISION, 0, 0x1234, &low_level);
+    ok(!ret, "AddMandatoryAce succeeded\n");
+    ok(GetLastError() == ERROR_INVALID_PARAMETER, "Expected ERROR_INVALID_PARAMETER got %u\n", GetLastError());
+
+    ret = pAddMandatoryAce(pAcl, ACL_REVISION, 0, SYSTEM_MANDATORY_LABEL_NO_WRITE_UP, &low_level);
+    ok(ret, "AddMandatoryAce failed with %u\n", GetLastError());
+
+    index = 0;
+    found = FALSE;
+    while (pGetAce( pAcl, index++, (void **)&ace ))
+    {
+        if (ace->Header.AceType == SYSTEM_MANDATORY_LABEL_ACE_TYPE)
+        {
+            found = TRUE;
+            ok(ace->Header.AceFlags == 0, "Expected 0 as flags, got %x\n", ace->Header.AceFlags);
+            ok(ace->Mask == SYSTEM_MANDATORY_LABEL_NO_WRITE_UP,
+               "Expected SYSTEM_MANDATORY_LABEL_NO_WRITE_UP as flag, got %x\n", ace->Mask);
+            ok(EqualSid(&ace->SidStart, &low_level), "Expected low integrity level\n");
+        }
+    }
+    ok(found, "Could not find mandatory label\n");
+}
+
 static void test_AdjustTokenPrivileges(void)
 {
     TOKEN_PRIVILEGES tp, prev;
@@ -6450,6 +6494,7 @@ START_TEST(security)
     test_CreateRestrictedToken();
     test_TokenIntegrityLevel();
     test_default_dacl_owner_sid();
+    test_integrity();
     test_AdjustTokenPrivileges();
     test_AddAce();
     test_system_security_access();
