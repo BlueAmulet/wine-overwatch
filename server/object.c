@@ -567,33 +567,44 @@ struct security_descriptor *set_sd_from_token_internal( const struct security_de
     }
     else new_sd.group_len = 0;
 
-    new_sd.control |= SE_SACL_PRESENT;
     sacl = sd_get_sacl( sd, &present );
     if (set_info & SACL_SECURITY_INFORMATION && present)
+    {
+        new_sd.control |= SE_SACL_PRESENT;
         new_sd.sacl_len = sd->sacl_len;
+    }
     else
     {
         if (old_sd) sacl = sd_get_sacl( old_sd, &present );
 
         if (old_sd && present)
+        {
+            new_sd.control |= SE_SACL_PRESENT;
             new_sd.sacl_len = old_sd->sacl_len;
+        }
         else
             new_sd.sacl_len = 0;
     }
 
-    new_sd.control |= SE_DACL_PRESENT;
     dacl = sd_get_dacl( sd, &present );
     if (set_info & DACL_SECURITY_INFORMATION && present)
+    {
+        new_sd.control |= SE_DACL_PRESENT;
         new_sd.dacl_len = sd->dacl_len;
+    }
     else
     {
         if (old_sd) dacl = sd_get_dacl( old_sd, &present );
 
         if (old_sd && present)
+        {
+            new_sd.control |= SE_DACL_PRESENT;
             new_sd.dacl_len = old_sd->dacl_len;
+        }
         else if (token)
         {
             dacl = token_get_default_dacl( token );
+            new_sd.control |= SE_DACL_PRESENT;
             new_sd.dacl_len = dacl->AclSize;
         }
         else new_sd.dacl_len = 0;
