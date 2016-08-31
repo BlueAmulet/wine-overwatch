@@ -339,6 +339,7 @@ static void STDMETHODCALLTYPE d3d_texture1d_wined3d_object_released(void *parent
 {
     struct d3d_texture1d *texture = parent;
 
+    wined3d_private_store_cleanup(&texture->private_store);
     HeapFree(GetProcessHeap(), 0, texture);
 }
 
@@ -360,6 +361,7 @@ static HRESULT d3d_texture1d_init(struct d3d_texture1d *texture, struct d3d_devi
     texture->desc = *desc;
 
     wined3d_mutex_lock();
+    wined3d_private_store_init(&texture->private_store);
 
     wined3d_desc.resource_type = WINED3D_RTYPE_TEXTURE_1D;
     wined3d_desc.format = wined3dformat_from_dxgi_format(desc->Format);
@@ -379,6 +381,7 @@ static HRESULT d3d_texture1d_init(struct d3d_texture1d *texture, struct d3d_devi
             texture, &d3d_texture1d_wined3d_parent_ops, &texture->wined3d_texture)))
     {
         WARN("Failed to create wined3d texture, hr %#x.\n", hr);
+        wined3d_private_store_cleanup(&texture->private_store);
         wined3d_mutex_unlock();
         if (hr == WINED3DERR_NOTAVAILABLE || hr == WINED3DERR_INVALIDCALL)
             hr = E_INVALIDARG;
