@@ -73,6 +73,9 @@ static ULONG STDMETHODCALLTYPE d3d11_texture1d_AddRef(ID3D11Texture1D *iface)
     if (refcount == 1)
     {
         ID3D11Device_AddRef(texture->device);
+        wined3d_mutex_lock();
+        wined3d_texture_incref(texture->wined3d_texture);
+        wined3d_mutex_unlock();
     }
 
     return refcount;
@@ -89,6 +92,9 @@ static ULONG STDMETHODCALLTYPE d3d11_texture1d_Release(ID3D11Texture1D *iface)
     {
         ID3D11Device *device = texture->device;
 
+        wined3d_mutex_lock();
+        wined3d_texture_decref(texture->wined3d_texture);
+        wined3d_mutex_unlock();
         /* Release the device last, it may cause the wined3d device to be
          * destroyed. */
         ID3D11Device_Release(device);
@@ -329,13 +335,57 @@ struct d3d_texture1d *unsafe_impl_from_ID3D10Texture1D(ID3D10Texture1D *iface)
     return CONTAINING_RECORD(iface, struct d3d_texture1d, ID3D10Texture1D_iface);
 }
 
+static void STDMETHODCALLTYPE d3d_texture1d_wined3d_object_released(void *parent)
+{
+    struct d3d_texture1d *texture = parent;
+
+    HeapFree(GetProcessHeap(), 0, texture);
+}
+
+static const struct wined3d_parent_ops d3d_texture1d_wined3d_parent_ops =
+{
+    d3d_texture1d_wined3d_object_released,
+};
+
 static HRESULT d3d_texture1d_init(struct d3d_texture1d *texture, struct d3d_device *device,
         const D3D11_TEXTURE1D_DESC *desc, const D3D11_SUBRESOURCE_DATA *data)
 {
+    struct wined3d_resource_desc wined3d_desc;
+    unsigned int levels;
+    HRESULT hr;
+
     texture->ID3D11Texture1D_iface.lpVtbl = &d3d11_texture1d_vtbl;
     texture->ID3D10Texture1D_iface.lpVtbl = &d3d10_texture1d_vtbl;
     texture->refcount = 1;
     texture->desc = *desc;
+
+    wined3d_mutex_lock();
+
+    wined3d_desc.resource_type = WINED3D_RTYPE_TEXTURE_1D;
+    wined3d_desc.format = wined3dformat_from_dxgi_format(desc->Format);
+    wined3d_desc.multisample_type = WINED3D_MULTISAMPLE_NONE;
+    wined3d_desc.multisample_quality = 0;
+    wined3d_desc.usage = wined3d_usage_from_d3d11(desc->BindFlags, desc->Usage);
+    wined3d_desc.pool = WINED3D_POOL_DEFAULT;
+    wined3d_desc.width = desc->Width;
+    wined3d_desc.height = 1;
+    wined3d_desc.depth = 1;
+    wined3d_desc.size = 0;
+
+    levels = desc->MipLevels ? desc->MipLevels : wined3d_log2i(max(desc->Width, 1)) + 1;
+
+    if (FAILED(hr = wined3d_texture_create(device->wined3d_device, &wined3d_desc,
+            desc->ArraySize, levels, 0, (struct wined3d_sub_resource_data *)data,
+            texture, &d3d_texture1d_wined3d_parent_ops, &texture->wined3d_texture)))
+    {
+        WARN("Failed to create wined3d texture, hr %#x.\n", hr);
+        wined3d_mutex_unlock();
+        if (hr == WINED3DERR_NOTAVAILABLE || hr == WINED3DERR_INVALIDCALL)
+            hr = E_INVALIDARG;
+        return hr;
+    }
+    texture->desc.MipLevels = levels;
+    wined3d_mutex_unlock();
 
     texture->device = &device->ID3D11Device_iface;
     ID3D11Device_AddRef(texture->device);

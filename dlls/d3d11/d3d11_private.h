@@ -111,6 +111,7 @@ struct d3d_texture1d
     ID3D10Texture1D ID3D10Texture1D_iface;
     LONG refcount;
 
+    struct wined3d_texture *wined3d_texture;
     D3D11_TEXTURE1D_DESC desc;
     ID3D11Device *device;
 };
