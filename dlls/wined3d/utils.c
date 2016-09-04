@@ -1613,6 +1613,10 @@ static const struct wined3d_format_texture_info format_texture_info[] =
             GL_RGBA_INTEGER,            GL_INT,                           0,
             WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_RENDERTARGET,
             EXT_TEXTURE_INTEGER,        NULL},
+    {WINED3DFMT_R24_UNORM_X8_TYPELESS,  GL_DEPTH_COMPONENT24_ARB,         GL_DEPTH_COMPONENT24_ARB,               0,
+            GL_DEPTH_COMPONENT,         GL_UNSIGNED_INT_24_8,             0,
+            WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_DEPTH,
+            ARB_DEPTH_TEXTURE,          NULL},
     /* Vendor-specific formats */
     {WINED3DFMT_ATI1N,                  GL_COMPRESSED_RED_RGTC1,          GL_COMPRESSED_RED_RGTC1,                0,
             GL_RED,                     GL_UNSIGNED_BYTE,                 0,
