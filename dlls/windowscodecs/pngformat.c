@@ -319,11 +319,6 @@ MAKE_FUNCPTR(png_get_tRNS);
 MAKE_FUNCPTR(png_set_bgr);
 MAKE_FUNCPTR(png_set_crc_action);
 MAKE_FUNCPTR(png_set_error_fn);
-#ifdef HAVE_PNG_SET_EXPAND_GRAY_1_2_4_TO_8
-MAKE_FUNCPTR(png_set_expand_gray_1_2_4_to_8);
-#else
-MAKE_FUNCPTR(png_set_gray_1_2_4_to_8);
-#endif
 MAKE_FUNCPTR(png_set_filler);
 MAKE_FUNCPTR(png_set_filter);
 MAKE_FUNCPTR(png_set_gray_to_rgb);
@@ -388,11 +383,6 @@ static void *load_libpng(void)
         LOAD_FUNCPTR(png_set_bgr);
         LOAD_FUNCPTR(png_set_crc_action);
         LOAD_FUNCPTR(png_set_error_fn);
-#ifdef HAVE_PNG_SET_EXPAND_GRAY_1_2_4_TO_8
-        LOAD_FUNCPTR(png_set_expand_gray_1_2_4_to_8);
-#else
-        LOAD_FUNCPTR(png_set_gray_1_2_4_to_8);
-#endif
         LOAD_FUNCPTR(png_set_filler);
         LOAD_FUNCPTR(png_set_filter);
         LOAD_FUNCPTR(png_set_gray_to_rgb);
@@ -585,6 +575,8 @@ static HRESULT WINAPI PngDecoder_Initialize(IWICBitmapDecoder *iface, IStream *p
     int num_trans;
     png_uint_32 transparency;
     png_color_16p trans_values;
+    png_colorp png_palette;
+    int num_palette;
     jmp_buf jmpbuf;
     BYTE chunk_type[4];
     ULONG chunk_size;
@@ -651,25 +643,11 @@ static HRESULT WINAPI PngDecoder_Initialize(IWICBitmapDecoder *iface, IStream *p
     /* check for color-keyed alpha */
     transparency = ppng_get_tRNS(This->png_ptr, This->info_ptr, &trans, &num_trans, &trans_values);
 
-    if (transparency && color_type != PNG_COLOR_TYPE_PALETTE)
-    {
-        /* expand to RGBA */
-        if (color_type == PNG_COLOR_TYPE_GRAY)
-        {
-            if (bit_depth < 8)
-            {
-#ifdef HAVE_PNG_SET_EXPAND_GRAY_1_2_4_TO_8
-                ppng_set_expand_gray_1_2_4_to_8(This->png_ptr);
-#else
-                ppng_set_gray_1_2_4_to_8(This->png_ptr);
-#endif
-                bit_depth = 8;
-            }
-            ppng_set_gray_to_rgb(This->png_ptr);
-        }
-        ppng_set_tRNS_to_alpha(This->png_ptr);
-        color_type = PNG_COLOR_TYPE_RGB_ALPHA;
-    }
+    if (!ppng_get_PLTE(This->png_ptr, This->info_ptr, &png_palette, &num_palette))
+        num_palette = 0;
+
+    TRACE("color_type %d, bit_depth %d, transparency %d, num_palette %d\n",
+          color_type, bit_depth, transparency, num_palette);
 
     switch (color_type)
     {
