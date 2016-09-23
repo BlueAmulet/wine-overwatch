@@ -826,7 +826,7 @@ static void check_bmp_format(IStream *stream, const WICPixelFormatGUID *format)
     else if (IsEqualGUID(format, &GUID_WICPixelFormat32bppBGR))
     {
         ok(bih.bV5Width == 4, "wrong width %u\n", bih.bV5Width);
-        ok(bih.bV5Height == 2 || bih.bV5Height == -2 /* Wine */, "wrong height %u\n", bih.bV5Height);
+        ok(bih.bV5Height == 2, "wrong height %u\n", bih.bV5Height);
 
         ok(bih.bV5Planes == 1, "wrong Planes %d\n", bih.bV5Planes);
         ok(bih.bV5BitCount == 32, "wrong BitCount %d\n", bih.bV5BitCount);
