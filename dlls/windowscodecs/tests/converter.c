@@ -723,13 +723,13 @@ static void check_tiff_format(IStream *stream, const WICPixelFormatGUID *format)
     }
     else if (IsEqualGUID(format, &GUID_WICPixelFormat2bppIndexed))
     {
-        ok(width == 32, "wrong width %u\n", width);
+        ok(width == 16, "wrong width %u\n", width);
         ok(height == 2, "wrong height %u\n", height);
 
-        ok(bps == 1, "wrong bps %d\n", bps);
+        ok(bps == 2, "wrong bps %d\n", bps);
         ok(photo == 3, "wrong photometric %d\n", photo);
         ok(samples == 1, "wrong samples %d\n", samples);
-        ok(colormap == 6, "wrong colormap %d\n", colormap);
+        ok(colormap == 12, "wrong colormap %d\n", colormap);
     }
     else if (IsEqualGUID(format, &GUID_WICPixelFormat4bppIndexed))
     {
@@ -1060,8 +1060,9 @@ static void test_multi_encoder(const struct bitmap_data **srcs, const CLSID* cls
                     memcpy(&pixelformat, srcs[i]->format, sizeof(GUID));
                     hr = IWICBitmapFrameEncode_SetPixelFormat(frameencode, &pixelformat);
                     ok(SUCCEEDED(hr), "SetPixelFormat failed, hr=%x\n", hr);
-                    ok(IsEqualGUID(&pixelformat, dsts[i]->format), "SetPixelFormat changed the format to %s (%s)\n",
-                       wine_dbgstr_guid(&pixelformat), name);
+                    ok(IsEqualGUID(&pixelformat, dsts[i]->format) ||
+                       broken(IsEqualGUID(clsid_encoder, &CLSID_WICTiffEncoder) && srcs[i]->bpp == 2 && IsEqualGUID(&pixelformat, &GUID_WICPixelFormat4bppIndexed)),
+                       "SetPixelFormat changed the format to %s (%s)\n", wine_dbgstr_guid(&pixelformat), name);
 
                     hr = IWICBitmapFrameEncode_SetSize(frameencode, srcs[i]->width, srcs[i]->height);
                     ok(SUCCEEDED(hr), "SetSize failed, hr=%x\n", hr);
@@ -1213,6 +1214,15 @@ static void test_multi_encoder(const struct bitmap_data **srcs, const CLSID* cls
                                     ok(colors[3] == 0xff444444, "got %08x (%s)\n", colors[3], name);
                                     ok(colors[4] == 0xff555555, "got %08x (%s)\n", colors[4], name);
                                     ok(colors[5] == 0xff000000, "got %08x (%s)\n", colors[5], name);
+                                }
+                                else if (IsEqualGUID(dsts[i]->format, &GUID_WICPixelFormat2bppIndexed))
+                                {
+                                    ok(count == 4, "expected 4, got %u (%s)\n", count, name);
+
+                                    ok(colors[0] == 0xff111111, "got %08x (%s)\n", colors[0], name);
+                                    ok(colors[1] == 0xff222222, "got %08x (%s)\n", colors[1], name);
+                                    ok(colors[2] == 0xff333333, "got %08x (%s)\n", colors[2], name);
+                                    ok(colors[3] == 0xff444444, "got %08x (%s)\n", colors[3], name);
                                 }
                                 else if (IsEqualGUID(dsts[i]->format, &GUID_WICPixelFormat4bppIndexed))
                                 {
@@ -1403,17 +1413,14 @@ if (!strcmp(winetest_platform, "windows")) /* FIXME: enable once implemented in 
 
     test_encoder(&testdata_BlackWhite, &CLSID_WICTiffEncoder,
                  &testdata_BlackWhite, &CLSID_WICTiffDecoder, "TIFF encoder BlackWhite");
-if (!strcmp(winetest_platform, "windows")) /* FIXME: enable once implemented in Wine */
-{
     test_encoder(&testdata_1bppIndexed, &CLSID_WICTiffEncoder,
                  &testdata_1bppIndexed, &CLSID_WICTiffDecoder, "TIFF encoder 1bppIndexed");
     test_encoder(&testdata_2bppIndexed, &CLSID_WICTiffEncoder,
-                 &testdata_4bppIndexed, &CLSID_WICTiffDecoder, "TIFF encoder 2bppIndexed");
+                 &testdata_2bppIndexed, &CLSID_WICTiffDecoder, "TIFF encoder 2bppIndexed");
     test_encoder(&testdata_4bppIndexed, &CLSID_WICTiffEncoder,
                  &testdata_4bppIndexed, &CLSID_WICTiffDecoder, "TIFF encoder 4bppIndexed");
     test_encoder(&testdata_8bppIndexed, &CLSID_WICTiffEncoder,
                  &testdata_8bppIndexed, &CLSID_WICTiffDecoder, "TIFF encoder 8bppIndexed");
-}
     test_encoder(&testdata_24bppBGR, &CLSID_WICTiffEncoder,
                  &testdata_24bppBGR, &CLSID_WICTiffDecoder, "TIFF encoder 24bppBGR");
 
