@@ -153,7 +153,7 @@ static void create_display_keys(HKEY enumKey, int index, DISPLAY_DEVICEW *disp)
 {
     static const WCHAR fmtW[] = {'1','3','&','1','2','3','4','5','&','%','d',0};
     HKEY devKey, intKey;
-    WCHAR buffer[50];
+    WCHAR *str, buffer[50];
     LONG l;
 
     l = RegCreateKeyExW(enumKey, disp->DeviceID, 0, NULL, 0, KEY_ALL_ACCESS,
@@ -167,6 +167,12 @@ static void create_display_keys(HKEY enumKey, int index, DISPLAY_DEVICEW *disp)
     {
         RegSetValueExW(intKey, ClassGUID, 0, REG_SZ, (BYTE *)displayGUIDW, sizeof(displayGUIDW));
         RegSetValueExW(intKey, Driver, 0, REG_SZ, (BYTE *)ddriverGUIDW, sizeof(ddriverGUIDW));
+        if ((str = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, (strlenW(disp->DeviceID) + 2) * sizeof(WCHAR))))
+        {
+            strcpyW(str, disp->DeviceID); /* we need two \0 for REG_MULTI_SZ */
+            RegSetValueExW(intKey, HardwareId, 0, REG_MULTI_SZ, (BYTE *)str, (strlenW(str) + 2) * sizeof(WCHAR));
+            HeapFree(GetProcessHeap(), 0, str);
+        }
         RegCloseKey(intKey);
     }
 
