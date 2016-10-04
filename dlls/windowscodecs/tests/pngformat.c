@@ -275,15 +275,16 @@ static const char png_color_profile[] = {
 
 static IWICImagingFactory *factory;
 
-static IWICBitmapDecoder *create_decoder(const void *image_data, UINT image_size)
+static HRESULT create_decoder(const void *image_data, UINT image_size, IWICBitmapDecoder **decoder)
 {
     HGLOBAL hmem;
     BYTE *data;
     HRESULT hr;
-    IWICBitmapDecoder *decoder = NULL;
     IStream *stream;
     GUID format;
     LONG refcount;
+
+    *decoder = NULL;
 
     hmem = GlobalAlloc(0, image_size);
     data = GlobalLock(hmem);
@@ -293,19 +294,19 @@ static IWICBitmapDecoder *create_decoder(const void *image_data, UINT image_size
     hr = CreateStreamOnHGlobal(hmem, TRUE, &stream);
     ok(hr == S_OK, "CreateStreamOnHGlobal error %#x\n", hr);
 
-    hr = IWICImagingFactory_CreateDecoderFromStream(factory, stream, NULL, 0, &decoder);
-    ok(hr == S_OK, "CreateDecoderFromStream error %#x\n", hr);
-    if (FAILED(hr)) return NULL;
+    hr = IWICImagingFactory_CreateDecoderFromStream(factory, stream, NULL, 0, decoder);
+    if (hr == S_OK)
+    {
+        hr = IWICBitmapDecoder_GetContainerFormat(*decoder, &format);
+        ok(hr == S_OK, "GetContainerFormat error %#x\n", hr);
+        ok(IsEqualGUID(&format, &GUID_ContainerFormatPng),
+           "wrong container format %s\n", wine_dbgstr_guid(&format));
 
-    hr = IWICBitmapDecoder_GetContainerFormat(decoder, &format);
-    ok(hr == S_OK, "GetContainerFormat error %#x\n", hr);
-    ok(IsEqualGUID(&format, &GUID_ContainerFormatPng),
-       "wrong container format %s\n", wine_dbgstr_guid(&format));
+        refcount = IStream_Release(stream);
+        ok(refcount > 0, "expected stream refcount > 0\n");
+    }
 
-    refcount = IStream_Release(stream);
-    ok(refcount > 0, "expected stream refcount > 0\n");
-
-    return decoder;
+    return hr;
 }
 
 static WCHAR *save_profile( BYTE *buffer, UINT size )
@@ -341,9 +342,9 @@ static void test_color_contexts(void)
     BYTE *buffer;
     BOOL ret;
 
-    decoder = create_decoder(png_no_color_profile, sizeof(png_no_color_profile));
-    ok(decoder != 0, "Failed to load PNG image data\n");
-    if (!decoder) return;
+    hr = create_decoder(png_no_color_profile, sizeof(png_no_color_profile), &decoder);
+    ok(hr == S_OK, "Failed to load PNG image data %#x\n", hr);
+    if (hr != S_OK) return;
 
     /* global color context */
     hr = IWICBitmapDecoder_GetColorContexts(decoder, 0, NULL, NULL);
@@ -369,9 +370,9 @@ static void test_color_contexts(void)
     IWICBitmapFrameDecode_Release(frame);
     IWICBitmapDecoder_Release(decoder);
 
-    decoder = create_decoder(png_color_profile, sizeof(png_color_profile));
-    ok(decoder != 0, "Failed to load PNG image data\n");
-    if (!decoder) return;
+    hr = create_decoder(png_color_profile, sizeof(png_color_profile), &decoder);
+    ok(hr == S_OK, "Failed to load PNG image data %#x\n", hr);
+    if (hr != S_OK) return;
 
     /* global color context */
     count = 0xdeadbeef;
@@ -547,9 +548,9 @@ static void test_png_palette(void)
     UINT count, ret;
     WICColor color[256];
 
-    decoder = create_decoder(png_PLTE_tRNS, sizeof(png_PLTE_tRNS));
-    ok(decoder != 0, "Failed to load PNG image data\n");
-    if (!decoder) return;
+    hr = create_decoder(png_PLTE_tRNS, sizeof(png_PLTE_tRNS), &decoder);
+    ok(hr == S_OK, "Failed to load PNG image data %#x\n", hr);
+    if (hr != S_OK) return;
 
     hr = IWICBitmapDecoder_GetFrame(decoder, 0, &frame);
     ok(hr == S_OK, "GetFrame error %#x\n", hr);
@@ -617,9 +618,9 @@ static void test_color_formats(void)
         buf[24] = td[i].bit_depth;
         buf[25] = td[i].color_type;
 
-        decoder = create_decoder(buf, sizeof(buf));
-        ok(decoder != NULL, "Failed to load PNG image data\n");
-        if (!decoder) continue;
+        hr = create_decoder(buf, sizeof(buf), &decoder);
+        ok(hr == S_OK, "Failed to load PNG image data %#x\n", hr);
+        if (hr != S_OK) return;
 
         hr = IWICBitmapDecoder_GetFrame(decoder, 0, &frame);
         ok(hr == S_OK, "GetFrame error %#x\n", hr);
