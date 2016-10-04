@@ -725,7 +725,6 @@ static void test_color_formats(void)
 
         hr = create_decoder(buf, sizeof(buf), &decoder);
         if (!is_valid_png_type_depth(td[i].color_type, td[i].bit_depth, TRUE))
-todo_wine
             ok(hr == WINCODEC_ERR_UNKNOWNIMAGEFORMAT, "%d: wrong error %#x\n", i, hr);
         else
 todo_wine_if(td[i].todo_load)
@@ -754,7 +753,6 @@ next_1:
 
         hr = create_decoder(buf, sizeof(buf), &decoder);
         if (!is_valid_png_type_depth(td[i].color_type, td[i].bit_depth, TRUE))
-todo_wine
             ok(hr == WINCODEC_ERR_UNKNOWNIMAGEFORMAT, "%d: wrong error %#x\n", i, hr);
         else
 todo_wine_if(td[i].todo_load)
@@ -783,7 +781,6 @@ next_2:
 
         hr = create_decoder(buf, sizeof(buf), &decoder);
         if (!is_valid_png_type_depth(td[i].color_type, td[i].bit_depth, FALSE))
-todo_wine
             ok(hr == WINCODEC_ERR_UNKNOWNIMAGEFORMAT, "%d: wrong error %#x\n", i, hr);
         else
 todo_wine_if(td[i].todo_load)
@@ -811,7 +808,6 @@ next_3:
 
         hr = create_decoder(buf, sizeof(buf), &decoder);
         if (!is_valid_png_type_depth(td[i].color_type, td[i].bit_depth, FALSE))
-todo_wine
             ok(hr == WINCODEC_ERR_UNKNOWNIMAGEFORMAT, "%d: wrong error %#x\n", i, hr);
         else
 todo_wine_if(td[i].todo_load)
