@@ -660,14 +660,22 @@ static HRESULT WINAPI PngDecoder_Initialize(IWICBitmapDecoder *iface, IStream *p
         This->bpp = bit_depth;
         switch (bit_depth)
         {
-        case 1: This->format = &GUID_WICPixelFormatBlackWhite; break;
-        case 2: This->format = &GUID_WICPixelFormat2bppGray; break;
-        case 4: This->format = &GUID_WICPixelFormat4bppGray; break;
-        case 8: This->format = &GUID_WICPixelFormat8bppGray; break;
+        case 1:
+            This->format = num_palette ? &GUID_WICPixelFormat1bppIndexed : &GUID_WICPixelFormatBlackWhite;
+            break;
+        case 2:
+            This->format = num_palette ? &GUID_WICPixelFormat2bppIndexed : &GUID_WICPixelFormat2bppGray;
+            break;
+        case 4:
+            This->format = num_palette ? &GUID_WICPixelFormat4bppIndexed : &GUID_WICPixelFormat4bppGray;
+            break;
+        case 8:
+            This->format = num_palette ? &GUID_WICPixelFormat8bppIndexed : &GUID_WICPixelFormat8bppGray;
+            break;
         case 16: This->format = &GUID_WICPixelFormat16bppGray; break;
         default:
             ERR("invalid grayscale bit depth: %i\n", bit_depth);
-            hr = E_FAIL;
+            hr = WINCODEC_ERR_UNKNOWNIMAGEFORMAT;
             goto end;
         }
         break;
