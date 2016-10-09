@@ -353,25 +353,59 @@ VkResult WINAPI vkCreateInstance( const VkInstanceCreateInfo *pCreateInfo,
 VkResult WINAPI vkEnumerateInstanceExtensionProperties( const char *pLayerName,
         uint32_t *pPropertyCount, VkExtensionProperties *pProperties )
 {
+    VkExtensionProperties *native_props;
+    uint32_t native_prop_count;
+    BOOL found = FALSE;
     VkResult res;
-    int i;
+    int i, j;
 
     TRACE( "(%p, %p, %p)\n", pLayerName, pPropertyCount, pProperties );
 
-    res = p_vkEnumerateInstanceExtensionProperties( pLayerName, pPropertyCount, pProperties );
-    if ((res == VK_SUCCESS || res == VK_INCOMPLETE) && pProperties)
+    res = p_vkEnumerateInstanceExtensionProperties( pLayerName, &native_prop_count, NULL );
+    if (res != VK_SUCCESS)
+        return res;
+
+    native_props = HeapAlloc( GetProcessHeap(), 0, sizeof(*native_props) * native_prop_count );
+    if (!native_props)
+        return VK_ERROR_OUT_OF_HOST_MEMORY;
+
+    res = p_vkEnumerateInstanceExtensionProperties( pLayerName, &native_prop_count, native_props );
+    if (res != VK_SUCCESS)
     {
-        for (i = 0; i < *pPropertyCount; i++)
-        {
-            if (!strcmp( pProperties[i].extensionName, "VK_KHR_xcb_surface" ) ||
-                !strcmp( pProperties[i].extensionName, "VK_KHR_xlib_surface" ))
-            {
-                TRACE( "replacing %s -> VK_KHR_win32_surface\n", debugstr_a(pProperties[i].extensionName) );
-                strcpy( pProperties[i].extensionName, "VK_KHR_win32_surface" );
-                pProperties[i].specVersion = 6;
-            }
-        }
+        HeapFree( GetProcessHeap(), 0, native_props );
+        return res;
     }
 
+    for (i = 0, j = 0; i < native_prop_count; i++)
+    {
+        if (!strcmp( native_props[i].extensionName, "VK_KHR_xcb_surface" ) ||
+            !strcmp( native_props[i].extensionName, "VK_KHR_xlib_surface" ))
+        {
+            TRACE( "found %s for VK_KHR_win32_surface support\n", debugstr_a(native_props[i].extensionName) );
+
+            if (found)
+                continue;
+
+            strcpy( native_props[i].extensionName, "VK_KHR_win32_surface" );
+            native_props[i].specVersion = 6;
+            found = TRUE;
+        }
+
+        if (!pProperties)
+        {
+            j++;
+            continue;
+        }
+
+        if (j >= *pPropertyCount)
+        {
+            res = VK_INCOMPLETE;
+            break;
+        }
+        pProperties[j++] = native_props[i];
+    }
+
+    *pPropertyCount = j;
+    HeapFree( GetProcessHeap(), 0, native_props );
     return res;
 }
