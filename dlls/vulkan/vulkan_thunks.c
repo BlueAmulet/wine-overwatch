@@ -1769,12 +1769,8 @@ VkDisplayModePropertiesKHR_host *convert_VkDisplayModePropertiesKHR(
 {
     TRACE( "(%p, %p)\n", out, in );
 
-    if (!in) return NULL;
-
-    out->displayMode    = in->displayMode;
-    out->parameters     = in->parameters;
-
-    return out;
+    /* return-only type, skipping conversion */
+    return in ? out : NULL;
 }
 void release_VkDisplayModePropertiesKHR( VkDisplayModePropertiesKHR *out,
         VkDisplayModePropertiesKHR_host *in )
@@ -1825,12 +1821,8 @@ VkDisplayPlanePropertiesKHR_host *convert_VkDisplayPlanePropertiesKHR(
 {
     TRACE( "(%p, %p)\n", out, in );
 
-    if (!in) return NULL;
-
-    out->currentDisplay     = in->currentDisplay;
-    out->currentStackIndex  = in->currentStackIndex;
-
-    return out;
+    /* return-only type, skipping conversion */
+    return in ? out : NULL;
 }
 void release_VkDisplayPlanePropertiesKHR( VkDisplayPlanePropertiesKHR *out,
         VkDisplayPlanePropertiesKHR_host *in )
@@ -1871,6 +1863,124 @@ void release_VkDisplayPlanePropertiesKHR_array( VkDisplayPlanePropertiesKHR *out
 
     for (i = 0; i < count; i++)
         release_VkDisplayPlanePropertiesKHR( out ? &out[i] : NULL, &in[i] );
+    HeapFree( GetProcessHeap(), 0, in );
+}
+#endif /* defined(USE_STRUCT_CONVERSION) */
+
+#if defined(USE_STRUCT_CONVERSION)
+VkImageFormatProperties_host *convert_VkImageFormatProperties( VkImageFormatProperties_host *out,
+        const VkImageFormatProperties *in )
+{
+    TRACE( "(%p, %p)\n", out, in );
+
+    /* return-only type, skipping conversion */
+    return in ? out : NULL;
+}
+void release_VkImageFormatProperties( VkImageFormatProperties *out,
+        VkImageFormatProperties_host *in )
+{
+    TRACE( "(%p, %p)\n", out, in );
+
+    if (!in || !out) return;
+
+    out->maxExtent          = in->maxExtent;
+    out->maxMipLevels       = in->maxMipLevels;
+    out->maxArrayLayers     = in->maxArrayLayers;
+    out->sampleCounts       = in->sampleCounts;
+    out->maxResourceSize    = in->maxResourceSize;
+}
+
+VkImageFormatProperties_host *convert_VkImageFormatProperties_array(
+        const VkImageFormatProperties *in, int count )
+{
+    VkImageFormatProperties_host *out;
+    int i;
+
+    TRACE( "(%p, %d)\n", in, count );
+
+    if (!in) return NULL;
+
+    out = HeapAlloc( GetProcessHeap(), 0, count * sizeof(*out) );
+    for (i = 0; i < count; i++)
+        convert_VkImageFormatProperties( &out[i], &in[i] );
+
+    return out;
+}
+
+void release_VkImageFormatProperties_array( VkImageFormatProperties *out,
+        VkImageFormatProperties_host *in, int count )
+{
+    int i;
+
+    TRACE( "(%p, %p, %d)\n", out, in, count );
+
+    if (!in) return;
+
+    for (i = 0; i < count; i++)
+        release_VkImageFormatProperties( out ? &out[i] : NULL, &in[i] );
+    HeapFree( GetProcessHeap(), 0, in );
+}
+#endif /* defined(USE_STRUCT_CONVERSION) */
+
+#if defined(USE_STRUCT_CONVERSION)
+VkExternalImageFormatPropertiesNV_host *convert_VkExternalImageFormatPropertiesNV(
+        VkExternalImageFormatPropertiesNV_host *out, const VkExternalImageFormatPropertiesNV *in )
+{
+    TRACE( "(%p, %p)\n", out, in );
+
+    if (!in) return NULL;
+
+    convert_VkImageFormatProperties( &out->imageFormatProperties, &in->imageFormatProperties );
+    out->externalMemoryFeatures         = in->externalMemoryFeatures;
+    out->exportFromImportedHandleTypes  = in->exportFromImportedHandleTypes;
+    out->compatibleHandleTypes          = in->compatibleHandleTypes;
+
+    return out;
+}
+void release_VkExternalImageFormatPropertiesNV( VkExternalImageFormatPropertiesNV *out,
+        VkExternalImageFormatPropertiesNV_host *in )
+{
+    TRACE( "(%p, %p)\n", out, in );
+
+    if (!in) return;
+
+    release_VkImageFormatProperties( out ? &out->imageFormatProperties : NULL, &in->imageFormatProperties );
+
+    if (!out) return;
+
+    out->externalMemoryFeatures         = in->externalMemoryFeatures;
+    out->exportFromImportedHandleTypes  = in->exportFromImportedHandleTypes;
+    out->compatibleHandleTypes          = in->compatibleHandleTypes;
+}
+
+VkExternalImageFormatPropertiesNV_host *convert_VkExternalImageFormatPropertiesNV_array(
+        const VkExternalImageFormatPropertiesNV *in, int count )
+{
+    VkExternalImageFormatPropertiesNV_host *out;
+    int i;
+
+    TRACE( "(%p, %d)\n", in, count );
+
+    if (!in) return NULL;
+
+    out = HeapAlloc( GetProcessHeap(), 0, count * sizeof(*out) );
+    for (i = 0; i < count; i++)
+        convert_VkExternalImageFormatPropertiesNV( &out[i], &in[i] );
+
+    return out;
+}
+
+void release_VkExternalImageFormatPropertiesNV_array( VkExternalImageFormatPropertiesNV *out,
+        VkExternalImageFormatPropertiesNV_host *in, int count )
+{
+    int i;
+
+    TRACE( "(%p, %p, %d)\n", out, in, count );
+
+    if (!in) return;
+
+    for (i = 0; i < count; i++)
+        release_VkExternalImageFormatPropertiesNV( out ? &out[i] : NULL, &in[i] );
     HeapFree( GetProcessHeap(), 0, in );
 }
 #endif /* defined(USE_STRUCT_CONVERSION) */
@@ -3046,11 +3156,31 @@ static void null_vkCmdDrawIndexedIndirect( VkCommandBuffer commandBuffer, VkBuff
             wine_dbgstr_longlong(offset), drawCount, stride );
 }
 
+static void null_vkCmdDrawIndexedIndirectCountAMD( VkCommandBuffer commandBuffer, VkBuffer buffer,
+        VkDeviceSize offset, VkBuffer countBuffer, VkDeviceSize countBufferOffset,
+        uint32_t maxDrawCount, uint32_t stride )
+{
+    FIXME( "(%p, %s, %s, %s, %s, %u, %u) not supported\n", commandBuffer,
+            wine_dbgstr_longlong(buffer), wine_dbgstr_longlong(offset),
+            wine_dbgstr_longlong(countBuffer), wine_dbgstr_longlong(countBufferOffset),
+            maxDrawCount, stride );
+}
+
 static void null_vkCmdDrawIndirect( VkCommandBuffer commandBuffer, VkBuffer buffer,
         VkDeviceSize offset, uint32_t drawCount, uint32_t stride )
 {
     FIXME( "(%p, %s, %s, %u, %u) not supported\n", commandBuffer, wine_dbgstr_longlong(buffer),
             wine_dbgstr_longlong(offset), drawCount, stride );
+}
+
+static void null_vkCmdDrawIndirectCountAMD( VkCommandBuffer commandBuffer, VkBuffer buffer,
+        VkDeviceSize offset, VkBuffer countBuffer, VkDeviceSize countBufferOffset,
+        uint32_t maxDrawCount, uint32_t stride )
+{
+    FIXME( "(%p, %s, %s, %s, %s, %u, %u) not supported\n", commandBuffer,
+            wine_dbgstr_longlong(buffer), wine_dbgstr_longlong(offset),
+            wine_dbgstr_longlong(countBuffer), wine_dbgstr_longlong(countBufferOffset),
+            maxDrawCount, stride );
 }
 
 static void null_vkCmdEndQuery( VkCommandBuffer commandBuffer, VkQueryPool queryPool,
@@ -3187,7 +3317,7 @@ static void null_vkCmdSetViewport( VkCommandBuffer commandBuffer, uint32_t first
 }
 
 static void null_vkCmdUpdateBuffer( VkCommandBuffer commandBuffer, VkBuffer dstBuffer,
-        VkDeviceSize dstOffset, VkDeviceSize dataSize, const uint32_t *pData )
+        VkDeviceSize dstOffset, VkDeviceSize dataSize, const void *pData )
 {
     FIXME( "(%p, %s, %s, %s, %p) not supported\n", commandBuffer, wine_dbgstr_longlong(dstBuffer),
             wine_dbgstr_longlong(dstOffset), wine_dbgstr_longlong(dataSize), pData );
@@ -3764,6 +3894,17 @@ static VkResult null_vkGetPhysicalDeviceDisplayPropertiesKHR( VkPhysicalDevice p
     return VK_ERROR_INCOMPATIBLE_DRIVER;
 }
 
+static VkResult null_vkGetPhysicalDeviceExternalImageFormatPropertiesNV(
+        VkPhysicalDevice physicalDevice, VkFormat format, VkImageType type, VkImageTiling tiling,
+        VkImageUsageFlags usage, VkImageCreateFlags flags,
+        VkExternalMemoryHandleTypeFlagsNV externalHandleType,
+        VkExternalImageFormatPropertiesNV_host *pExternalImageFormatProperties )
+{
+    FIXME( "(%p, %d, %d, %d, %u, %u, %u, %p) not supported\n", physicalDevice, format, type,
+            tiling, usage, flags, externalHandleType, pExternalImageFormatProperties );
+    return VK_ERROR_INCOMPATIBLE_DRIVER;
+}
+
 static void null_vkGetPhysicalDeviceFeatures( VkPhysicalDevice physicalDevice,
         VkPhysicalDeviceFeatures *pFeatures )
 {
@@ -4058,8 +4199,12 @@ void (*p_vkCmdDrawIndexed)( VkCommandBuffer, uint32_t, uint32_t, uint32_t, int32
         null_vkCmdDrawIndexed;
 void (*p_vkCmdDrawIndexedIndirect)( VkCommandBuffer, VkBuffer, VkDeviceSize, uint32_t, uint32_t ) =
         null_vkCmdDrawIndexedIndirect;
+void (*p_vkCmdDrawIndexedIndirectCountAMD)( VkCommandBuffer, VkBuffer, VkDeviceSize, VkBuffer,
+        VkDeviceSize, uint32_t, uint32_t ) = null_vkCmdDrawIndexedIndirectCountAMD;
 void (*p_vkCmdDrawIndirect)( VkCommandBuffer, VkBuffer, VkDeviceSize, uint32_t, uint32_t ) =
         null_vkCmdDrawIndirect;
+void (*p_vkCmdDrawIndirectCountAMD)( VkCommandBuffer, VkBuffer, VkDeviceSize, VkBuffer,
+        VkDeviceSize, uint32_t, uint32_t ) = null_vkCmdDrawIndirectCountAMD;
 void (*p_vkCmdEndQuery)( VkCommandBuffer, VkQueryPool, uint32_t ) = null_vkCmdEndQuery;
 void (*p_vkCmdEndRenderPass)( VkCommandBuffer ) = null_vkCmdEndRenderPass;
 void (*p_vkCmdExecuteCommands)( VkCommandBuffer, uint32_t, const VkCommandBuffer * ) =
@@ -4094,7 +4239,7 @@ void (*p_vkCmdSetStencilWriteMask)( VkCommandBuffer, VkStencilFaceFlags, uint32_
 void (*p_vkCmdSetViewport)( VkCommandBuffer, uint32_t, uint32_t, const VkViewport * ) =
         null_vkCmdSetViewport;
 void (*p_vkCmdUpdateBuffer)( VkCommandBuffer, VkBuffer, VkDeviceSize, VkDeviceSize,
-        const uint32_t * ) = null_vkCmdUpdateBuffer;
+        const void * ) = null_vkCmdUpdateBuffer;
 void (*p_vkCmdWaitEvents)( VkCommandBuffer, uint32_t, const VkEvent *, VkPipelineStageFlags,
         VkPipelineStageFlags, uint32_t, const VkMemoryBarrier *, uint32_t,
         const VkBufferMemoryBarrier *, uint32_t, const VkImageMemoryBarrier_host * ) =
@@ -4258,6 +4403,10 @@ VkResult (*p_vkGetPhysicalDeviceDisplayPlanePropertiesKHR)( VkPhysicalDevice, ui
         VkDisplayPlanePropertiesKHR_host * ) = null_vkGetPhysicalDeviceDisplayPlanePropertiesKHR;
 VkResult (*p_vkGetPhysicalDeviceDisplayPropertiesKHR)( VkPhysicalDevice, uint32_t *,
         VkDisplayPropertiesKHR * ) = null_vkGetPhysicalDeviceDisplayPropertiesKHR;
+VkResult (*p_vkGetPhysicalDeviceExternalImageFormatPropertiesNV)( VkPhysicalDevice, VkFormat,
+        VkImageType, VkImageTiling, VkImageUsageFlags, VkImageCreateFlags,
+        VkExternalMemoryHandleTypeFlagsNV, VkExternalImageFormatPropertiesNV_host * ) =
+        null_vkGetPhysicalDeviceExternalImageFormatPropertiesNV;
 void (*p_vkGetPhysicalDeviceFeatures)( VkPhysicalDevice, VkPhysicalDeviceFeatures * ) =
         null_vkGetPhysicalDeviceFeatures;
 void (*p_vkGetPhysicalDeviceFormatProperties)( VkPhysicalDevice, VkFormat, VkFormatProperties * ) =
@@ -4648,6 +4797,20 @@ void WINAPI vkCmdDrawIndexedIndirect( VkCommandBuffer commandBuffer, VkBuffer bu
 }
 
 /***********************************************************************
+ *              vkCmdDrawIndexedIndirectCountAMD (VULKAN.@)
+ */
+void WINAPI vkCmdDrawIndexedIndirectCountAMD( VkCommandBuffer commandBuffer, VkBuffer buffer,
+        VkDeviceSize offset, VkBuffer countBuffer, VkDeviceSize countBufferOffset,
+        uint32_t maxDrawCount, uint32_t stride )
+{
+    TRACE( "(%p, %s, %s, %s, %s, %u, %u)\n", commandBuffer, wine_dbgstr_longlong(buffer),
+            wine_dbgstr_longlong(offset), wine_dbgstr_longlong(countBuffer),
+            wine_dbgstr_longlong(countBufferOffset), maxDrawCount, stride );
+    p_vkCmdDrawIndexedIndirectCountAMD( commandBuffer, buffer, offset, countBuffer,
+            countBufferOffset, maxDrawCount, stride );
+}
+
+/***********************************************************************
  *              vkCmdDrawIndirect (VULKAN.@)
  */
 void WINAPI vkCmdDrawIndirect( VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset,
@@ -4656,6 +4819,20 @@ void WINAPI vkCmdDrawIndirect( VkCommandBuffer commandBuffer, VkBuffer buffer, V
     TRACE( "(%p, %s, %s, %u, %u)\n", commandBuffer, wine_dbgstr_longlong(buffer),
             wine_dbgstr_longlong(offset), drawCount, stride );
     p_vkCmdDrawIndirect( commandBuffer, buffer, offset, drawCount, stride );
+}
+
+/***********************************************************************
+ *              vkCmdDrawIndirectCountAMD (VULKAN.@)
+ */
+void WINAPI vkCmdDrawIndirectCountAMD( VkCommandBuffer commandBuffer, VkBuffer buffer,
+        VkDeviceSize offset, VkBuffer countBuffer, VkDeviceSize countBufferOffset,
+        uint32_t maxDrawCount, uint32_t stride )
+{
+    TRACE( "(%p, %s, %s, %s, %s, %u, %u)\n", commandBuffer, wine_dbgstr_longlong(buffer),
+            wine_dbgstr_longlong(offset), wine_dbgstr_longlong(countBuffer),
+            wine_dbgstr_longlong(countBufferOffset), maxDrawCount, stride );
+    p_vkCmdDrawIndirectCountAMD( commandBuffer, buffer, offset, countBuffer, countBufferOffset,
+            maxDrawCount, stride );
 }
 
 /***********************************************************************
@@ -4878,7 +5055,7 @@ void WINAPI vkCmdSetViewport( VkCommandBuffer commandBuffer, uint32_t firstViewp
  *              vkCmdUpdateBuffer (VULKAN.@)
  */
 void WINAPI vkCmdUpdateBuffer( VkCommandBuffer commandBuffer, VkBuffer dstBuffer,
-        VkDeviceSize dstOffset, VkDeviceSize dataSize, const uint32_t *pData )
+        VkDeviceSize dstOffset, VkDeviceSize dataSize, const void *pData )
 {
     TRACE( "(%p, %s, %s, %s, %p)\n", commandBuffer, wine_dbgstr_longlong(dstBuffer),
             wine_dbgstr_longlong(dstOffset), wine_dbgstr_longlong(dataSize), pData );
@@ -6036,6 +6213,31 @@ VkResult WINAPI vkGetPhysicalDeviceDisplayPropertiesKHR( VkPhysicalDevice physic
 }
 
 /***********************************************************************
+ *              vkGetPhysicalDeviceExternalImageFormatPropertiesNV (VULKAN.@)
+ */
+VkResult WINAPI vkGetPhysicalDeviceExternalImageFormatPropertiesNV(
+        VkPhysicalDevice physicalDevice, VkFormat format, VkImageType type, VkImageTiling tiling,
+        VkImageUsageFlags usage, VkImageCreateFlags flags,
+        VkExternalMemoryHandleTypeFlagsNV externalHandleType,
+        VkExternalImageFormatPropertiesNV *pExternalImageFormatProperties )
+{
+    VkExternalImageFormatPropertiesNV_host tmp_pExternalImageFormatProperties, *ptr_pExternalImageFormatProperties;
+    VkResult res;
+
+    TRACE( "(%p, %d, %d, %d, %u, %u, %u, %p)\n", physicalDevice, format, type, tiling, usage,
+            flags, externalHandleType, pExternalImageFormatProperties );
+
+    ptr_pExternalImageFormatProperties = convert_VkExternalImageFormatPropertiesNV(
+            &tmp_pExternalImageFormatProperties, pExternalImageFormatProperties );
+    res = p_vkGetPhysicalDeviceExternalImageFormatPropertiesNV( physicalDevice, format, type,
+            tiling, usage, flags, externalHandleType, ptr_pExternalImageFormatProperties );
+    release_VkExternalImageFormatPropertiesNV( pExternalImageFormatProperties,
+            ptr_pExternalImageFormatProperties );
+
+    return res;
+}
+
+/***********************************************************************
  *              vkGetPhysicalDeviceFeatures (VULKAN.@)
  */
 void WINAPI vkGetPhysicalDeviceFeatures( VkPhysicalDevice physicalDevice,
@@ -6430,7 +6632,9 @@ static const struct function_entry function_table[] =
     DEFINE_FUNCTION( vkCmdDraw )
     DEFINE_FUNCTION( vkCmdDrawIndexed )
     DEFINE_FUNCTION( vkCmdDrawIndexedIndirect )
+    DEFINE_FUNCTION( vkCmdDrawIndexedIndirectCountAMD )
     DEFINE_FUNCTION( vkCmdDrawIndirect )
+    DEFINE_FUNCTION( vkCmdDrawIndirectCountAMD )
     DEFINE_FUNCTION( vkCmdEndQuery )
     DEFINE_FUNCTION( vkCmdEndRenderPass )
     DEFINE_FUNCTION( vkCmdExecuteCommands )
@@ -6532,6 +6736,7 @@ static const struct function_entry function_table[] =
     DEFINE_FUNCTION( vkGetInstanceProcAddr )
     DEFINE_FUNCTION( vkGetPhysicalDeviceDisplayPlanePropertiesKHR )
     DEFINE_FUNCTION( vkGetPhysicalDeviceDisplayPropertiesKHR )
+    DEFINE_FUNCTION( vkGetPhysicalDeviceExternalImageFormatPropertiesNV )
     DEFINE_FUNCTION( vkGetPhysicalDeviceFeatures )
     DEFINE_FUNCTION( vkGetPhysicalDeviceFormatProperties )
     DEFINE_FUNCTION( vkGetPhysicalDeviceImageFormatProperties )

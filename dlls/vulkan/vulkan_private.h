@@ -119,6 +119,8 @@ typedef uint32_t VkDisplaySurfaceCreateFlagsKHR;
 typedef int VkDynamicState;
 typedef uint64_t VkEvent;
 typedef uint32_t VkEventCreateFlags;
+typedef uint32_t VkExternalMemoryFeatureFlagsNV;
+typedef uint32_t VkExternalMemoryHandleTypeFlagsNV;
 typedef uint64_t VkFence;
 typedef uint32_t VkFenceCreateFlags;
 typedef int VkFilter;
@@ -1521,13 +1523,6 @@ typedef struct VkDisplayPropertiesKHR_host
     VkBool32 persistentContent;
 } VkDisplayPropertiesKHR_host;
 
-typedef struct VkFormatProperties
-{
-    VkFormatFeatureFlags linearTilingFeatures;
-    VkFormatFeatureFlags optimalTilingFeatures;
-    VkFormatFeatureFlags bufferFeatures;
-} VkFormatProperties;
-
 typedef struct VkImageFormatProperties
 {
     VkExtent3D maxExtent;
@@ -1545,6 +1540,29 @@ typedef struct VkImageFormatProperties_host
     VkSampleCountFlags sampleCounts;
     VkDeviceSize maxResourceSize;
 } VkImageFormatProperties_host;
+
+typedef struct VkExternalImageFormatPropertiesNV
+{
+    VkImageFormatProperties DECLSPEC_ALIGN(8) imageFormatProperties;
+    VkExternalMemoryFeatureFlagsNV externalMemoryFeatures;
+    VkExternalMemoryHandleTypeFlagsNV exportFromImportedHandleTypes;
+    VkExternalMemoryHandleTypeFlagsNV compatibleHandleTypes;
+} VkExternalImageFormatPropertiesNV;
+
+typedef struct VkExternalImageFormatPropertiesNV_host
+{
+    VkImageFormatProperties_host imageFormatProperties;
+    VkExternalMemoryFeatureFlagsNV externalMemoryFeatures;
+    VkExternalMemoryHandleTypeFlagsNV exportFromImportedHandleTypes;
+    VkExternalMemoryHandleTypeFlagsNV compatibleHandleTypes;
+} VkExternalImageFormatPropertiesNV_host;
+
+typedef struct VkFormatProperties
+{
+    VkFormatFeatureFlags linearTilingFeatures;
+    VkFormatFeatureFlags optimalTilingFeatures;
+    VkFormatFeatureFlags bufferFeatures;
+} VkFormatProperties;
 
 typedef struct VkMemoryType
 {
@@ -2135,8 +2153,12 @@ extern void (*p_vkCmdDrawIndexed)( VkCommandBuffer, uint32_t, uint32_t, uint32_t
         uint32_t ) DECLSPEC_HIDDEN;
 extern void (*p_vkCmdDrawIndexedIndirect)( VkCommandBuffer, VkBuffer, VkDeviceSize, uint32_t,
         uint32_t ) DECLSPEC_HIDDEN;
+extern void (*p_vkCmdDrawIndexedIndirectCountAMD)( VkCommandBuffer, VkBuffer, VkDeviceSize,
+        VkBuffer, VkDeviceSize, uint32_t, uint32_t ) DECLSPEC_HIDDEN;
 extern void (*p_vkCmdDrawIndirect)( VkCommandBuffer, VkBuffer, VkDeviceSize, uint32_t,
         uint32_t ) DECLSPEC_HIDDEN;
+extern void (*p_vkCmdDrawIndirectCountAMD)( VkCommandBuffer, VkBuffer, VkDeviceSize, VkBuffer,
+        VkDeviceSize, uint32_t, uint32_t ) DECLSPEC_HIDDEN;
 extern void (*p_vkCmdEndQuery)( VkCommandBuffer, VkQueryPool, uint32_t ) DECLSPEC_HIDDEN;
 extern void (*p_vkCmdEndRenderPass)( VkCommandBuffer ) DECLSPEC_HIDDEN;
 extern void (*p_vkCmdExecuteCommands)( VkCommandBuffer, uint32_t,
@@ -2171,7 +2193,7 @@ extern void (*p_vkCmdSetStencilWriteMask)( VkCommandBuffer, VkStencilFaceFlags,
 extern void (*p_vkCmdSetViewport)( VkCommandBuffer, uint32_t, uint32_t,
         const VkViewport * ) DECLSPEC_HIDDEN;
 extern void (*p_vkCmdUpdateBuffer)( VkCommandBuffer, VkBuffer, VkDeviceSize, VkDeviceSize,
-        const uint32_t * ) DECLSPEC_HIDDEN;
+        const void * ) DECLSPEC_HIDDEN;
 extern void (*p_vkCmdWaitEvents)( VkCommandBuffer, uint32_t, const VkEvent *, VkPipelineStageFlags,
         VkPipelineStageFlags, uint32_t, const VkMemoryBarrier *, uint32_t,
         const VkBufferMemoryBarrier *, uint32_t,
@@ -2335,6 +2357,10 @@ extern VkResult (*p_vkGetPhysicalDeviceDisplayPlanePropertiesKHR)( VkPhysicalDev
         VkDisplayPlanePropertiesKHR_host * ) DECLSPEC_HIDDEN;
 extern VkResult (*p_vkGetPhysicalDeviceDisplayPropertiesKHR)( VkPhysicalDevice, uint32_t *,
         VkDisplayPropertiesKHR * ) DECLSPEC_HIDDEN;
+extern VkResult (*p_vkGetPhysicalDeviceExternalImageFormatPropertiesNV)( VkPhysicalDevice,
+        VkFormat, VkImageType, VkImageTiling, VkImageUsageFlags, VkImageCreateFlags,
+        VkExternalMemoryHandleTypeFlagsNV,
+        VkExternalImageFormatPropertiesNV_host * ) DECLSPEC_HIDDEN;
 extern void (*p_vkGetPhysicalDeviceFeatures)( VkPhysicalDevice,
         VkPhysicalDeviceFeatures * ) DECLSPEC_HIDDEN;
 extern void (*p_vkGetPhysicalDeviceFormatProperties)( VkPhysicalDevice, VkFormat,
@@ -2872,6 +2898,69 @@ static inline VkDisplayPlanePropertiesKHR_host *convert_VkDisplayPlaneProperties
 }
 static inline void release_VkDisplayPlanePropertiesKHR_array( VkDisplayPlanePropertiesKHR *out,
         VkDisplayPlanePropertiesKHR_host *in, int count )
+{
+}
+#endif /* defined(USE_STRUCT_CONVERSION) */
+
+#if defined(USE_STRUCT_CONVERSION)
+extern VkImageFormatProperties_host *convert_VkImageFormatProperties(
+        VkImageFormatProperties_host *out, const VkImageFormatProperties *in ) DECLSPEC_HIDDEN;
+extern void release_VkImageFormatProperties( VkImageFormatProperties *out,
+        VkImageFormatProperties_host *in ) DECLSPEC_HIDDEN;
+extern VkImageFormatProperties_host *convert_VkImageFormatProperties_array(
+        const VkImageFormatProperties *in, int count ) DECLSPEC_HIDDEN;
+extern void release_VkImageFormatProperties_array( VkImageFormatProperties *out,
+        VkImageFormatProperties_host *in, int count ) DECLSPEC_HIDDEN;
+#else  /* defined(USE_STRUCT_CONVERSION) */
+static inline VkImageFormatProperties_host *convert_VkImageFormatProperties(
+        VkImageFormatProperties_host *out, const VkImageFormatProperties *in )
+{
+    return (VkImageFormatProperties_host *)in;
+}
+static inline void release_VkImageFormatProperties( VkImageFormatProperties *out,
+        VkImageFormatProperties_host *in )
+{
+}
+static inline VkImageFormatProperties_host *convert_VkImageFormatProperties_array(
+        const VkImageFormatProperties *in, int count )
+{
+    return (VkImageFormatProperties_host *)in;
+}
+static inline void release_VkImageFormatProperties_array( VkImageFormatProperties *out,
+        VkImageFormatProperties_host *in, int count )
+{
+}
+#endif /* defined(USE_STRUCT_CONVERSION) */
+
+#if defined(USE_STRUCT_CONVERSION)
+extern VkExternalImageFormatPropertiesNV_host *convert_VkExternalImageFormatPropertiesNV(
+        VkExternalImageFormatPropertiesNV_host *out,
+        const VkExternalImageFormatPropertiesNV *in ) DECLSPEC_HIDDEN;
+extern void release_VkExternalImageFormatPropertiesNV( VkExternalImageFormatPropertiesNV *out,
+        VkExternalImageFormatPropertiesNV_host *in ) DECLSPEC_HIDDEN;
+extern VkExternalImageFormatPropertiesNV_host *convert_VkExternalImageFormatPropertiesNV_array(
+        const VkExternalImageFormatPropertiesNV *in, int count ) DECLSPEC_HIDDEN;
+extern void release_VkExternalImageFormatPropertiesNV_array(
+        VkExternalImageFormatPropertiesNV *out, VkExternalImageFormatPropertiesNV_host *in,
+        int count ) DECLSPEC_HIDDEN;
+#else  /* defined(USE_STRUCT_CONVERSION) */
+static inline VkExternalImageFormatPropertiesNV_host *convert_VkExternalImageFormatPropertiesNV(
+        VkExternalImageFormatPropertiesNV_host *out, const VkExternalImageFormatPropertiesNV *in )
+{
+    return (VkExternalImageFormatPropertiesNV_host *)in;
+}
+static inline void release_VkExternalImageFormatPropertiesNV(
+        VkExternalImageFormatPropertiesNV *out, VkExternalImageFormatPropertiesNV_host *in )
+{
+}
+static inline VkExternalImageFormatPropertiesNV_host *convert_VkExternalImageFormatPropertiesNV_array(
+        const VkExternalImageFormatPropertiesNV *in, int count )
+{
+    return (VkExternalImageFormatPropertiesNV_host *)in;
+}
+static inline void release_VkExternalImageFormatPropertiesNV_array(
+        VkExternalImageFormatPropertiesNV *out, VkExternalImageFormatPropertiesNV_host *in,
+        int count )
 {
 }
 #endif /* defined(USE_STRUCT_CONVERSION) */

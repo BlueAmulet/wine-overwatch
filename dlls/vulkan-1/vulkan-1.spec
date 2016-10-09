@@ -25,7 +25,9 @@
 @ stdcall vkCmdDraw(ptr long long long long) vulkan.vkCmdDraw
 @ stdcall vkCmdDrawIndexed(ptr long long long long long) vulkan.vkCmdDrawIndexed
 @ stdcall vkCmdDrawIndexedIndirect(ptr int64 int64 long long) vulkan.vkCmdDrawIndexedIndirect
+@ stdcall vkCmdDrawIndexedIndirectCountAMD(ptr int64 int64 int64 int64 long long) vulkan.vkCmdDrawIndexedIndirectCountAMD
 @ stdcall vkCmdDrawIndirect(ptr int64 int64 long long) vulkan.vkCmdDrawIndirect
+@ stdcall vkCmdDrawIndirectCountAMD(ptr int64 int64 int64 int64 long long) vulkan.vkCmdDrawIndirectCountAMD
 @ stdcall vkCmdEndQuery(ptr int64 long) vulkan.vkCmdEndQuery
 @ stdcall vkCmdEndRenderPass(ptr) vulkan.vkCmdEndRenderPass
 @ stdcall vkCmdExecuteCommands(ptr long ptr) vulkan.vkCmdExecuteCommands
@@ -126,6 +128,7 @@
 @ stdcall vkGetInstanceProcAddr(ptr str) vulkan.vkGetInstanceProcAddr
 @ stdcall vkGetPhysicalDeviceDisplayPlanePropertiesKHR(ptr ptr ptr) vulkan.vkGetPhysicalDeviceDisplayPlanePropertiesKHR
 @ stdcall vkGetPhysicalDeviceDisplayPropertiesKHR(ptr ptr ptr) vulkan.vkGetPhysicalDeviceDisplayPropertiesKHR
+@ stdcall vkGetPhysicalDeviceExternalImageFormatPropertiesNV(ptr long long long long long long ptr) vulkan.vkGetPhysicalDeviceExternalImageFormatPropertiesNV
 @ stdcall vkGetPhysicalDeviceFeatures(ptr ptr) vulkan.vkGetPhysicalDeviceFeatures
 @ stdcall vkGetPhysicalDeviceFormatProperties(ptr long ptr) vulkan.vkGetPhysicalDeviceFormatProperties
 @ stdcall vkGetPhysicalDeviceImageFormatProperties(ptr long long long long long ptr) vulkan.vkGetPhysicalDeviceImageFormatProperties
