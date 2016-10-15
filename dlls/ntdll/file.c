@@ -2899,6 +2899,23 @@ NTSTATUS WINAPI NtSetInformationFile(HANDLE handle, PIO_STATUS_BLOCK io,
             io->u.Status = STATUS_INVALID_PARAMETER_3;
         break;
 
+    case FileIoCompletionNotificationInformation:
+        if (len >= sizeof(FILE_IO_COMPLETION_NOTIFICATION_INFORMATION))
+        {
+            FILE_IO_COMPLETION_NOTIFICATION_INFORMATION *info = ptr;
+
+            SERVER_START_REQ( set_fd_compl_info )
+            {
+                req->handle   = wine_server_obj_handle( handle );
+                req->flags    = (info->Flags & FILE_SKIP_COMPLETION_PORT_ON_SUCCESS) ?
+                                COMPLETION_SKIP_ON_SUCCESS : 0;
+                io->u.Status  = wine_server_call( req );
+            }
+            SERVER_END_REQ;
+        } else
+            io->u.Status = STATUS_INFO_LENGTH_MISMATCH;
+        break;
+
     case FileAllInformation:
         io->u.Status = STATUS_INVALID_INFO_CLASS;
         break;

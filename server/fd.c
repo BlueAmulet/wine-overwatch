@@ -194,6 +194,7 @@ struct fd
     struct async_queue  *wait_q;      /* other async waiters of this fd */
     struct completion   *completion;  /* completion object attached to this fd */
     apc_param_t          comp_key;    /* completion key to set in completion events */
+    unsigned int         comp_flags;  /* completion flags */
 };
 
 static void fd_dump( struct object *obj, int verbose );
@@ -1611,6 +1612,7 @@ static struct fd *alloc_fd_object(void)
     fd->write_q    = NULL;
     fd->wait_q     = NULL;
     fd->completion = NULL;
+    fd->comp_flags = 0;
     list_init( &fd->inode_entry );
     list_init( &fd->locks );
 
@@ -2583,8 +2585,25 @@ DECL_HANDLER(add_fd_completion)
     struct fd *fd = get_handle_fd_obj( current->process, req->handle, 0 );
     if (fd)
     {
-        if (fd->completion)
+        if (fd->completion && (!(fd->comp_flags & COMPLETION_SKIP_ON_SUCCESS) || req->status))
             add_completion( fd->completion, fd->comp_key, req->cvalue, req->status, req->information );
+        release_object( fd );
+    }
+}
+
+/* set fd completion information */
+DECL_HANDLER(set_fd_compl_info)
+{
+    struct fd *fd = get_handle_fd_obj( current->process, req->handle, 0 );
+    if (fd)
+    {
+        if (!(fd->options & (FILE_SYNCHRONOUS_IO_ALERT | FILE_SYNCHRONOUS_IO_NONALERT)))
+        {
+            /* removing COMPLETION_SKIP_ON_SUCCESS is not allowed */
+            fd->comp_flags |= req->flags;
+        }
+        else
+            set_error( STATUS_INVALID_PARAMETER );
         release_object( fd );
     }
 }

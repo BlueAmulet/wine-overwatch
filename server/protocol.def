@@ -3663,6 +3663,14 @@ struct handle_info
 @END
 
 
+/* set fd completion information */
+@REQ(set_fd_compl_info)
+    obj_handle_t handle;          /* handle to a file or directory */
+    int          flags;           /* completion flags (see below) */
+@END
+#define COMPLETION_SKIP_ON_SUCCESS 0x01
+
+
 /* set fd disposition information */
 @REQ(set_fd_disp_info)
     obj_handle_t handle;          /* handle to a file or directory */
