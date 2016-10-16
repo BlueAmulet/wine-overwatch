@@ -861,6 +861,8 @@ typedef struct JpegEncoder {
     double xres, yres;
     const jpeg_compress_format *format;
     IStream *stream;
+    WICColor palette[256];
+    UINT colors;
     CRITICAL_SECTION lock;
     BYTE dest_buffer[1024];
 } JpegEncoder;
@@ -1063,10 +1065,24 @@ static HRESULT WINAPI JpegEncoder_Frame_SetColorContexts(IWICBitmapFrameEncode *
 }
 
 static HRESULT WINAPI JpegEncoder_Frame_SetPalette(IWICBitmapFrameEncode *iface,
-    IWICPalette *pIPalette)
+    IWICPalette *palette)
 {
-    FIXME("(%p,%p): stub\n", iface, pIPalette);
-    return WINCODEC_ERR_UNSUPPORTEDOPERATION;
+    JpegEncoder *This = impl_from_IWICBitmapFrameEncode(iface);
+    HRESULT hr;
+
+    TRACE("(%p,%p)\n", iface, palette);
+
+    if (!palette) return E_INVALIDARG;
+
+    EnterCriticalSection(&This->lock);
+
+    if (This->initialized)
+        hr = IWICPalette_GetColors(palette, 256, This->palette, &This->colors);
+    else
+        hr = WINCODEC_ERR_NOTINITIALIZED;
+
+    LeaveCriticalSection(&This->lock);
+    return hr;
 }
 
 static HRESULT WINAPI JpegEncoder_Frame_SetThumbnail(IWICBitmapFrameEncode *iface,
@@ -1516,6 +1532,7 @@ HRESULT JpegEncoder_CreateInstance(REFIID iid, void** ppv)
     This->xres = This->yres = 0.0;
     This->format = NULL;
     This->stream = NULL;
+    This->colors = 0;
     InitializeCriticalSection(&This->lock);
     This->lock.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": JpegEncoder.lock");
 
