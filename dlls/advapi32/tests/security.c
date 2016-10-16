@@ -6214,6 +6214,34 @@ static void test_process_access(void)
     CloseHandle(process);
 }
 
+static void test_maximum_allowed(void)
+{
+    char buffer_sd[SECURITY_DESCRIPTOR_MIN_LENGTH], buffer_acl[256];
+    SECURITY_DESCRIPTOR *sd = (SECURITY_DESCRIPTOR *)&buffer_sd;
+    SECURITY_ATTRIBUTES sa;
+    ACL *acl = (ACL *)&buffer_acl;
+    ACCESS_MASK mask;
+    HANDLE handle;
+    BOOL ret;
+
+    ret = InitializeSecurityDescriptor(sd, SECURITY_DESCRIPTOR_REVISION);
+    ok(ret, "InitializeSecurityDescriptor failed with %u\n", GetLastError());
+    ret = InitializeAcl(acl, 256, ACL_REVISION);
+    ok(ret, "InitializeAcl failed with %u\n", GetLastError());
+    ret = SetSecurityDescriptorDacl(sd, TRUE, acl, FALSE);
+    ok(ret, "SetSecurityDescriptorDacl failed with %u\n", GetLastError());
+
+    sa.nLength              = sizeof(SECURITY_ATTRIBUTES);
+    sa.lpSecurityDescriptor = sd;
+    sa.bInheritHandle       = FALSE;
+
+    handle = CreateEventExA(&sa, NULL, 0, MAXIMUM_ALLOWED | 0x4);
+    ok(handle != NULL, "CreateEventExA failed with error %u\n", GetLastError());
+    mask = get_obj_access(handle);
+    ok(mask == EVENT_ALL_ACCESS, "Expected %x, got %x\n", EVENT_ALL_ACCESS, mask);
+    CloseHandle(handle);
+}
+
 static BOOL validate_impersonation_token(HANDLE token, DWORD *token_type)
 {
     DWORD ret, needed;
@@ -6292,6 +6320,7 @@ static void test_kernel_objects_security(void)
     test_filemap_security();
     test_thread_security();
     test_process_access();
+    test_maximum_allowed();
     /* FIXME: test other kernel object types */
 
     CloseHandle(process_token);
