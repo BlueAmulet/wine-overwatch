@@ -2296,6 +2296,16 @@ static HRESULT WINAPI GifEncoder_CreateNewFrame(IWICBitmapEncoder *iface, IWICBi
             *frame = &ret->IWICBitmapFrameEncode_iface;
 
             hr = S_OK;
+
+            if (options)
+            {
+                hr = CreatePropertyBag2(NULL, 0, options);
+                if (hr != S_OK)
+                {
+                    IWICBitmapFrameEncode_Release(*frame);
+                    *frame = NULL;
+                }
+            }
         }
         else
             hr = E_OUTOFMEMORY;
