@@ -4549,7 +4549,7 @@ static GpStatus encode_image_jpeg(GpImage *image, IStream* stream,
 static GpStatus encode_image_gif(GpImage *image, IStream* stream,
     GDIPCONST CLSID* clsid, GDIPCONST EncoderParameters* params)
 {
-    return encode_image_wic(image, stream, &CLSID_WICGifEncoder, params);
+    return encode_image_wic(image, stream, &GUID_ContainerFormatGif, params);
 }
 
 /*****************************************************************************
@@ -4562,7 +4562,7 @@ GpStatus WINGDIPAPI GdipSaveImageToStream(GpImage *image, IStream* stream,
     encode_image_func encode_image;
     int i;
 
-    TRACE("%p %p %p %p\n", image, stream, clsid, params);
+    TRACE("%p %p %s %p\n", image, stream, wine_dbgstr_guid(clsid), params);
 
     if(!image || !stream)
         return InvalidParameter;
