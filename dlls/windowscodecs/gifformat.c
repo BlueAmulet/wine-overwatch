@@ -2070,9 +2070,11 @@ static HRESULT WINAPI GifFrameEncode_Commit(IWICBitmapFrameEncode *iface)
                 imd.height = This->height;
                 imd.packed = 0;
                 if (This->colors)
+                {
                     imd.packed |= 0x80; /* local color table flag */
+                    imd.packed |= 0x07; /* local color table size */
+                }
                 /* FIXME: interlace flag */
-                imd.packed |= 0x07; /* local color table size */
                 hr = IStream_Write(This->encoder->stream, &imd, sizeof(imd), NULL);
                 if (hr == S_OK && This->colors)
                 {
