@@ -1328,6 +1328,7 @@ static void test_multi_encoder(const struct bitmap_data **srcs, const CLSID* cls
                     if (SUCCEEDED(hr))
                     {
                         hr = IWICBitmapFrameDecode_GetPixelFormat(framedecode, &pixelformat);
+                        ok(hr == S_OK, "GetPixelFormat) failed, hr=%x (%s)\n", hr, name);
                         if (IsEqualGUID(&pixelformat, dsts[i]->format))
                             compare_bitmap_data(srcs[i], dsts[i], (IWICBitmapSource*)framedecode, name);
 
