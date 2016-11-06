@@ -2047,11 +2047,12 @@ static HRESULT WINAPI GifFrameEncode_Commit(IWICBitmapFrameEncode *iface)
                     gif_palette[i][2] = This->encoder->palette[i] & 0xff;
                 }
                 hr = IStream_Write(This->encoder->stream, gif_palette, sizeof(gif_palette), NULL);
-                if (hr == S_OK)
-                    This->encoder->info_written = TRUE;
             }
 
             /* FIXME: write GCE, APE, etc. GIF extensions */
+
+            if (hr == S_OK)
+                This->encoder->info_written = TRUE;
         }
 
         if (hr == S_OK)
