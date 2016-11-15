@@ -99,6 +99,12 @@ LRESULT WINAPI UiaReturnRawElementProvider(HWND hwnd, WPARAM wparam, LPARAM lpar
     return 0;
 }
 
+BOOL WINAPI UiaClientsAreListening(void)
+{
+    FIXME("(): stub\n");
+    return FALSE;
+}
+
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, void *reserved)
 {
