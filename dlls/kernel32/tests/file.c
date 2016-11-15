@@ -1906,12 +1906,10 @@ static void test_MoveFileA(void)
     ok(hmapfile != NULL, "CreateFileMapping: error %d\n", GetLastError());
 
     ret = MoveFileA(source, dest);
-    todo_wine {
-        ok(!ret, "MoveFileA: expected failure\n");
-        ok(GetLastError() == ERROR_SHARING_VIOLATION ||
-           broken(GetLastError() == ERROR_ACCESS_DENIED), /* Win9x and WinMe */
-           "MoveFileA: expected ERROR_SHARING_VIOLATION, got %d\n", GetLastError());
-    }
+    ok(!ret, "MoveFileA: expected failure\n");
+    ok(GetLastError() == ERROR_SHARING_VIOLATION ||
+       broken(GetLastError() == ERROR_ACCESS_DENIED), /* Win9x and WinMe */
+       "MoveFileA: expected ERROR_SHARING_VIOLATION, got %d\n", GetLastError());
 
     CloseHandle(hmapfile);
     CloseHandle(hfile);
@@ -1926,12 +1924,10 @@ static void test_MoveFileA(void)
     ok(hmapfile != NULL, "CreateFileMapping: error %d\n", GetLastError());
 
     ret = MoveFileA(source, dest);
-    todo_wine {
-        ok(!ret, "MoveFileA: expected failure\n");
-        ok(GetLastError() == ERROR_SHARING_VIOLATION ||
-           broken(GetLastError() == ERROR_ACCESS_DENIED), /* Win9x and WinMe */
-           "MoveFileA: expected ERROR_SHARING_VIOLATION, got %d\n", GetLastError());
-    }
+    ok(!ret, "MoveFileA: expected failure\n");
+    ok(GetLastError() == ERROR_SHARING_VIOLATION ||
+       broken(GetLastError() == ERROR_ACCESS_DENIED), /* Win9x and WinMe */
+       "MoveFileA: expected ERROR_SHARING_VIOLATION, got %d\n", GetLastError());
 
     CloseHandle(hmapfile);
     CloseHandle(hfile);
