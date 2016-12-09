@@ -1175,6 +1175,31 @@ static HRESULT TiffFrameDecode_ReadTile(TiffFrameDecode *This, UINT tile_x, UINT
             dst[7] = (b & 0x01) ? 0xff : 0; /* A */
         }
     }
+    /* 16bpp RGBA */
+    else if (This->decode_info.source_bpp == 16 && This->decode_info.samples == 4 && This->decode_info.bpp == 32)
+    {
+        BYTE *src, *dst;
+        DWORD count = This->decode_info.tile_width * This->decode_info.tile_height;
+
+        src = This->cached_tile + count * 2;
+        dst = This->cached_tile + This->decode_info.tile_size;
+
+        while (count--)
+        {
+            BYTE b[2];
+
+            src -= 2;
+            dst -= 4;
+
+            b[0] = src[0];
+            b[1] = src[1];
+
+            dst[0] = ((b[1] & 0xf0) >> 4) * 17; /* B */
+            dst[1] = (b[0] & 0x0f) * 17; /* G */
+            dst[2] = ((b[0] & 0xf0) >> 4) * 17; /* R */
+            dst[3] = (b[1] & 0x0f) * 17; /* A */
+        }
+    }
     /* 8bpp grayscale with extra alpha */
     else if (This->decode_info.source_bpp == 16 && This->decode_info.samples == 2 && This->decode_info.bpp == 32)
     {
