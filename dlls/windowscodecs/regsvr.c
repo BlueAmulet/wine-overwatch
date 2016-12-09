@@ -1211,6 +1211,8 @@ static GUID const * const tiff_decode_formats[] = {
     &GUID_WICPixelFormatBlackWhite,
     &GUID_WICPixelFormat4bppGray,
     &GUID_WICPixelFormat8bppGray,
+    &GUID_WICPixelFormat16bppGray,
+    &GUID_WICPixelFormat32bppGrayFloat,
     &GUID_WICPixelFormat1bppIndexed,
     &GUID_WICPixelFormat2bppIndexed,
     &GUID_WICPixelFormat4bppIndexed,
