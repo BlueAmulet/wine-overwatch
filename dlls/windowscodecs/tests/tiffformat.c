@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Dmitry Timoshkov
+ * Copyright 2012,2016 Dmitry Timoshkov
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -160,7 +160,7 @@ static const struct tiff_8bpp_data
         { 0xff, IFD_SHORT, 1, 0 }, /* SUBFILETYPE */
         { 0x100, IFD_LONG, 1, 4 }, /* IMAGEWIDTH */
         { 0x101, IFD_LONG, 1, 1 }, /* IMAGELENGTH */
-        { 0x102, IFD_LONG, 1, 8 }, /* BITSPERSAMPLE */
+        { 0x102, IFD_SHORT, 1, 8 }, /* BITSPERSAMPLE: XP doesn't accept IFD_LONG here */
         { 0x103, IFD_SHORT, 1, 1 }, /* COMPRESSION: XP doesn't accept IFD_LONG here */
         { 0x106, IFD_SHORT, 1, 3 }, /* PHOTOMETRIC */
         { 0x111, IFD_LONG, 1, FIELD_OFFSET(struct tiff_8bpp_data, pixel_data) }, /* STRIPOFFSETS */
