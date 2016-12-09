@@ -1224,6 +1224,8 @@ static GUID const * const tiff_decode_formats[] = {
     &GUID_WICPixelFormat48bppRGB,
     &GUID_WICPixelFormat64bppRGBA,
     &GUID_WICPixelFormat64bppPRGBA,
+    &GUID_WICPixelFormat32bppCMYK,
+    &GUID_WICPixelFormat64bppCMYK,
     &GUID_WICPixelFormat128bppRGBAFloat,
     NULL
 };
@@ -2015,6 +2017,17 @@ static struct regsvr_pixelformat const pixelformat_list[] = {
         NULL, /* no version */
         &GUID_VendorMicrosoft,
         32, /* bitsperpixel */
+        4, /* channel count */
+        channel_masks_8bit,
+        WICPixelFormatNumericRepresentationUnsignedInteger,
+        0
+    },
+    {   &GUID_WICPixelFormat64bppCMYK,
+        "The Wine Project",
+        "64bpp CMYK",
+        NULL, /* no version */
+        &GUID_VendorMicrosoft,
+        64, /* bitsperpixel */
         4, /* channel count */
         channel_masks_8bit,
         WICPixelFormatNumericRepresentationUnsignedInteger,
