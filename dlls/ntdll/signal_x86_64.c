@@ -3938,7 +3938,7 @@ __ASM_GLOBAL_FUNC( RtlRaiseException,
  */
 USHORT WINAPI RtlCaptureStackBackTrace( ULONG skip, ULONG count, PVOID *buffer, ULONG *hash )
 {
-    FIXME( "(%d, %d, %p, %p) stub!\n", skip, count, buffer, hash );
+    TRACE( "(%d, %d, %p, %p) stub!\n", skip, count, buffer, hash );
     return 0;
 }
 
