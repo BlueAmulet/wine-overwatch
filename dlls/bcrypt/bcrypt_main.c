@@ -49,6 +49,10 @@ WINE_DECLARE_DEBUG_CHANNEL(winediag);
 
 static void *libgnutls_handle;
 #define MAKE_FUNCPTR(f) static typeof(f) * p##f
+MAKE_FUNCPTR(gnutls_cipher_init);
+MAKE_FUNCPTR(gnutls_cipher_deinit);
+MAKE_FUNCPTR(gnutls_cipher_encrypt2);
+MAKE_FUNCPTR(gnutls_cipher_decrypt2);
 MAKE_FUNCPTR(gnutls_global_deinit);
 MAKE_FUNCPTR(gnutls_global_init);
 MAKE_FUNCPTR(gnutls_global_set_log_function);
@@ -84,6 +88,10 @@ static BOOL gnutls_initialize(void)
         goto fail; \
     }
 
+    LOAD_FUNCPTR(gnutls_cipher_init)
+    LOAD_FUNCPTR(gnutls_cipher_deinit)
+    LOAD_FUNCPTR(gnutls_cipher_encrypt2)
+    LOAD_FUNCPTR(gnutls_cipher_decrypt2)
     LOAD_FUNCPTR(gnutls_global_deinit)
     LOAD_FUNCPTR(gnutls_global_init)
     LOAD_FUNCPTR(gnutls_global_set_log_function)
@@ -138,6 +146,7 @@ NTSTATUS WINAPI BCryptEnumAlgorithms(ULONG dwAlgOperations, ULONG *pAlgCount,
 
 #define MAGIC_ALG  (('A' << 24) | ('L' << 16) | ('G' << 8) | '0')
 #define MAGIC_HASH (('H' << 24) | ('A' << 16) | ('S' << 8) | 'H')
+#define MAGIC_KEY  (('K' << 24) | ('E' << 16) | ('Y' << 8) | '0')
 struct object
 {
     ULONG magic;
@@ -145,6 +154,7 @@ struct object
 
 enum alg_id
 {
+    ALG_ID_AES,
     ALG_ID_MD5,
     ALG_ID_RNG,
     ALG_ID_SHA1,
@@ -157,6 +167,7 @@ static const struct {
     ULONG hash_length;
     const WCHAR *alg_name;
 } alg_props[] = {
+    /* ALG_ID_AES    */ {  0, BCRYPT_AES_ALGORITHM },
     /* ALG_ID_MD5    */ { 16, BCRYPT_MD5_ALGORITHM },
     /* ALG_ID_RNG    */ {  0, BCRYPT_RNG_ALGORITHM },
     /* ALG_ID_SHA1   */ { 20, BCRYPT_SHA1_ALGORITHM },
@@ -215,10 +226,9 @@ NTSTATUS WINAPI BCryptGenRandom(BCRYPT_ALG_HANDLE handle, UCHAR *buffer, ULONG c
 
 NTSTATUS WINAPI BCryptOpenAlgorithmProvider( BCRYPT_ALG_HANDLE *handle, LPCWSTR id, LPCWSTR implementation, DWORD flags )
 {
+    const DWORD supported_flags = BCRYPT_ALG_HANDLE_HMAC_FLAG;
     struct algorithm *alg;
     enum alg_id alg_id;
-
-    const DWORD supported_flags = BCRYPT_ALG_HANDLE_HMAC_FLAG;
 
     TRACE( "%p, %s, %s, %08x\n", handle, wine_dbgstr_w(id), wine_dbgstr_w(implementation), flags );
 
@@ -229,9 +239,10 @@ NTSTATUS WINAPI BCryptOpenAlgorithmProvider( BCRYPT_ALG_HANDLE *handle, LPCWSTR 
         return STATUS_NOT_IMPLEMENTED;
     }
 
-    if (!strcmpW( id, BCRYPT_SHA1_ALGORITHM )) alg_id = ALG_ID_SHA1;
+    if (!strcmpW( id, BCRYPT_AES_ALGORITHM )) alg_id = ALG_ID_AES;
     else if (!strcmpW( id, BCRYPT_MD5_ALGORITHM )) alg_id = ALG_ID_MD5;
     else if (!strcmpW( id, BCRYPT_RNG_ALGORITHM )) alg_id = ALG_ID_RNG;
+    else if (!strcmpW( id, BCRYPT_SHA1_ALGORITHM )) alg_id = ALG_ID_SHA1;
     else if (!strcmpW( id, BCRYPT_SHA256_ALGORITHM )) alg_id = ALG_ID_SHA256;
     else if (!strcmpW( id, BCRYPT_SHA384_ALGORITHM )) alg_id = ALG_ID_SHA384;
     else if (!strcmpW( id, BCRYPT_SHA512_ALGORITHM )) alg_id = ALG_ID_SHA512;
@@ -430,7 +441,6 @@ static NTSTATUS hash_finish( struct hash *hash, UCHAR *output, ULONG size )
 static NTSTATUS hmac_finish( struct hash *hash, UCHAR *output, ULONG size )
 {
     CCHmacFinal( &hash->u.hmac_ctx, output );
-
     return STATUS_SUCCESS;
 }
 #elif defined(HAVE_GNUTLS_HASH)
@@ -586,11 +596,18 @@ static NTSTATUS hmac_finish( struct hash *hash, UCHAR *output, ULONG size )
 }
 #endif
 
+#ifdef _WIN64
+#define OBJECT_LENGTH_AES       654
+#else
+#define OBJECT_LENGTH_AES       618
+#endif
 #define OBJECT_LENGTH_MD5       274
 #define OBJECT_LENGTH_SHA1      278
 #define OBJECT_LENGTH_SHA256    286
 #define OBJECT_LENGTH_SHA384    382
 #define OBJECT_LENGTH_SHA512    382
+
+#define BLOCK_LENGTH_AES        16
 
 static NTSTATUS generic_alg_property( enum alg_id id, const WCHAR *prop, UCHAR *buf, ULONG size, ULONG *ret_size )
 {
@@ -628,6 +645,34 @@ static NTSTATUS get_alg_property( enum alg_id id, const WCHAR *prop, UCHAR *buf,
 
     switch (id)
     {
+    case ALG_ID_AES:
+        if (!strcmpW( prop, BCRYPT_BLOCK_LENGTH ))
+        {
+            value = BLOCK_LENGTH_AES;
+            break;
+        }
+        if (!strcmpW( prop, BCRYPT_OBJECT_LENGTH ))
+        {
+            value = OBJECT_LENGTH_AES;
+            break;
+        }
+        if (!strcmpW( prop, BCRYPT_CHAINING_MODE ))
+        {
+            if (size >= sizeof(BCRYPT_CHAIN_MODE_CBC))
+            {
+                memcpy(buf, BCRYPT_CHAIN_MODE_CBC, sizeof(BCRYPT_CHAIN_MODE_CBC));
+                *ret_size = sizeof(BCRYPT_CHAIN_MODE_CBC) * sizeof(WCHAR);
+                return STATUS_SUCCESS;
+            }
+            else
+            {
+                *ret_size = sizeof(BCRYPT_CHAIN_MODE_CBC) * sizeof(WCHAR);
+                return STATUS_BUFFER_TOO_SMALL;
+            }
+        }
+        FIXME( "unsupported aes algorithm property %s\n", debugstr_w(prop) );
+        return STATUS_NOT_IMPLEMENTED;
+
     case ALG_ID_MD5:
         if (!strcmpW( prop, BCRYPT_OBJECT_LENGTH ))
         {
@@ -729,6 +774,13 @@ NTSTATUS WINAPI BCryptGetProperty( BCRYPT_HANDLE handle, LPCWSTR prop, UCHAR *bu
         WARN( "unknown magic %08x\n", object->magic );
         return STATUS_INVALID_HANDLE;
     }
+}
+
+NTSTATUS WINAPI BCryptSetProperty( BCRYPT_HANDLE handle, const WCHAR *prop, UCHAR *value,
+                                   ULONG size, ULONG flags )
+{
+    FIXME( "%p, %s, %p, %u, %08x\n", handle, debugstr_w(prop), value, size, flags );
+    return STATUS_NOT_IMPLEMENTED;
 }
 
 NTSTATUS WINAPI BCryptCreateHash( BCRYPT_ALG_HANDLE algorithm, BCRYPT_HASH_HANDLE *handle, UCHAR *object, ULONG objectlen,
@@ -852,6 +904,293 @@ NTSTATUS WINAPI BCryptHash( BCRYPT_ALG_HANDLE algorithm, UCHAR *secret, ULONG se
     }
 
     return BCryptDestroyHash( handle );
+}
+
+#if defined(HAVE_GNUTLS_HASH)
+struct key
+{
+    struct object      hdr;
+    enum alg_id        alg_id;
+    ULONG              block_size;
+    gnutls_cipher_hd_t handle;
+    UCHAR             *secret;
+    ULONG              secret_len;
+};
+
+static ULONG get_block_size( enum alg_id alg )
+{
+    ULONG ret = 0, size = sizeof(ret);
+    get_alg_property( alg, BCRYPT_BLOCK_LENGTH, (UCHAR *)&ret, sizeof(ret), &size );
+    return ret;
+}
+
+static NTSTATUS key_init( struct key *key, enum alg_id id, UCHAR *secret, ULONG secret_len )
+{
+    if (!libgnutls_handle) return STATUS_INTERNAL_ERROR;
+
+    switch (id)
+    {
+    case ALG_ID_AES:
+        break;
+
+    default:
+        FIXME( "algorithm %u not supported\n", id );
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    if (!(key->block_size = get_block_size( id ))) return STATUS_INVALID_PARAMETER;
+
+    key->alg_id     = id;
+    key->handle     = 0;        /* initialized on first use */
+    key->secret     = secret;
+    key->secret_len = secret_len;
+
+    return STATUS_SUCCESS;
+}
+
+static gnutls_cipher_algorithm_t get_gnutls_cipher( const struct key *key )
+{
+    switch (key->alg_id)
+    {
+    case ALG_ID_AES:
+        FIXME( "handle block size and chaining mode\n" );
+        return GNUTLS_CIPHER_AES_128_CBC;
+
+    default:
+        FIXME( "algorithm %u not supported\n", key->alg_id );
+        return GNUTLS_CIPHER_UNKNOWN;
+    }
+}
+
+static NTSTATUS key_set_params( struct key *key, UCHAR *iv, ULONG iv_len )
+{
+    gnutls_cipher_algorithm_t cipher;
+    gnutls_datum_t secret, vector;
+    int ret;
+
+    if (key->handle)
+    {
+        pgnutls_cipher_deinit( key->handle );
+        key->handle = NULL;
+    }
+
+    if ((cipher = get_gnutls_cipher( key )) == GNUTLS_CIPHER_UNKNOWN)
+        return STATUS_NOT_SUPPORTED;
+
+    secret.data = key->secret;
+    secret.size = key->secret_len;
+    if (iv)
+    {
+        vector.data = iv;
+        vector.size = iv_len;
+    }
+
+    if ((ret = pgnutls_cipher_init( &key->handle, cipher, &secret, iv ? &vector : NULL )))
+    {
+        pgnutls_perror( ret );
+        return STATUS_INTERNAL_ERROR;
+    }
+
+    return STATUS_SUCCESS;
+}
+
+static NTSTATUS key_encrypt( struct key *key, const UCHAR *input, ULONG input_len, UCHAR *output,
+                             ULONG output_len )
+{
+    int ret;
+
+    if ((ret = pgnutls_cipher_encrypt2( key->handle, input, input_len, output, output_len )))
+    {
+        pgnutls_perror( ret );
+        return STATUS_INTERNAL_ERROR;
+    }
+
+    return STATUS_SUCCESS;
+}
+
+static NTSTATUS key_decrypt( struct key *key, const UCHAR *input, ULONG input_len, UCHAR *output,
+                             ULONG output_len  )
+{
+    int ret;
+
+    if ((ret = pgnutls_cipher_decrypt2( key->handle, input, input_len, output, output_len )))
+    {
+        pgnutls_perror( ret );
+        return STATUS_INTERNAL_ERROR;
+    }
+
+    return STATUS_SUCCESS;
+}
+
+static NTSTATUS key_destroy( struct key *key )
+{
+    if (key->handle) pgnutls_cipher_deinit( key->handle );
+    HeapFree( GetProcessHeap(), 0, key->secret );
+    HeapFree( GetProcessHeap(), 0, key );
+    return STATUS_SUCCESS;
+}
+#else
+struct key
+{
+    struct object hdr;
+    ULONG         block_size;
+};
+
+static NTSTATUS key_init( struct key *key, enum alg_id id, const UCHAR *secret, ULONG secret_len )
+{
+    ERR( "support for keys not available at build time\n" );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+static NTSTATUS key_set_params( struct key *key, UCHAR *iv, ULONG iv_len )
+{
+    ERR( "support for keys not available at build time\n" );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+static NTSTATUS key_encrypt( struct key *key, const UCHAR *input, ULONG input_len, UCHAR *output,
+                             ULONG output_len  )
+{
+    ERR( "support for keys not available at build time\n" );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+static NTSTATUS key_decrypt( struct key *key, const UCHAR *input, ULONG input_len, UCHAR *output,
+                             ULONG output_len )
+{
+    ERR( "support for keys not available at build time\n" );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+static NTSTATUS key_destroy( struct key *key )
+{
+    ERR( "support for keys not available at build time\n" );
+    return STATUS_NOT_IMPLEMENTED;
+}
+#endif
+
+NTSTATUS WINAPI BCryptGenerateSymmetricKey( BCRYPT_ALG_HANDLE algorithm, BCRYPT_KEY_HANDLE *handle,
+                                            UCHAR *object, ULONG object_len, UCHAR *secret, ULONG secret_len,
+                                            ULONG flags )
+{
+    struct algorithm *alg = algorithm;
+    struct key *key;
+    NTSTATUS status;
+
+    TRACE( "%p, %p, %p, %u, %p, %u, %08x\n", alg, handle, object, object_len, secret, secret_len, flags );
+
+    if (!alg || alg->hdr.magic != MAGIC_ALG) return STATUS_INVALID_HANDLE;
+    if (object) FIXME( "ignoring object buffer\n" );
+
+    if (!(key = HeapAlloc( GetProcessHeap(), 0, sizeof(*key) ))) return STATUS_NO_MEMORY;
+    key->hdr.magic = MAGIC_KEY;
+
+    if ((status = key_init( key, alg->id, secret, secret_len )))
+    {
+        HeapFree( GetProcessHeap(), 0, key );
+        return status;
+    }
+
+    *handle = key;
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS WINAPI BCryptDestroyKey( BCRYPT_KEY_HANDLE handle )
+{
+    struct key *key = handle;
+
+    TRACE( "%p\n", handle );
+
+    if (!key || key->hdr.magic != MAGIC_KEY) return STATUS_INVALID_HANDLE;
+    return key_destroy( key );
+}
+
+NTSTATUS WINAPI BCryptEncrypt( BCRYPT_KEY_HANDLE handle, UCHAR *input, ULONG input_len,
+                               void *padding, UCHAR *iv, ULONG iv_len, UCHAR *output,
+                               ULONG output_len, ULONG *ret_len, ULONG flags )
+{
+    struct key *key = handle;
+    ULONG bytes_left = input_len;
+    UCHAR *buf, *src, *dst;
+    NTSTATUS status;
+
+    TRACE( "%p, %p, %u, %p, %p, %u, %p, %u, %p, %08x\n", handle, input, input_len,
+           padding, iv, iv_len, output, output_len, ret_len, flags );
+
+    if (!key || key->hdr.magic != MAGIC_KEY) return STATUS_INVALID_HANDLE;
+    if (padding)
+    {
+        FIXME( "padding info not implemented\n" );
+        return STATUS_NOT_IMPLEMENTED;
+    }
+    if (flags & ~BCRYPT_BLOCK_PADDING)
+    {
+        FIXME( "flags %08x not implemented\n", flags );
+        return STATUS_NOT_IMPLEMENTED;
+    }
+
+    if ((status = key_set_params( key, iv, iv_len ))) return status;
+
+    *ret_len = input_len;
+    if (input_len & (key->block_size - 1))
+    {
+        if (!(flags & BCRYPT_BLOCK_PADDING)) return STATUS_INVALID_BUFFER_SIZE;
+        *ret_len = (input_len + key->block_size - 1) & ~(key->block_size - 1);
+    }
+    if (!output) return STATUS_SUCCESS;
+    if (output_len < *ret_len) return STATUS_BUFFER_TOO_SMALL;
+
+    src = input;
+    dst = output;
+    while (bytes_left >= key->block_size)
+    {
+        if ((status = key_encrypt( key, src, key->block_size, dst, key->block_size ))) return status;
+        bytes_left -= key->block_size;
+        src += key->block_size;
+        dst += key->block_size;
+    }
+    if (bytes_left)
+    {
+        if (!(buf = HeapAlloc( GetProcessHeap(), 0, key->block_size ))) return STATUS_NO_MEMORY;
+        memcpy( buf, src, bytes_left );
+        memset( buf + bytes_left, key->block_size - bytes_left, key->block_size - bytes_left );
+        status = key_encrypt( key, buf, key->block_size, dst, key->block_size );
+        HeapFree( GetProcessHeap(), 0, buf );
+    }
+
+    return status;
+}
+
+NTSTATUS WINAPI BCryptDecrypt( BCRYPT_KEY_HANDLE handle, UCHAR *input, ULONG input_len,
+                               void *padding, UCHAR *iv, ULONG iv_len, UCHAR *output,
+                               ULONG output_len, ULONG *ret_len, ULONG flags )
+{
+    struct key *key = handle;
+    NTSTATUS status;
+
+    TRACE( "%p, %p, %u, %p, %p, %u, %p, %u, %p, %08x\n", handle, input, input_len,
+           padding, iv, iv_len, output, output_len, ret_len, flags );
+
+    if (!key || key->hdr.magic != MAGIC_KEY) return STATUS_INVALID_HANDLE;
+    if (padding)
+    {
+        FIXME( "padding info not implemented\n" );
+        return STATUS_NOT_IMPLEMENTED;
+    }
+    if (flags & ~BCRYPT_BLOCK_PADDING)
+    {
+        FIXME( "flags %08x not supported\n", flags );
+        return STATUS_NOT_IMPLEMENTED;
+    }
+
+    if ((status = key_set_params( key, iv, iv_len ))) return status;
+
+    *ret_len = input_len;
+    if (input_len & (key->block_size - 1)) return STATUS_INVALID_BUFFER_SIZE;
+    if (!output) return STATUS_SUCCESS;
+    if (output_len < *ret_len) return STATUS_BUFFER_TOO_SMALL;
+
+    return key_decrypt( key, input, input_len, output, output_len );
 }
 
 BOOL WINAPI DllMain( HINSTANCE hinst, DWORD reason, LPVOID reserved )
