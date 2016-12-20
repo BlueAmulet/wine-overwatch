@@ -672,6 +672,24 @@ end:
     return STATUS_SUCCESS;
 }
 
+NTSTATUS WINAPI BCryptDuplicateHash( BCRYPT_HASH_HANDLE handle, BCRYPT_HASH_HANDLE *handle_copy,
+                                     UCHAR *object, ULONG object_count, ULONG flags )
+{
+    struct hash *hash_orig = handle;
+    struct hash *hash_copy;
+
+    TRACE( "%p, %p, %p, %u, %u\n", handle, handle_copy, object, object_count, flags );
+
+    if (!hash_orig || hash_orig->hdr.magic != MAGIC_HASH) return STATUS_INVALID_HANDLE;
+    if (!(hash_copy = HeapAlloc( GetProcessHeap(), 0, sizeof(*hash_copy) )))
+        return STATUS_NO_MEMORY;
+
+    memcpy( hash_copy, hash_orig, sizeof(*hash_orig) );
+
+    *handle_copy = hash_copy;
+    return STATUS_SUCCESS;
+}
+
 NTSTATUS WINAPI BCryptDestroyHash( BCRYPT_HASH_HANDLE handle )
 {
     struct hash *hash = handle;

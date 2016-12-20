@@ -11,7 +11,7 @@
 @ stdcall BCryptDestroyHash(ptr)
 @ stdcall BCryptDestroyKey(ptr)
 @ stub BCryptDestroySecret
-@ stub BCryptDuplicateHash
+@ stdcall BCryptDuplicateHash(ptr ptr ptr long long)
 @ stub BCryptDuplicateKey
 @ stdcall BCryptEncrypt(ptr ptr long ptr ptr long ptr long ptr long)
 @ stdcall BCryptEnumAlgorithms(long ptr ptr long)
