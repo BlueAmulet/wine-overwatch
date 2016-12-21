@@ -997,11 +997,12 @@ NTSTATUS WINAPI BCryptEncrypt( BCRYPT_KEY_HANDLE handle, UCHAR *input, ULONG inp
     if ((status = key_set_params( key, iv, iv_len ))) return status;
 
     *ret_len = input_len;
-    if (input_len & (key->block_size - 1))
-    {
-        if (!(flags & BCRYPT_BLOCK_PADDING)) return STATUS_INVALID_BUFFER_SIZE;
-        *ret_len = (input_len + key->block_size - 1) & ~(key->block_size - 1);
-    }
+
+    if (flags & BCRYPT_BLOCK_PADDING)
+        *ret_len = (input_len + key->block_size) & ~(key->block_size - 1);
+    else if (input_len & (key->block_size - 1))
+        return STATUS_INVALID_BUFFER_SIZE;
+
     if (!output) return STATUS_SUCCESS;
     if (output_len < *ret_len) return STATUS_BUFFER_TOO_SMALL;
 
@@ -1014,7 +1015,8 @@ NTSTATUS WINAPI BCryptEncrypt( BCRYPT_KEY_HANDLE handle, UCHAR *input, ULONG inp
         src += key->block_size;
         dst += key->block_size;
     }
-    if (bytes_left)
+
+    if (flags & BCRYPT_BLOCK_PADDING)
     {
         if (!(buf = HeapAlloc( GetProcessHeap(), 0, key->block_size ))) return STATUS_NO_MEMORY;
         memcpy( buf, src, bytes_left );
