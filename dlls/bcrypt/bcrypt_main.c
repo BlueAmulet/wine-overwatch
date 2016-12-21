@@ -1033,6 +1033,8 @@ NTSTATUS WINAPI BCryptDecrypt( BCRYPT_KEY_HANDLE handle, UCHAR *input, ULONG inp
                                ULONG output_len, ULONG *ret_len, ULONG flags )
 {
     struct key *key = handle;
+    ULONG bytes_left = input_len;
+    UCHAR *buf, *src, *dst;
     NTSTATUS status;
 
     TRACE( "%p, %p, %u, %p, %p, %u, %p, %u, %p, %08x\n", handle, input, input_len,
@@ -1053,11 +1055,44 @@ NTSTATUS WINAPI BCryptDecrypt( BCRYPT_KEY_HANDLE handle, UCHAR *input, ULONG inp
     if ((status = key_set_params( key, iv, iv_len ))) return status;
 
     *ret_len = input_len;
+
     if (input_len & (key->block_size - 1)) return STATUS_INVALID_BUFFER_SIZE;
     if (!output) return STATUS_SUCCESS;
-    if (output_len < *ret_len) return STATUS_BUFFER_TOO_SMALL;
+    if (flags & BCRYPT_BLOCK_PADDING)
+    {
+        if (output_len + key->block_size < *ret_len) return STATUS_BUFFER_TOO_SMALL;
+        if (input_len < key->block_size) return STATUS_BUFFER_TOO_SMALL;
+        bytes_left -= key->block_size;
+    }
+    else if (output_len < *ret_len)
+        return STATUS_BUFFER_TOO_SMALL;
 
-    return key_decrypt( key, input, input_len, output, output_len );
+    src = input;
+    dst = output;
+    while (bytes_left >= key->block_size)
+    {
+        if ((status = key_decrypt( key, src, key->block_size, dst, key->block_size ))) return status;
+        bytes_left -= key->block_size;
+        src += key->block_size;
+        dst += key->block_size;
+    }
+
+    if (flags & BCRYPT_BLOCK_PADDING)
+    {
+        if (!(buf = HeapAlloc( GetProcessHeap(), 0, key->block_size ))) return STATUS_NO_MEMORY;
+        status = key_decrypt( key, src, key->block_size, buf, key->block_size );
+        if (!status && buf[ key->block_size - 1 ] <= key->block_size)
+        {
+            *ret_len -= buf[ key->block_size - 1 ];
+            if (output_len < *ret_len) status = STATUS_BUFFER_TOO_SMALL;
+            else memcpy( dst, buf, key->block_size - buf[ key->block_size - 1 ] );
+        }
+        else
+            status = STATUS_UNSUCCESSFUL; /* FIXME: invalid padding */
+        HeapFree( GetProcessHeap(), 0, buf );
+    }
+
+    return status;
 }
 
 BOOL WINAPI DllMain( HINSTANCE hinst, DWORD reason, LPVOID reserved )
