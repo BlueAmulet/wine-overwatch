@@ -31,9 +31,9 @@
 #include "dxva.h"
 #include "dxva2_private.h"
 
-WINE_DEFAULT_DEBUG_CHANNEL(dxva2);
-
 #ifdef HAVE_VAAPI
+
+WINE_DEFAULT_DEBUG_CHANNEL(dxva2);
 
 #define MAX_SLICES 4096
 
