@@ -791,6 +791,8 @@ static ULONG get_block_size( enum alg_id alg )
 
 static NTSTATUS key_init( struct key *key, enum alg_id id, UCHAR *secret, ULONG secret_len )
 {
+    UCHAR *buffer;
+
     if (!libgnutls_handle) return STATUS_INTERNAL_ERROR;
 
     switch (id)
@@ -804,10 +806,12 @@ static NTSTATUS key_init( struct key *key, enum alg_id id, UCHAR *secret, ULONG 
     }
 
     if (!(key->block_size = get_block_size( id ))) return STATUS_INVALID_PARAMETER;
+    if (!(buffer = HeapAlloc( GetProcessHeap(), 0, secret_len ))) return STATUS_NO_MEMORY;
+    memcpy( buffer, secret, secret_len );
 
     key->alg_id     = id;
     key->handle     = 0;        /* initialized on first use */
-    key->secret     = secret;
+    key->secret     = buffer;
     key->secret_len = secret_len;
 
     return STATUS_SUCCESS;
