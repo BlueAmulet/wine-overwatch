@@ -915,6 +915,24 @@ static NTSTATUS key_init( struct key *key, struct algorithm *alg, UCHAR *secret,
     return STATUS_SUCCESS;
 }
 
+static NTSTATUS key_duplicate( struct key *key_orig, struct key *key_copy )
+{
+    UCHAR *buffer;
+
+    if (!(buffer = HeapAlloc( GetProcessHeap(), 0, key_orig->secret_len ))) return STATUS_NO_MEMORY;
+    memcpy( buffer, key_orig->secret, key_orig->secret_len );
+
+    key_copy->hdr           = key_orig->hdr;
+    key_copy->alg_id        = key_orig->alg_id;
+    key_copy->mode          = key_orig->mode;
+    key_copy->block_size    = key_orig->block_size;
+    key_copy->handle        = NULL;
+    key_copy->secret        = buffer;
+    key_copy->secret_len    = key_orig->secret_len;
+
+    return STATUS_SUCCESS;
+}
+
 static gnutls_cipher_algorithm_t get_gnutls_cipher( const struct key *key )
 {
     switch (key->alg_id)
@@ -1028,6 +1046,13 @@ static NTSTATUS key_init( struct key *key, struct algorithm *alg, UCHAR *secret,
     return STATUS_NOT_IMPLEMENTED;
 }
 
+static NTSTATUS key_duplicate( struct key *key_orig, struct key *key_copy )
+{
+    ERR( "support for keys not available at build time\n" );
+    key_copy->mode = MODE_ID_CBC;
+    return STATUS_NOT_IMPLEMENTED;
+}
+
 static NTSTATUS key_set_params( struct key *key, UCHAR *iv, ULONG iv_len )
 {
     ERR( "support for keys not available at build time\n" );
@@ -1084,6 +1109,30 @@ NTSTATUS WINAPI BCryptGenerateSymmetricKey( BCRYPT_ALG_HANDLE algorithm, BCRYPT_
     }
 
     *handle = key;
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS WINAPI BCryptDuplicateKey( BCRYPT_KEY_HANDLE handle, BCRYPT_KEY_HANDLE *handle_copy,
+                                    UCHAR *object, ULONG object_len, ULONG flags )
+{
+    struct key *key_orig = handle;
+    struct key *key_copy;
+    NTSTATUS status;
+
+    TRACE( "%p, %p, %p, %u, %08x\n", handle, handle_copy, object, object_len, flags );
+
+    if (!key_orig || key_orig->hdr.magic != MAGIC_KEY) return STATUS_INVALID_HANDLE;
+    if (!handle_copy) return STATUS_INVALID_PARAMETER;
+    if (!(key_copy = HeapAlloc( GetProcessHeap(), 0, sizeof(*key_copy) )))
+        return STATUS_NO_MEMORY;
+
+    if ((status = key_duplicate( key_orig, key_copy )))
+    {
+        HeapFree( GetProcessHeap(), 0, key_copy );
+        return status;
+    }
+
+    *handle_copy = key_copy;
     return STATUS_SUCCESS;
 }
 
