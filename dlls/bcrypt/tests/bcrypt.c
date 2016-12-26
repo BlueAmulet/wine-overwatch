@@ -875,7 +875,7 @@ static void test_BCryptGenerateSymmetricKey(void)
 
     ret = pBCryptSetProperty(aes, BCRYPT_CHAINING_MODE, (UCHAR *)BCRYPT_CHAIN_MODE_CBC,
                             sizeof(BCRYPT_CHAIN_MODE_CBC), 0);
-    todo_wine ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
+    ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
 
     size = 0xdeadbeef;
     ret = pBCryptEncrypt(key, NULL, 0, NULL, NULL, 0, NULL, 0, &size, 0);
@@ -1064,7 +1064,7 @@ static void test_BCryptEncrypt(void)
     todo_wine ok(ret == STATUS_NOT_SUPPORTED, "got %08x\n", ret);
 
     ret = BCryptSetProperty(aes, BCRYPT_CHAINING_MODE, (UCHAR*)BCRYPT_CHAIN_MODE_GCM, sizeof(BCRYPT_CHAIN_MODE_GCM), 0);
-    todo_wine ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
+    ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
 
     size = 0;
     ret = BCryptGetProperty(aes, BCRYPT_AUTH_TAG_LENGTH, NULL, 0, &size, 0);
@@ -1292,7 +1292,7 @@ static void test_BCryptDecrypt(void)
      ******************/
 
     ret = BCryptSetProperty(aes, BCRYPT_CHAINING_MODE, (UCHAR*)BCRYPT_CHAIN_MODE_GCM, sizeof(BCRYPT_CHAIN_MODE_GCM), 0);
-    todo_wine ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
+    ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
 
     buf = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
     ret = pBCryptGenerateSymmetricKey(aes, &key, buf, len, secret, sizeof(secret), 0);
