@@ -215,6 +215,9 @@ int alg_block_bits[] =
     /* ALG_ID_SHA512 */ 1024
 };
 
+struct key;
+static NTSTATUS set_key_property( struct key *key, const WCHAR *prop, UCHAR *value, ULONG size, ULONG flags );
+
 NTSTATUS WINAPI BCryptGenRandom(BCRYPT_ALG_HANDLE handle, UCHAR *buffer, ULONG count, ULONG flags)
 {
     const DWORD supported_flags = BCRYPT_USE_SYSTEM_PREFERRED_RNG;
@@ -685,8 +688,8 @@ NTSTATUS WINAPI BCryptSetProperty( BCRYPT_HANDLE handle, const WCHAR *prop, UCHA
     }
     case MAGIC_KEY:
     {
-        FIXME( "keys not implemented yet\n" );
-        return STATUS_NOT_IMPLEMENTED;
+        struct key *key = (struct key *)object;
+        return set_key_property( key, prop, value, size, flags );
     }
     default:
         WARN( "unknown magic %08x\n", object->magic );
@@ -933,6 +936,31 @@ static NTSTATUS key_duplicate( struct key *key_orig, struct key *key_copy )
     return STATUS_SUCCESS;
 }
 
+static NTSTATUS set_key_property( struct key *key, const WCHAR *prop, UCHAR *value, ULONG size, ULONG flags )
+{
+    if (!strcmpW( prop, BCRYPT_CHAINING_MODE ))
+    {
+        if (!strncmpW( (WCHAR *)value, BCRYPT_CHAIN_MODE_CBC, size ))
+        {
+            key->mode = MODE_ID_CBC;
+            return STATUS_SUCCESS;
+        }
+        else if (!strncmpW( (WCHAR *)value, BCRYPT_CHAIN_MODE_GCM, size ))
+        {
+            key->mode = MODE_ID_GCM;
+            return STATUS_SUCCESS;
+        }
+        else
+        {
+            FIXME( "unsupported mode %s\n", debugstr_wn( (WCHAR *)value, size ) );
+            return STATUS_NOT_IMPLEMENTED;
+        }
+    }
+
+    FIXME( "unsupported key property %s\n", debugstr_w(prop) );
+    return STATUS_NOT_IMPLEMENTED;
+}
+
 static gnutls_cipher_algorithm_t get_gnutls_cipher( const struct key *key )
 {
     switch (key->alg_id)
@@ -1050,6 +1078,12 @@ static NTSTATUS key_duplicate( struct key *key_orig, struct key *key_copy )
 {
     ERR( "support for keys not available at build time\n" );
     key_copy->mode = MODE_ID_CBC;
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+static NTSTATUS set_key_property( struct key *key, const WCHAR *prop, UCHAR *value, ULONG size, ULONG flags )
+{
+    ERR( "support for keys not available at build time\n" );
     return STATUS_NOT_IMPLEMENTED;
 }
 
