@@ -499,8 +499,7 @@ static GpStatus alpha_blend_pixels_hrgn(GpGraphics *graphics, INT dst_x, INT dst
 
         SetViewportOrgEx(graphics->hdc, 0, 0, NULL);
 
-        if (hrgn)
-            ExtSelectClipRgn(graphics->hdc, hrgn, RGN_AND);
+        ExtSelectClipRgn(graphics->hdc, hrgn, RGN_COPY);
 
         if (hregion)
             ExtSelectClipRgn(graphics->hdc, hregion, RGN_AND);
