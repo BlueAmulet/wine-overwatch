@@ -1163,12 +1163,17 @@ NTSTATUS WINAPI BCryptGenerateSymmetricKey( BCRYPT_ALG_HANDLE algorithm, BCRYPT_
     if (!alg || alg->hdr.magic != MAGIC_ALG) return STATUS_INVALID_HANDLE;
     if (object) FIXME( "ignoring object buffer\n" );
 
-    if (!(key = HeapAlloc( GetProcessHeap(), 0, sizeof(*key) ))) return STATUS_NO_MEMORY;
+    if (!(key = HeapAlloc( GetProcessHeap(), 0, sizeof(*key) )))
+    {
+        *handle = NULL;
+        return STATUS_NO_MEMORY;
+    }
     key->hdr.magic = MAGIC_KEY;
 
     if ((status = key_init( key, alg, secret, secret_len )))
     {
         HeapFree( GetProcessHeap(), 0, key );
+        *handle = NULL;
         return status;
     }
 
@@ -1188,11 +1193,15 @@ NTSTATUS WINAPI BCryptDuplicateKey( BCRYPT_KEY_HANDLE handle, BCRYPT_KEY_HANDLE 
     if (!key_orig || key_orig->hdr.magic != MAGIC_KEY) return STATUS_INVALID_HANDLE;
     if (!handle_copy) return STATUS_INVALID_PARAMETER;
     if (!(key_copy = HeapAlloc( GetProcessHeap(), 0, sizeof(*key_copy) )))
+    {
+        *handle_copy = NULL;
         return STATUS_NO_MEMORY;
+    }
 
     if ((status = key_duplicate( key_orig, key_copy )))
     {
         HeapFree( GetProcessHeap(), 0, key_copy );
+        *handle_copy = NULL;
         return status;
     }
 
