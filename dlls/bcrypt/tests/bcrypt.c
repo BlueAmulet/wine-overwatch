@@ -828,7 +828,7 @@ static void test_aes(void)
 
     size = 0;
     ret = pBCryptGetProperty(alg, BCRYPT_CHAINING_MODE, mode, sizeof(mode) - 1, &size, 0);
-    todo_wine ok(ret == STATUS_BUFFER_TOO_SMALL, "got %08x\n", ret);
+    ok(ret == STATUS_BUFFER_TOO_SMALL, "got %08x\n", ret);
     ok(size == 64, "got %u\n", size);
 
     size = 0;
