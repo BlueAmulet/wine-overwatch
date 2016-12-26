@@ -681,6 +681,7 @@ NTSTATUS WINAPI BCryptDuplicateHash( BCRYPT_HASH_HANDLE handle, BCRYPT_HASH_HAND
     TRACE( "%p, %p, %p, %u, %u\n", handle, handle_copy, object, object_count, flags );
 
     if (!hash_orig || hash_orig->hdr.magic != MAGIC_HASH) return STATUS_INVALID_HANDLE;
+    if (!handle_copy) return STATUS_INVALID_PARAMETER;
     if (!(hash_copy = HeapAlloc( GetProcessHeap(), 0, sizeof(*hash_copy) )))
         return STATUS_NO_MEMORY;
 

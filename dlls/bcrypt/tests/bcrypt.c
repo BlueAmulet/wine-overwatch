@@ -33,6 +33,7 @@ static NTSTATUS (WINAPI *pBCryptCreateHash)(BCRYPT_ALG_HANDLE, BCRYPT_HASH_HANDL
                                             ULONG, ULONG);
 static NTSTATUS (WINAPI *pBCryptHash)(BCRYPT_ALG_HANDLE, UCHAR *, ULONG, UCHAR *, ULONG, UCHAR *, ULONG);
 static NTSTATUS (WINAPI *pBCryptHashData)(BCRYPT_HASH_HANDLE, PUCHAR, ULONG, ULONG);
+static NTSTATUS (WINAPI *pBCryptDuplicateHash)(BCRYPT_HASH_HANDLE, BCRYPT_HASH_HANDLE *, UCHAR *, ULONG, ULONG);
 static NTSTATUS (WINAPI *pBCryptFinishHash)(BCRYPT_HASH_HANDLE, PUCHAR, ULONG, ULONG);
 static NTSTATUS (WINAPI *pBCryptDestroyHash)(BCRYPT_HASH_HANDLE);
 static NTSTATUS (WINAPI *pBCryptGenRandom)(BCRYPT_ALG_HANDLE, PUCHAR, ULONG, ULONG);
@@ -173,7 +174,7 @@ static void test_sha1(void)
     static const char expected[] = "961fa64958818f767707072755d7018dcd278e94";
     static const char expected_hmac[] = "2472cf65d0e090618d769d3e46f0d9446cf212da";
     BCRYPT_ALG_HANDLE alg;
-    BCRYPT_HASH_HANDLE hash;
+    BCRYPT_HASH_HANDLE hash, hash2;
     UCHAR buf[512], buf_hmac[1024], sha1[20], sha1_hmac[20];
     ULONG size, len;
     char str[41];
@@ -259,6 +260,28 @@ static void test_sha1(void)
 
     test_hash_length(hash, 20);
     test_alg_name(hash, "SHA1");
+
+    ret = pBCryptDuplicateHash(NULL, &hash2, NULL, 0, 0);
+    ok(ret == STATUS_INVALID_HANDLE, "got %08x\n", ret);
+
+    ret = pBCryptDuplicateHash(hash, NULL, NULL, 0, 0);
+    ok(ret == STATUS_INVALID_PARAMETER, "got %08x\n", ret);
+
+    hash2 = (void *)0xdeadbeef;
+    ret = pBCryptDuplicateHash(hash, &hash2, NULL, 0, 0);
+    ok(ret == STATUS_SUCCESS || broken(ret == STATUS_INVALID_PARAMETER) /* < Win 7 */, "got %08x\n", ret);
+
+    if (ret == STATUS_SUCCESS)
+    {
+        memset(sha1_hmac, 0, sizeof(sha1_hmac));
+        ret = pBCryptFinishHash(hash2, sha1_hmac, sizeof(sha1_hmac), 0);
+        ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
+        format_hash( sha1_hmac, sizeof(sha1_hmac), str );
+        ok(!strcmp(str, expected_hmac), "got %s\n", str);
+
+        ret = pBCryptDestroyHash(hash2);
+        ok(ret == STATUS_SUCCESS, "got %08x\n", ret);
+    }
 
     memset(sha1_hmac, 0, sizeof(sha1_hmac));
     ret = pBCryptFinishHash(hash, sha1_hmac, sizeof(sha1_hmac), 0);
@@ -1165,6 +1188,7 @@ START_TEST(bcrypt)
     pBCryptCreateHash = (void *)GetProcAddress(module, "BCryptCreateHash");
     pBCryptHash = (void *)GetProcAddress(module, "BCryptHash");
     pBCryptHashData = (void *)GetProcAddress(module, "BCryptHashData");
+    pBCryptDuplicateHash = (void *)GetProcAddress(module, "BCryptDuplicateHash");
     pBCryptFinishHash = (void *)GetProcAddress(module, "BCryptFinishHash");
     pBCryptDestroyHash = (void *)GetProcAddress(module, "BCryptDestroyHash");
     pBCryptGenRandom = (void *)GetProcAddress(module, "BCryptGenRandom");
