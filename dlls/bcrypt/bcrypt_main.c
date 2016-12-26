@@ -585,14 +585,12 @@ static NTSTATUS set_alg_property( struct algorithm *alg, const WCHAR *prop, UCHA
     case ALG_ID_AES:
         if (!strcmpW( prop, BCRYPT_CHAINING_MODE ))
         {
-            if (size == sizeof(BCRYPT_CHAIN_MODE_CBC) &&
-                !strncmpW( (WCHAR *)value, BCRYPT_CHAIN_MODE_CBC, size ))
+            if (!strncmpW( (WCHAR *)value, BCRYPT_CHAIN_MODE_CBC, size ))
             {
                 alg->mode = MODE_ID_CBC;
                 return STATUS_SUCCESS;
             }
-            else if (size == sizeof(BCRYPT_CHAIN_MODE_GCM) &&
-                     !strncmpW( (WCHAR *)value, BCRYPT_CHAIN_MODE_GCM, size ))
+            else if (!strncmpW( (WCHAR *)value, BCRYPT_CHAIN_MODE_GCM, size ))
             {
                 alg->mode = MODE_ID_GCM;
                 return STATUS_SUCCESS;
