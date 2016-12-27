@@ -593,15 +593,26 @@ static void set_input_focus( struct x11drv_win_data *data )
  */
 static void set_focus( Display *display, HWND hwnd, Time time )
 {
-    HWND focus;
+    HWND focus, old_active;
     Window win;
     GUITHREADINFO threadinfo;
+
+    old_active = GetForegroundWindow();
 
     /* prevent recursion */
     x11drv_thread_data()->active_window = hwnd;
 
     TRACE( "setting foreground window to %p\n", hwnd );
     SetForegroundWindow( hwnd );
+
+    /* Some applications expect that a being deactivated topmost window
+     * receives the WM_WINDOWPOSCHANGING/WM_WINDOWPOSCHANGED messages,
+     * and perform some specific actions. Chessmaster is one of such apps.
+     * Window Manager keeps a topmost window on top in z-oder, so there is
+     * no need to actually do anything, just send the messages.
+     */
+    if (old_active && (GetWindowLongW( old_active, GWL_EXSTYLE ) & WS_EX_TOPMOST))
+        SetWindowPos( old_active, hwnd, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER );
 
     threadinfo.cbSize = sizeof(threadinfo);
     GetGUIThreadInfo(0, &threadinfo);
