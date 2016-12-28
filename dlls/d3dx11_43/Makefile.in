@@ -5,6 +5,7 @@ IMPORTS   = d3dcompiler
 C_SRCS = \
 	async.c \
 	d3dx11_43.c \
+	shader.c \
 	texture.c
 
 RC_SRCS = version.rc
