@@ -1129,6 +1129,13 @@ static NTSTATUS map_image( HANDLE hmapping, int fd, char *base, SIZE_T total_siz
         /* unaligned sections, this happens for native subsystem binaries */
         /* in that case Windows simply maps in the whole file */
 
+        /* if the image size is larger than the backed file size we can't mmap it */
+        if (total_size > ROUND_SIZE( 0, st.st_size ))
+        {
+            close_handle( dup_mapping );
+            dup_mapping = 0;
+        }
+
         if (map_file_into_view( view, fd, 0, total_size, 0, VPROT_COMMITTED | VPROT_READ | VPROT_WRITECOPY,
                                 !dup_mapping ) != STATUS_SUCCESS) goto error;
 
