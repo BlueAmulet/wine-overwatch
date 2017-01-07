@@ -836,8 +836,11 @@ static GLenum gl_stencil_op(enum wined3d_stencil_op op)
         case WINED3D_STENCIL_OP_DECR:
             return GL_DECR_WRAP;
         default:
-            FIXME("Unrecognized stencil op %#x.\n", op);
+        {
+            static int once;
+            if (op || !once++) FIXME("Unrecognized stencil op %#x.\n", op);
             return GL_KEEP;
+        }
     }
 }
 
