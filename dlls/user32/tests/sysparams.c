@@ -39,6 +39,7 @@
 #endif
 
 static LONG (WINAPI *pChangeDisplaySettingsExA)(LPCSTR, LPDEVMODEA, HWND, DWORD, LPVOID);
+static LONG (WINAPI *pGetAutoRotationState)(PAR_STATE);
 
 static BOOL strict;
 static int dpi;
@@ -2917,6 +2918,28 @@ static void test_GetSysColorBrush(void)
         win_skip("COLOR_MENUBAR unsupported\n");
 }
 
+static void test_GetAutoRotationState(void)
+{
+    AR_STATE state;
+    BOOL ret;
+
+    if (!pGetAutoRotationState)
+    {
+        win_skip("GetAutoRotationState not supported\n");
+        return;
+    }
+
+    SetLastError(0xdeadbeef);
+    ret = pGetAutoRotationState(NULL);
+    ok(!ret, "Expected GetAutoRotationState to fail\n");
+    ok(GetLastError() == ERROR_INVALID_PARAMETER, "Expected ERROR_INVALID_PARAMETER, got %d\n", GetLastError());
+
+    state = 0;
+    ret = pGetAutoRotationState(&state);
+    ok(ret, "Expected GetAutoRotationState to succeed, error %d\n", GetLastError());
+    ok((state & AR_NOSENSOR) != 0, "Expected AR_NOSENSOR, got %d\n", state);
+}
+
 START_TEST(sysparams)
 {
     int argc;
@@ -2929,6 +2952,7 @@ START_TEST(sysparams)
 
     hdll = GetModuleHandleA("user32.dll");
     pChangeDisplaySettingsExA=(void*)GetProcAddress(hdll, "ChangeDisplaySettingsExA");
+    pGetAutoRotationState=(void*)GetProcAddress(hdll, "GetAutoRotationState");
 
     hInstance = GetModuleHandleA( NULL );
     hdc = GetDC(0);
@@ -2948,6 +2972,7 @@ START_TEST(sysparams)
     trace("testing EnumDisplaySettings vs GetDeviceCaps\n");
     test_EnumDisplaySettings( );
     test_GetSysColorBrush( );
+    test_GetAutoRotationState( );
 
     change_counter = 0;
     change_last_param = 0;

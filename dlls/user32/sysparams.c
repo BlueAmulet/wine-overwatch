@@ -2913,3 +2913,20 @@ BOOL WINAPI IsProcessDPIAware(void)
     FIXME( "stub!\n");
     return FALSE;
 }
+
+/***********************************************************************
+ *      GetAutoRotationState   (USER32.@)
+ */
+BOOL WINAPI GetAutoRotationState(AR_STATE *state)
+{
+    TRACE("(%p)\n", state);
+
+    if (!state)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+
+    *state = AR_NOSENSOR;
+    return TRUE;
+}
