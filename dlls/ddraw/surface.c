@@ -42,6 +42,7 @@ static inline struct ddraw_surface *impl_from_IDirectDrawGammaControl(IDirectDra
  * to support windowless rendering first. */
 HRESULT ddraw_surface_update_frontbuffer(struct ddraw_surface *surface, const RECT *rect, BOOL read)
 {
+    struct ddraw *ddraw = surface->ddraw;
     HDC surface_dc, screen_dc;
     int x, y, w, h;
     HRESULT hr;
@@ -62,14 +63,14 @@ HRESULT ddraw_surface_update_frontbuffer(struct ddraw_surface *surface, const RE
     if (w <= 0 || h <= 0)
         return DD_OK;
 
-    if (surface->ddraw->swapchain_window)
+    if (ddraw->swapchain_window && !(ddraw->flags & DDRAW_GDI_FLIP))
     {
         /* Nothing to do, we control the frontbuffer, or at least the parts we
          * care about. */
         if (read)
             return DD_OK;
 
-        return wined3d_texture_blt(surface->ddraw->wined3d_frontbuffer, 0, rect,
+        return wined3d_texture_blt(ddraw->wined3d_frontbuffer, 0, rect,
                 surface->wined3d_texture, surface->sub_resource_idx, rect, 0, NULL, WINED3D_TEXF_POINT);
     }
 

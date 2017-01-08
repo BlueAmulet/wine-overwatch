@@ -2091,7 +2091,14 @@ static HRESULT WINAPI d3d1_Initialize(IDirect3D *iface, REFIID riid)
  *****************************************************************************/
 static HRESULT WINAPI ddraw7_FlipToGDISurface(IDirectDraw7 *iface)
 {
-    FIXME("iface %p stub!\n", iface);
+    struct ddraw *ddraw = impl_from_IDirectDraw7(iface);
+
+    TRACE("iface %p.\n", iface);
+
+    ddraw->flags |= DDRAW_GDI_FLIP;
+
+    if (ddraw->primary)
+        ddraw_surface_update_frontbuffer(ddraw->primary, NULL, FALSE);
 
     return DD_OK;
 }
