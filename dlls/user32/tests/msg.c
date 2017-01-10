@@ -6396,11 +6396,9 @@ if (0) /* actual message sequence is different on every run in some Windows setu
     while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE)) DispatchMessageA(&msg);
     ok_sequence(auto_radio_button_VK_DOWN_dialog, "IsDialogMessage(VK_DOWN)", TRUE);
 
-todo_wine
     test_radio(radio1, 1, radio2, 0, radio3, 0);
 
     hwnd = GetFocus();
-todo_wine
     ok(hwnd == radio1, "focus should be on radio1, not on %p\n", hwnd);
     GetWindowRect(radio1, &rc);
 
@@ -6415,11 +6413,9 @@ todo_wine
     while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE)) DispatchMessageA(&msg);
     ok_sequence(auto_radio_button_VK_DOWN_radio3, "down to radio3", TRUE);
 
-todo_wine
     test_radio(radio1, 1, radio2, 0, radio3, 0);
 
     hwnd = GetFocus();
-todo_wine
     ok(hwnd == radio1, "focus should be on radio1, not on %p\n", hwnd);
 
     flush_events();
@@ -6436,11 +6432,9 @@ todo_wine
     while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE)) DispatchMessageA(&msg);
     ok_sequence(auto_radio_button_VK_UP_radio1, "up to radio1", TRUE);
 
-todo_wine
     test_radio(radio1, 1, radio2, 0, radio3, 0);
 
     hwnd = GetFocus();
-todo_wine
     ok(hwnd == radio1, "focus should be on radio1, not on %p\n", hwnd);
 
     flush_events();
@@ -6458,7 +6452,6 @@ todo_wine
 if (0) /* actual message sequence is different on every run in some Windows setups */
     ok_sequence(auto_radio_button_VK_UP_dialog, "IsDialogMessage(VK_UP) #3", FALSE);
     /* what really matters is that nothing has changed */
-todo_wine
     test_radio(radio1, 1, radio2, 0, radio3, 0);
 
     log_all_parent_messages--;
