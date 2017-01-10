@@ -5676,11 +5676,30 @@ typedef struct _ASSEMBLY_FILE_DETAILED_INFORMATION {
 
 typedef const ASSEMBLY_FILE_DETAILED_INFORMATION *PCASSEMBLY_FILE_DETAILED_INFORMATION;
 
+typedef enum {
+    ACTCTX_RUN_LEVEL_UNSPECIFIED = 0,
+    ACTCTX_RUN_LEVEL_AS_INVOKER,
+    ACTCTX_RUN_LEVEL_HIGHEST_AVAILABLE,
+    ACTCTX_RUN_LEVEL_REQUIRE_ADMIN,
+    ACTCTX_RUN_LEVEL_NUMBERS
+} ACTCTX_REQUESTED_RUN_LEVEL;
+
+typedef struct _ACTIVATION_CONTEXT_RUN_LEVEL_INFORMATION {
+    DWORD ulFlags;
+    ACTCTX_REQUESTED_RUN_LEVEL RunLevel;
+    DWORD UiAccess;
+} ACTIVATION_CONTEXT_RUN_LEVEL_INFORMATION, *PACTIVATION_CONTEXT_RUN_LEVEL_INFORMATION;
+
+typedef const struct _ACTIVATION_CONTEXT_RUN_LEVEL_INFORMATION *PCACTIVATION_CONTEXT_RUN_LEVEL_INFORMATION;
+
 typedef enum _ACTIVATION_CONTEXT_INFO_CLASS {
     ActivationContextBasicInformation                       = 1,
     ActivationContextDetailedInformation                    = 2,
     AssemblyDetailedInformationInActivationContext          = 3,
     FileInformationInAssemblyOfAssemblyInActivationContext  = 4,
+    RunlevelInformationInActivationContext                  = 5,
+    CompatibilityInformationInActivationContext             = 6,
+    ActivationContextManifestResourceName                   = 7,
     MaxActivationContextInfoClass,
 
     AssemblyDetailedInformationInActivationContxt          = 3,
