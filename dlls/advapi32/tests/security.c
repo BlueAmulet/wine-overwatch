@@ -7144,7 +7144,7 @@ static void test_token_security_descriptor(void)
     char buffer_acl[256];
     ACL *pAcl = (ACL *)&buffer_acl, *pAcl2;
     BOOL defaulted, present, ret, found;
-    HANDLE token, token2;
+    HANDLE token, token2, token3;
     SECURITY_ATTRIBUTES sa;
     DWORD size, index;
     PSID psid;
@@ -7214,8 +7214,48 @@ static void test_token_security_descriptor(void)
 
     HeapFree( GetProcessHeap(), 0, sd2);
 
+    /* Duplicate token without security attributes.
+     * Tokens do not inherit the security descriptor when calling DuplicateToken,
+     * see https://blogs.msdn.microsoft.com/oldnewthing/20160512-00/?p=93447
+     */
+    ret = pDuplicateTokenEx(token2, MAXIMUM_ALLOWED, NULL, SecurityImpersonation, TokenImpersonation, &token3);
+    ok(ret, "DuplicateTokenEx failed with %u\n", GetLastError());
+
+    ret = GetKernelObjectSecurity(token3, DACL_SECURITY_INFORMATION, NULL, 0, &size);
+    ok(!ret && GetLastError() == ERROR_INSUFFICIENT_BUFFER,
+       "GetKernelObjectSecurity failed with %u\n", GetLastError());
+
+    sd2 = HeapAlloc(GetProcessHeap(), 0, size);
+    ret = GetKernelObjectSecurity(token3, DACL_SECURITY_INFORMATION, sd2, size, &size);
+    ok(ret, "GetKernelObjectSecurity failed %u\n", GetLastError());
+
+    pAcl2 = (void *)0xdeadbeef;
+    present = FALSE;
+    defaulted = TRUE;
+    ret = GetSecurityDescriptorDacl(sd2, &present, &pAcl2, &defaulted);
+    ok(ret, "GetSecurityDescriptorDacl failed with %u\n", GetLastError());
+    todo_wine
+    ok(present, "pAcl2 not present\n");
+    ok(pAcl2 != (void *)0xdeadbeef, "pAcl2 not set\n");
+    ok(!defaulted, "pAcl2 defaulted\n");
+
+    if (pAcl2)
+    {
+        index = 0;
+        found = FALSE;
+        while (pGetAce( pAcl2, index++, (void **)&ace ))
+        {
+            if (ace->Header.AceType == ACCESS_ALLOWED_ACE_TYPE && EqualSid(&ace->SidStart, psid))
+                found = TRUE;
+        }
+        ok(!found, "Access allowed ace got inherited!\n");
+    }
+
+    HeapFree(GetProcessHeap(), 0, sd2);
+
     LocalFree(psid);
 
+    CloseHandle(token3);
     CloseHandle(token2);
     CloseHandle(token);
 }
