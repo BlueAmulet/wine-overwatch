@@ -6436,6 +6436,8 @@ static void test_integrity(void)
                                                     {SECURITY_MANDATORY_LOW_RID}};
     static SID medium_level = {SID_REVISION, 1, {SECURITY_MANDATORY_LABEL_AUTHORITY},
                                                     {SECURITY_MANDATORY_MEDIUM_RID}};
+    static SID high_level = {SID_REVISION, 1, {SECURITY_MANDATORY_LABEL_AUTHORITY},
+                                                    {SECURITY_MANDATORY_HIGH_RID}};
     SYSTEM_MANDATORY_LABEL_ACE *ace;
     char buffer_sd[SECURITY_DESCRIPTOR_MIN_LENGTH];
     SECURITY_DESCRIPTOR *sd2, *sd = (SECURITY_DESCRIPTOR *)&buffer_sd;
@@ -6654,6 +6656,45 @@ static void test_integrity(void)
     ok(sAcl != (void *)0xdeadbeef, "sAcl not set\n");
     ok(sAcl->AclRevision == ACL_REVISION3, "Expected revision 3, got %d\n", sAcl->AclRevision);
     ok(!defaulted, "sAcl defaulted\n");
+
+    HeapFree(GetProcessHeap(), 0, sd2);
+    CloseHandle(handle);
+
+    ret = OpenProcessToken(GetCurrentProcess(), READ_CONTROL, &handle);
+    ok(ret, "got %d with %d (expected TRUE)\n", ret, GetLastError());
+
+    ret = GetKernelObjectSecurity(handle, LABEL_SECURITY_INFORMATION, NULL, 0, &size);
+    ok(!ret && GetLastError() == ERROR_INSUFFICIENT_BUFFER,
+       "GetKernelObjectSecurity failed with %u\n", GetLastError());
+
+    sd2 = HeapAlloc(GetProcessHeap(), 0, size);
+    ret = GetKernelObjectSecurity(handle, LABEL_SECURITY_INFORMATION, sd2, size, &size);
+    ok(ret, "GetKernelObjectSecurity failed %u\n", GetLastError());
+
+    sAcl = (void *)0xdeadbeef;
+    present = FALSE;
+    defaulted = TRUE;
+    ret = GetSecurityDescriptorSacl(sd2, &present, &sAcl, &defaulted);
+    ok(ret, "GetSecurityDescriptorSacl failed with %u\n", GetLastError());
+    ok(present, "sAcl not present\n");
+    ok(sAcl != (void *)0xdeadbeef, "sAcl not set\n");
+    ok(sAcl->AceCount == 1, "Expected 1 ACEs, got %d\n", sAcl->AceCount);
+    ok(!defaulted, "sAcl defaulted\n");
+
+    index = 0;
+    found = FALSE;
+    while (pGetAce( sAcl, index++, (void **)&ace ))
+    {
+        if (ace->Header.AceType == SYSTEM_MANDATORY_LABEL_ACE_TYPE &&
+            (EqualSid(&ace->SidStart, &medium_level) || EqualSid(&ace->SidStart, &high_level)))
+        {
+            found = TRUE;
+            ok(ace->Header.AceFlags == 0, "Expected 0 as flags, got %x\n", ace->Header.AceFlags);
+            ok(ace->Mask == SYSTEM_MANDATORY_LABEL_NO_WRITE_UP,
+               "Expected SYSTEM_MANDATORY_LABEL_NO_WRITE_UP as flag, got %x\n", ace->Mask);
+        }
+    }
+    ok(found, "Could not find medium/high mandatory label\n");
 
     HeapFree(GetProcessHeap(), 0, sd2);
     CloseHandle(handle);
@@ -7274,7 +7315,6 @@ static void test_token_security_descriptor(void)
     defaulted = TRUE;
     ret = GetSecurityDescriptorDacl(sd2, &present, &pAcl2, &defaulted);
     ok(ret, "GetSecurityDescriptorDacl failed with %u\n", GetLastError());
-    todo_wine
     ok(present, "pAcl2 not present\n");
     ok(pAcl2 != (void *)0xdeadbeef, "pAcl2 not set\n");
     ok(!defaulted, "pAcl2 defaulted\n");

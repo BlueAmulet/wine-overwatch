@@ -574,6 +574,13 @@ struct thread *create_process( int fd, struct thread *parent_thread, int inherit
     }
     if (!process->handles || !process->token) goto error;
 
+    /* Assign high security label to token. The default would be medium, but wine provides
+     * admin access to all applications, so high makes more sense. For further information:
+     * "Default integrity level" at https://msdn.microsoft.com/en-us/library/bb625963.aspx
+     */
+    if (!token_assign_label( process->token, security_high_label_sid ))
+        goto error;
+
     /* create the main thread */
     if (pipe( request_pipe ) == -1)
     {
