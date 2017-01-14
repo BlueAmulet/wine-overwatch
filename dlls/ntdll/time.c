@@ -46,6 +46,7 @@
 #define WIN32_NO_STATUS
 #include "windef.h"
 #include "winternl.h"
+#include "wine/exception.h"
 #include "wine/unicode.h"
 #include "wine/debug.h"
 #include "ntdll_misc.h"
@@ -474,8 +475,17 @@ NTSTATUS WINAPI NtQueryPerformanceCounter( LARGE_INTEGER *counter, LARGE_INTEGER
 {
     if (!counter) return STATUS_ACCESS_VIOLATION;
 
-    counter->QuadPart = monotonic_counter();
-    if (frequency) frequency->QuadPart = TICKSPERSEC;
+    __TRY
+    {
+        counter->QuadPart = monotonic_counter();
+        if (frequency) frequency->QuadPart = TICKSPERSEC;
+    }
+    __EXCEPT_PAGE_FAULT
+    {
+        return STATUS_ACCESS_VIOLATION;
+    }
+    __ENDTRY
+
     return STATUS_SUCCESS;
 }
 
