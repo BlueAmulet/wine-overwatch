@@ -58,38 +58,39 @@ IDirect3D8 * WINAPI DECLSPEC_HOTPATCH Direct3DCreate8(UINT sdk_version)
 
 /***********************************************************************
  *              ValidateVertexShader (D3D8.@)
- *
- * I've seen reserved1 and reserved2 always passed as 0's
- * bool seems always passed as 0 or 1, but other values work as well...
- * toto       result?
  */
-HRESULT WINAPI ValidateVertexShader(DWORD* vertexshader, DWORD* reserved1, DWORD* reserved2, BOOL bool, DWORD* toto)
+HRESULT WINAPI ValidateVertexShader(DWORD *vertexshader, DWORD *reserved1, DWORD *reserved2,
+                                    BOOL return_error, char **errors)
 {
-  HRESULT ret;
-  static BOOL warned;
+    const char *message = "";
+    HRESULT hr = E_FAIL;
 
-  if (TRACE_ON(d3d8) || !warned) {
-      FIXME("(%p %p %p %d %p): stub\n", vertexshader, reserved1, reserved2, bool, toto);
-      warned = TRUE;
-  }
+    TRACE("(%p %p %p %d %p): semi-stub\n", vertexshader, reserved1, reserved2, return_error, errors);
 
-  if (!vertexshader)
-      return E_FAIL;
+    if (!vertexshader)
+    {
+        message = "(Global Validation Error) Version Token: Code pointer cannot be NULL.\n";
+        goto done;
+    }
 
-  if (reserved1 || reserved2)
-      return E_FAIL;
-
-  switch(*vertexshader) {
+    switch (*vertexshader)
+    {
         case 0xFFFE0101:
         case 0xFFFE0100:
-            ret=S_OK;
+            hr = S_OK;
             break;
+
         default:
             WARN("Invalid shader version token %#x.\n", *vertexshader);
-            ret=E_FAIL;
-        }
+            message = "(Global Validation Error) Version Token: Unsupported vertex shader version.\n";
+    }
 
-  return ret;
+done:
+    if (!return_error) message = "";
+    if (errors && (*errors = HeapAlloc(GetProcessHeap(), 0, strlen(message) + 1)))
+        strcpy(*errors, message);
+
+    return hr;
 }
 
 /***********************************************************************
