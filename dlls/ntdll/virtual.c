@@ -462,6 +462,7 @@ static NTSTATUS create_view( struct file_view **view_ret, void *base, size_t siz
 {
     struct file_view *view;
     struct list *ptr;
+    SIZE_T view_size = sizeof(*view) + (size >> page_shift) - 1;
     int unix_prot = VIRTUAL_GetUnixProt( vprot );
 
     assert( !((UINT_PTR)base & page_mask) );
@@ -469,10 +470,31 @@ static NTSTATUS create_view( struct file_view **view_ret, void *base, size_t siz
 
     /* Create the view structure */
 
-    if (!(view = RtlAllocateHeap( virtual_heap, 0, sizeof(*view) + (size >> page_shift) - 1 )))
+    if (!(view = RtlAllocateHeap( virtual_heap, 0, view_size )))
     {
-        FIXME( "out of memory in virtual heap for %p-%p\n", base, (char *)base + size );
-        return STATUS_NO_MEMORY;
+        SIZE_T heap_size = max( view_size, VIRTUAL_HEAP_SIZE );
+        struct file_view *heap_view;
+        void *heap_base;
+
+        if (!(heap_base = grow_virtual_heap( virtual_heap, &heap_size )))
+        {
+            FIXME( "failed to grow virtual heap for %p-%p\n", base, (char *)base + size );
+            return STATUS_NO_MEMORY;
+        }
+
+        /* FIXME: The grown heap is guaranteed to be large to handle allocation
+         * of size 'view_size', but we also have to add a second view for the
+         * newly reserved area. If this fails we can no longer track all memory
+         * areas. On the other hand, first calling create_view and then
+         * RtlAllocateHeap would be even worse, and could end in an endless loop. */
+        view = RtlAllocateHeap( virtual_heap, 0, view_size );
+        create_view( &heap_view, heap_base, heap_size, VPROT_COMMITTED | VPROT_READ | VPROT_WRITE );
+
+        if (!view)
+        {
+            FIXME( "out of memory in virtual heap for %p-%p\n", base, (char *)base + size );
+            return STATUS_NO_MEMORY;
+        }
     }
 
     view->base    = base;

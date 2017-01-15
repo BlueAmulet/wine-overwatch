@@ -27,6 +27,9 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#ifdef HAVE_SYS_MMAN_H
+# include <sys/mman.h>
+#endif
 #ifdef HAVE_VALGRIND_MEMCHECK_H
 #include <valgrind/memcheck.h>
 #else
@@ -40,6 +43,7 @@
 #include "winnt.h"
 #include "winternl.h"
 #include "ntdll_misc.h"
+#include "wine/library.h"
 #include "wine/list.h"
 #include "wine/debug.h"
 #include "wine/server.h"
@@ -658,6 +662,9 @@ static void HEAP_MakeInUseBlockFree( SUBHEAP *subheap, ARENA_INUSE *pArena )
     if ((char *)pFree + size < (char *)subheap->base + subheap->size)
         return;  /* Not the last block, so nothing more to do */
 
+    if (!(subheap->heap->flags & HEAP_GROWABLE) && (subheap != &subheap->heap->subheap))
+        return;  /* virtual heap, never attempt to release or decommit memory */
+
     /* Free the whole sub-heap if it's empty and not the original one */
 
     if (((char *)pFree == (char *)subheap->base + subheap->headerSize) &&
@@ -1045,6 +1052,48 @@ static ARENA_FREE *HEAP_FindFreeBlock( HEAP *heap, SIZE_T size,
 
     *ppSubHeap = subheap;
     return (ARENA_FREE *)((char *)subheap->base + subheap->headerSize);
+}
+
+
+/* similar to HEAP_FindFreeBlock, but for the virtual heap */
+void *grow_virtual_heap( HANDLE handle, SIZE_T *size )
+{
+    HEAP *heap = HEAP_GetPtr( handle );
+    SIZE_T rounded_size, total_size;
+    SUBHEAP *subheap;
+    void *address;
+
+    assert( !(heap->flags & HEAP_GROWABLE) );
+
+    /* compute rounded size, see RtlAllocateHeap */
+    rounded_size = ROUND_SIZE( *size ) + HEAP_TAIL_EXTRA_SIZE( heap->flags );
+    if (rounded_size < *size) return NULL;
+    if (rounded_size < HEAP_MIN_DATA_SIZE) rounded_size = HEAP_MIN_DATA_SIZE;
+
+    /* compute total size, see HEAP_FindFreeBlock */
+    total_size = rounded_size + ROUND_SIZE(sizeof(SUBHEAP)) + sizeof(ARENA_INUSE) + sizeof(ARENA_FREE);
+    if (total_size < rounded_size) return NULL;
+
+    *size = (max( heap->grow_size, total_size ) + page_size - 1) & ~(page_size - 1);
+    if ((address = wine_anon_mmap( NULL, *size, PROT_READ|PROT_WRITE, 0 )) != (void *)-1)
+    {
+        if (heap->grow_size < 128 * 1024 * 1024) heap->grow_size *= 2;
+    }
+    else while (address != (void *)-1)  /* shrink the grow size again if we are running out of space */
+    {
+        if (heap->grow_size <= total_size || heap->grow_size <= 4 * 1024 * 1024) return NULL;
+        heap->grow_size /= 2;
+        *size = (max( heap->grow_size, total_size ) + page_size - 1) & ~(page_size - 1);
+        address = wine_anon_mmap( NULL, *size, PROT_READ|PROT_WRITE, 0 );
+    }
+
+    subheap = HEAP_CreateSubHeap( heap, address, heap->flags, *size, *size );
+    assert( subheap != NULL );
+
+    TRACE("created new sub-heap %p of %08lx bytes for heap %p\n",
+          subheap, subheap->size, heap );
+
+    return address;
 }
 
 
