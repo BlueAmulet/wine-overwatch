@@ -718,10 +718,11 @@ NTSTATUS WINAPI NtQuerySymbolicLinkObject( HANDLE handle, PUNICODE_STRING target
 NTSTATUS WINAPI NtAllocateUuids(
         PULARGE_INTEGER Time,
         PULONG Range,
-        PULONG Sequence)
+        PULONG Sequence,
+        PUCHAR Seed)
 {
-        FIXME("(%p,%p,%p), stub.\n", Time, Range, Sequence);
-	return 0;
+    FIXME("(%p,%p,%p,%p), stub.\n", Time, Range, Sequence, Seed);
+    return STATUS_SUCCESS;
 }
 
 /**************************************************************************

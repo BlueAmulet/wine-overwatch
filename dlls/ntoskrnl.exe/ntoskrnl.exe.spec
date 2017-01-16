@@ -736,7 +736,7 @@
 @ stdcall NtAddAtom(ptr long ptr) ntdll.NtAddAtom
 @ stdcall NtAdjustPrivilegesToken(long long long long long long) ntdll.NtAdjustPrivilegesToken
 @ stdcall NtAllocateLocallyUniqueId(ptr) ntdll.NtAllocateLocallyUniqueId
-@ stdcall NtAllocateUuids(ptr ptr ptr) ntdll.NtAllocateUuids
+@ stdcall NtAllocateUuids(ptr ptr ptr ptr) ntdll.NtAllocateUuids
 @ stdcall NtAllocateVirtualMemory(long ptr ptr ptr long long) ntdll.NtAllocateVirtualMemory
 @ stub NtBuildNumber
 @ stdcall NtClose(long) ntdll.NtClose
