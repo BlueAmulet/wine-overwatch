@@ -2822,8 +2822,12 @@ VkWriteDescriptorSet_host *convert_VkWriteDescriptorSet( VkWriteDescriptorSet_ho
     out->dstArrayElement    = in->dstArrayElement;
     out->descriptorCount    = in->descriptorCount;
     out->descriptorType     = in->descriptorType;
-    out->pImageInfo         = convert_VkDescriptorImageInfo_array( in->pImageInfo, in->descriptorCount );
-    out->pBufferInfo        = convert_VkDescriptorBufferInfo_array( in->pBufferInfo, in->descriptorCount );
+    out->pImageInfo         = valid_pImageInfo( in->descriptorType ) ?
+                              convert_VkDescriptorImageInfo_array( in->pImageInfo, in->descriptorCount ) :
+                              (void *)0xbadc0ded;  /* should be ignored */
+    out->pBufferInfo        = valid_pBufferInfo( in->descriptorType ) ?
+                              convert_VkDescriptorBufferInfo_array( in->pBufferInfo, in->descriptorCount ) :
+                              (void *)0xbadc0ded;  /* should be ignored */
     out->pTexelBufferView   = in->pTexelBufferView; /* length is descriptorCount */
 
     return out;

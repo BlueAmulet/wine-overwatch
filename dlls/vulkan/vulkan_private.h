@@ -45,6 +45,18 @@
 #define VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR 1000004000
 #define VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR 1000005000
 
+#define VK_DESCRIPTOR_TYPE_SAMPLER                 0
+#define VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER  1
+#define VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE           2
+#define VK_DESCRIPTOR_TYPE_STORAGE_IMAGE           3
+#define VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER    4
+#define VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER    5
+#define VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER          6
+#define VK_DESCRIPTOR_TYPE_STORAGE_BUFFER          7
+#define VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC  8
+#define VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC  9
+#define VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT       10
+
 #if !defined(HAVE_X11_XLIB_H)
 typedef struct _XDisplay Display;
 #endif
@@ -3388,6 +3400,35 @@ static inline void release_VkCopyDescriptorSet_array( VkCopyDescriptorSet *out,
 }
 #endif /* defined(USE_STRUCT_CONVERSION) */
 
+
+static inline BOOL valid_pImageInfo( VkDescriptorType descriptorType )
+{
+    switch (descriptorType)
+    {
+        case VK_DESCRIPTOR_TYPE_SAMPLER:
+        case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+        case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+        case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+        case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+            return TRUE;
+        default:
+            return FALSE;
+    }
+}
+
+static inline BOOL valid_pBufferInfo( VkDescriptorType descriptorType )
+{
+    switch (descriptorType)
+    {
+        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+        case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+        case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+            return TRUE;
+        default:
+            return FALSE;
+    }
+}
 
 extern BOOL init_vulkan( void ) DECLSPEC_HIDDEN;
 extern BOOL is_null_func( const char *name ); DECLSPEC_HIDDEN
