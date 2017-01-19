@@ -6744,8 +6744,17 @@ DispCallFunc(
         break;
     case VT_DECIMAL:
     case VT_VARIANT:
-        args[0] = (DWORD)pvargResult;  /* arg 0 is a pointer to the result */
-        call_method( func, argspos, args, &stack_offset );
+        if (pvInstance)
+        {
+            args[0] = (DWORD)pvInstance;  /* arg 0 is a pointer to the instance */
+            args[1] = (DWORD)pvargResult; /* arg 1 is a pointer to the result */
+            call_method( func, argspos, args, &stack_offset );
+        }
+        else
+        {
+            args[0] = (DWORD)pvargResult;  /* arg 0 is a pointer to the result */
+            call_method( func, argspos, args, &stack_offset );
+        }
         break;
     case VT_I8:
     case VT_UI8:
@@ -6830,8 +6839,17 @@ DispCallFunc(
         break;
     case VT_DECIMAL:
     case VT_VARIANT:
-        args[0] = (DWORD_PTR)pvargResult;  /* arg 0 is a pointer to the result */
-        call_method( func, argspos, args );
+        if (pvInstance)
+        {
+            args[0] = (DWORD_PTR)pvInstance;  /* arg 0 is a pointer to the instance */
+            args[1] = (DWORD_PTR)pvargResult; /* arg 1 is a pointer to the result */
+            call_method( func, argspos, args );
+        }
+        else
+        {
+            args[0] = (DWORD_PTR)pvargResult;  /* arg 0 is a pointer to the result */
+            call_method( func, argspos, args );
+        }
         break;
     case VT_HRESULT:
         WARN("invalid return type %u\n", vtReturn);
