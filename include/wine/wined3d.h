@@ -1739,6 +1739,13 @@ struct wined3d_map_desc
     void *data;
 };
 
+struct wined3d_map_info
+{
+    UINT row_pitch;
+    UINT slice_pitch;
+    UINT size;
+};
+
 struct wined3d_sub_resource_data
 {
     const void *data;
@@ -2424,6 +2431,8 @@ void * __cdecl wined3d_resource_get_parent(const struct wined3d_resource *resour
 DWORD __cdecl wined3d_resource_get_priority(const struct wined3d_resource *resource);
 HRESULT __cdecl wined3d_resource_map(struct wined3d_resource *resource, unsigned int sub_resource_idx,
         struct wined3d_map_desc *map_desc, const struct wined3d_box *box, DWORD flags);
+HRESULT __cdecl wined3d_resource_map_info(struct wined3d_resource *resource, unsigned int sub_resource_idx,
+        struct wined3d_map_info *info, DWORD flags);
 void __cdecl wined3d_resource_preload(struct wined3d_resource *resource);
 void __cdecl wined3d_resource_set_parent(struct wined3d_resource *resource, void *parent);
 DWORD __cdecl wined3d_resource_set_priority(struct wined3d_resource *resource, DWORD priority);
