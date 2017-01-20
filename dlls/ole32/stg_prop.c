@@ -1020,15 +1020,18 @@ static HRESULT PropertyStorage_ReadDictionary(PropertyStorage_impl *This,
         if (This->codePage != CP_UNICODE)
             ptr[cbEntry - 1] = '\0';
         else
-            *((LPWSTR)ptr + cbEntry / sizeof(WCHAR)) = '\0';
+            ((LPWSTR)ptr)[cbEntry - 1] = 0;
         hr = PropertyStorage_StoreNameWithId(This, (char*)ptr, This->codePage, propid);
         if (This->codePage == CP_UNICODE)
         {
+            /* cbEntry is the number of characters */
+            cbEntry *= 2;
+
             /* Unicode entries are padded to DWORD boundaries */
             if (cbEntry % sizeof(DWORD))
                 ptr += sizeof(DWORD) - (cbEntry % sizeof(DWORD));
         }
-        ptr += sizeof(DWORD) + cbEntry;
+        ptr += cbEntry;
     }
     return hr;
 }
