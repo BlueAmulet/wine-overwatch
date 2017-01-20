@@ -2393,7 +2393,9 @@ static HRESULT create_EnumSTATPROPSETSTG(
 
     enumx = enumx_allocate(&IID_IEnumSTATPROPSETSTG,
                            &IEnumSTATPROPSETSTG_Vtbl,
-                           sizeof (STATPROPSETSTG));
+                           sizeof (STATPROPSETSTG),
+                           (IUnknown*)&This->base.IStorage_iface,
+                           NULL);
 
     /* add all the property set elements into a list */
     r = IStorage_EnumElements(stg, 0, NULL, 0, &penum);
@@ -2486,6 +2488,27 @@ static HRESULT WINAPI IEnumSTATPROPSTG_fnClone(
     return enumx_Clone((enumx_impl*)iface, (enumx_impl**)ppenum);
 }
 
+static void prop_enum_copy_cb(IUnknown *parent, void *orig, void *dest)
+{
+    PropertyStorage_impl *storage = impl_from_IPropertyStorage((IPropertyStorage*)parent);
+    STATPROPSTG *src_prop = orig;
+    STATPROPSTG *dest_prop = dest;
+    LPWSTR name;
+
+    dest_prop->propid = src_prop->propid;
+    dest_prop->vt = src_prop->vt;
+    dest_prop->lpwstrName = NULL;
+
+    if (dictionary_find(storage->propid_to_name, UlongToPtr(src_prop->propid), (void**)&name))
+    {
+        DWORD size = (strlenW(name) + 1) * sizeof(WCHAR);
+
+        dest_prop->lpwstrName = CoTaskMemAlloc(size);
+        if (!dest_prop->lpwstrName) return;
+        memcpy(dest_prop->lpwstrName, name, size);
+    }
+}
+
 static BOOL prop_enum_stat(const void *k, const void *v, void *extra, void *arg)
 {
     enumx_impl *enumx = arg;
@@ -2512,7 +2535,9 @@ static HRESULT create_EnumSTATPROPSTG(
 
     enumx = enumx_allocate(&IID_IEnumSTATPROPSTG,
                            &IEnumSTATPROPSTG_Vtbl,
-                           sizeof (STATPROPSTG));
+                           sizeof (STATPROPSTG),
+                           (IUnknown*)&This->IPropertyStorage_iface,
+                           prop_enum_copy_cb);
 
     dictionary_enumerate(This->propid_to_prop, prop_enum_stat, enumx);
 
