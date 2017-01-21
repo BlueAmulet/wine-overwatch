@@ -2742,7 +2742,7 @@ static DWORD find_draw_buffers_mask(const struct wined3d_context *context, const
     if (wined3d_settings.offscreen_rendering_mode != ORM_FBO)
         return context_generate_rt_mask_no_fbo(context, wined3d_rendertarget_view_get_surface(rts[0])->container);
     else if (!context->render_offscreen)
-        return context_generate_rt_mask_from_resource(rts[0]->resource);
+        return rts[0] ? context_generate_rt_mask_from_resource(rts[0]->resource) : 0;
 
     rt_mask = ps ? ps->reg_maps.rt_mask : 1;
     rt_mask &= context->d3d_info->valid_rt_mask;
