@@ -4873,8 +4873,16 @@ static void scissorrect(struct wined3d_context *context, const struct wined3d_st
         UINT height;
         UINT width;
 
-        wined3d_rendertarget_view_get_drawable_size(target, context, &width, &height);
-        gl_info->gl_ops.gl.p_glScissor(r->left, height - r->bottom, r->right - r->left, r->bottom - r->top);
+        if (target)
+        {
+            wined3d_rendertarget_view_get_drawable_size(target, context, &width, &height);
+            gl_info->gl_ops.gl.p_glScissor(r->left, height - r->bottom, r->right - r->left, r->bottom - r->top);
+        }
+        else
+        {
+            /* There is nothing to render to anyway */
+            gl_info->gl_ops.gl.p_glScissor(0, 0, 0, 0);
+        }
     }
     checkGLcall("glScissor");
 }
