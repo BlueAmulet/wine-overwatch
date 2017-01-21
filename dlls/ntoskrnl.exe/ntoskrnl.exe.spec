@@ -1398,14 +1398,14 @@
 @ cdecl -private -arch=i386 _CIsqrt() msvcrt._CIsqrt
 @ cdecl -private _abnormal_termination() msvcrt._abnormal_termination
 @ stdcall -private -arch=i386 -ret64 _alldiv(int64 int64) ntdll._alldiv
-@ stub _alldvrm
+@ stdcall -private -arch=i386 -norelay _alldvrm(int64 int64) ntdll._alldvrm
 @ stdcall -private -arch=i386 -ret64 _allmul(int64 int64) ntdll._allmul
 @ stdcall -private -arch=i386 -norelay _alloca_probe() ntdll._alloca_probe
 @ stdcall -private -arch=i386 -ret64 _allrem(int64 int64) ntdll._allrem
 @ stdcall -private -arch=i386 -ret64 _allshl(int64 long) ntdll._allshl
 @ stdcall -private -arch=i386 -ret64 _allshr(int64 long) ntdll._allshr
 @ stdcall -private -arch=i386 -ret64 _aulldiv(int64 int64) ntdll._aulldiv
-@ stub _aulldvrm
+@ stdcall -private -arch=i386 -norelay _aulldvrm(int64 int64) ntdll._aulldvrm
 @ stdcall -private -arch=i386 -ret64 _aullrem(int64 int64) ntdll._aullrem
 @ stdcall -private -arch=i386 -ret64 _aullshr(int64 long) ntdll._aullshr
 @ cdecl -private -arch=i386 _except_handler2(ptr ptr ptr ptr) msvcrt._except_handler2
