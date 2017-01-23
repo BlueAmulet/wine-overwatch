@@ -531,6 +531,7 @@ HKLM,%CurrentVersionNT%\Print,,16
 HKLM,%CurrentVersionNT%\ProfileList,,16
 ; Update/Replace if local_user_sid in server/token.c changes
 HKLM,%CurrentVersionNT%\ProfileList\S-1-5-21-0-0-0-1000,,16
+HKLM,%CurrentVersionNT%\ProfileList\S-1-5-21-0-0-0-1000,"ProfileImagePath",0x20000,"%53%"
 
 [CurrentVersionWow64]
 HKLM,%CurrentVersion%,"ProgramFilesDir (x86)",,"%16426%"
