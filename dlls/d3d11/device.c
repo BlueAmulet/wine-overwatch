@@ -3252,17 +3252,15 @@ static void STDMETHODCALLTYPE d3d11_deferred_context_IASetVertexBuffers(ID3D11De
     call->vbuffer_info.num_buffers = buffer_count;
 
     call->vbuffer_info.buffers = (void *)(call + 1);
+    call->vbuffer_info.strides = (void *)&call->vbuffer_info.buffers[buffer_count];
+    call->vbuffer_info.offsets = (void *)&call->vbuffer_info.strides[buffer_count];
     for (i = 0; i < buffer_count; i++)
     {
         if (buffers[i]) ID3D11Buffer_AddRef(buffers[i]);
         call->vbuffer_info.buffers[i] = buffers[i];
+        call->vbuffer_info.strides[i] = strides[i];
+        call->vbuffer_info.offsets[i] = offsets[i];
     }
-
-    call->vbuffer_info.strides = (void *)((char *)call->vbuffer_info.buffers + buffer_count * sizeof(*buffers));
-    memcpy(call->vbuffer_info.strides, strides, sizeof(UINT) * buffer_count);
-
-    call->vbuffer_info.offsets = (void *)((char *)call->vbuffer_info.strides + buffer_count * sizeof(UINT));
-    memcpy(call->vbuffer_info.offsets, offsets, sizeof(UINT) * buffer_count);
 }
 
 static void STDMETHODCALLTYPE d3d11_deferred_context_IASetIndexBuffer(ID3D11DeviceContext *iface,
