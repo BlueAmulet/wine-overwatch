@@ -58,6 +58,8 @@ enum deferred_cmd
     DEFERRED_PSSETCONSTANTBUFFERS,      /* constant_buffers_info */
     DEFERRED_VSSETCONSTANTBUFFERS,      /* constant_buffers_info */
 
+    DEFERRED_CSSETUNORDEREDACCESSVIEWS, /* unordered_view */
+
     DEFERRED_DRAWINDEXED,               /* draw_indexed_info */
     DEFERRED_DRAWINDEXEDINSTANCED,      /* draw_indexed_inst_info */
 
@@ -164,6 +166,13 @@ struct deferred_call
             UINT num_buffers;
             ID3D11Buffer **buffers;
         } constant_buffers_info;
+        struct
+        {
+            UINT start_slot;
+            UINT num_views;
+            ID3D11UnorderedAccessView **views;
+            UINT *initial_counts;
+        } unordered_view;
         struct
         {
             UINT count;
@@ -426,6 +435,15 @@ static void free_deferred_calls(struct list *commands)
                 }
                 break;
             }
+            case DEFERRED_CSSETUNORDEREDACCESSVIEWS:
+            {
+                for (i = 0; i < call->unordered_view.num_views; i++)
+                {
+                    if (call->unordered_view.views[i])
+                        ID3D11UnorderedAccessView_Release(call->unordered_view.views[i]);
+                }
+                break;
+            }
             case DEFERRED_DRAWINDEXED:
             case DEFERRED_DRAWINDEXEDINSTANCED:
             {
@@ -593,6 +611,12 @@ static void exec_deferred_calls(ID3D11DeviceContext *iface, struct list *command
             {
                 ID3D11DeviceContext_VSSetConstantBuffers(iface, call->constant_buffers_info.start_slot,
                         call->constant_buffers_info.num_buffers, call->constant_buffers_info.buffers);
+                break;
+            }
+            case DEFERRED_CSSETUNORDEREDACCESSVIEWS:
+            {
+                ID3D11DeviceContext_CSSetUnorderedAccessViews(iface, call->unordered_view.start_slot,
+                        call->unordered_view.num_views, call->unordered_view.views, call->unordered_view.initial_counts);
                 break;
             }
             case DEFERRED_DRAWINDEXED:
@@ -3682,8 +3706,27 @@ static void STDMETHODCALLTYPE d3d11_deferred_context_CSSetShaderResources(ID3D11
 static void STDMETHODCALLTYPE d3d11_deferred_context_CSSetUnorderedAccessViews(ID3D11DeviceContext *iface,
         UINT start_slot, UINT view_count, ID3D11UnorderedAccessView *const *views, const UINT *initial_counts)
 {
-    FIXME("iface %p, start_slot %u, view_count %u, views %p, initial_counts %p stub!\n",
+    struct d3d11_deferred_context *context = impl_from_deferred_ID3D11DeviceContext(iface);
+    struct deferred_call *call;
+    int i;
+
+    TRACE("iface %p, start_slot %u, view_count %u, views %p, initial_counts %p.\n",
             iface, start_slot, view_count, views, initial_counts);
+
+    if (!(call = add_deferred_call(context, view_count * (sizeof(*views) + sizeof(UINT)))))
+        return;
+
+    call->cmd = DEFERRED_CSSETUNORDEREDACCESSVIEWS;
+    call->unordered_view.start_slot = start_slot;
+    call->unordered_view.num_views = view_count;
+    call->unordered_view.views = (void *)(call + 1);
+    call->unordered_view.initial_counts = (void *)&call->unordered_view.views[view_count];
+    for (i = 0; i < view_count; i++)
+    {
+        if (views[i]) ID3D11UnorderedAccessView_AddRef(views[i]);
+        call->unordered_view.views[i] = views[i];
+        call->unordered_view.initial_counts[i] = initial_counts[i];
+    }
 }
 
 static void STDMETHODCALLTYPE d3d11_deferred_context_CSSetShader(ID3D11DeviceContext *iface,
