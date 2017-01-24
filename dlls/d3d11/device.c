@@ -40,6 +40,7 @@ enum deferred_cmd
     DEFERRED_OMSETBLENDSTATE,           /* blend_state_info */
     DEFERRED_OMSETRENDERTARGETS,        /* render_target_info */
 
+    DEFERRED_CSSETSHADER,               /* cs_info */
     DEFERRED_DSSETSHADER,               /* ds_info */
     DEFERRED_HSSETSHADER,               /* hs_info */
     DEFERRED_PSSETSHADER,               /* ps_info */
@@ -118,6 +119,11 @@ struct deferred_call
             ID3D11RenderTargetView **render_targets;
             ID3D11DepthStencilView *depth_stencil;
         } render_target_info;
+        struct
+        {
+            ID3D11ComputeShader *shader;
+            /* FIXME: add class instances */
+        } cs_info;
         struct
         {
             ID3D11DomainShader *shader;
@@ -349,6 +355,12 @@ static void free_deferred_calls(struct list *commands)
                     ID3D11DepthStencilView_Release(call->render_target_info.depth_stencil);
                 break;
             }
+            case DEFERRED_CSSETSHADER:
+            {
+                if (call->cs_info.shader)
+                    ID3D11ComputeShader_Release(call->cs_info.shader);
+                break;
+            }
             case DEFERRED_DSSETSHADER:
             {
                 if (call->ds_info.shader)
@@ -489,6 +501,11 @@ static void exec_deferred_calls(ID3D11DeviceContext *iface, struct list *command
             {
                 ID3D11DeviceContext_OMSetRenderTargets(iface, call->render_target_info.num_views,
                         call->render_target_info.render_targets, call->render_target_info.depth_stencil);
+                break;
+            }
+            case DEFERRED_CSSETSHADER:
+            {
+                ID3D11DeviceContext_CSSetShader(iface, call->cs_info.shader, NULL, 0);
                 break;
             }
             case DEFERRED_DSSETSHADER:
@@ -3636,8 +3653,18 @@ static void STDMETHODCALLTYPE d3d11_deferred_context_CSSetUnorderedAccessViews(I
 static void STDMETHODCALLTYPE d3d11_deferred_context_CSSetShader(ID3D11DeviceContext *iface,
         ID3D11ComputeShader *shader, ID3D11ClassInstance *const *class_instances, UINT class_instance_count)
 {
-    FIXME("iface %p, shader %p, class_instances %p, class_instance_count %u stub!\n",
+    struct d3d11_deferred_context *context = impl_from_deferred_ID3D11DeviceContext(iface);
+    struct deferred_call *call;
+
+    TRACE("iface %p, shader %p, class_instances %p, class_instance_count %u.\n",
             iface, shader, class_instances, class_instance_count);
+
+    if (!(call = add_deferred_call(context, 0)))
+        return;
+
+    call->cmd = DEFERRED_CSSETSHADER;
+    if (shader) ID3D11ComputeShader_AddRef(shader);
+    call->cs_info.shader = shader;
 }
 
 static void STDMETHODCALLTYPE d3d11_deferred_context_CSSetSamplers(ID3D11DeviceContext *iface,
