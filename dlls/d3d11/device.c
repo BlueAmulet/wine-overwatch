@@ -52,6 +52,7 @@ enum deferred_cmd
     DEFERRED_DSSETSAMPLERS,             /* samplers_info */
     DEFERRED_PSSETSAMPLERS,             /* samplers_info */
 
+    DEFERRED_CSSETCONSTANTBUFFERS,      /* constant_buffers_info */
     DEFERRED_DSSETCONSTANTBUFFERS,      /* constant_buffers_info */
     DEFERRED_HSSETCONSTANTBUFFERS,      /* constant_buffers_info */
     DEFERRED_PSSETCONSTANTBUFFERS,      /* constant_buffers_info */
@@ -266,7 +267,7 @@ static void add_deferred_set_samplers(struct d3d11_deferred_context *context, en
     }
 }
 
-/* for DEFERRED_DSSETCONSTANTBUFFERS, DEFERRED_HSSETCONSTANTBUFFERS,
+/* for DEFERRED_CSSETCONSTANTBUFFERS. DEFERRED_DSSETCONSTANTBUFFERS, DEFERRED_HSSETCONSTANTBUFFERS,
  * DEFERRED_PSSETCONSTANTBUFFERS and DEFERRED_VSSETCONSTANTBUFFERS */
 static void add_deferred_set_constant_buffers(struct d3d11_deferred_context *context, enum deferred_cmd cmd,
         UINT start_slot, UINT buffer_count, ID3D11Buffer *const *buffers)
@@ -405,6 +406,7 @@ static void free_deferred_calls(struct list *commands)
                 }
                 break;
             }
+            case DEFERRED_CSSETCONSTANTBUFFERS:
             case DEFERRED_DSSETCONSTANTBUFFERS:
             case DEFERRED_HSSETCONSTANTBUFFERS:
             case DEFERRED_PSSETCONSTANTBUFFERS:
@@ -550,6 +552,12 @@ static void exec_deferred_calls(ID3D11DeviceContext *iface, struct list *command
             {
                 ID3D11DeviceContext_PSSetSamplers(iface, call->samplers_info.start_slot,
                         call->samplers_info.num_samplers, call->samplers_info.samplers);
+                break;
+            }
+            case DEFERRED_CSSETCONSTANTBUFFERS:
+            {
+                ID3D11DeviceContext_CSSetConstantBuffers(iface, call->constant_buffers_info.start_slot,
+                        call->constant_buffers_info.num_buffers, call->constant_buffers_info.buffers);
                 break;
             }
             case DEFERRED_DSSETCONSTANTBUFFERS:
@@ -3677,8 +3685,12 @@ static void STDMETHODCALLTYPE d3d11_deferred_context_CSSetSamplers(ID3D11DeviceC
 static void STDMETHODCALLTYPE d3d11_deferred_context_CSSetConstantBuffers(ID3D11DeviceContext *iface,
         UINT start_slot, UINT buffer_count, ID3D11Buffer *const *buffers)
 {
-    FIXME("iface %p, start_slot %u, buffer_count %u, buffers %p stub!\n",
+    struct d3d11_deferred_context *context = impl_from_deferred_ID3D11DeviceContext(iface);
+
+    TRACE("iface %p, start_slot %u, buffer_count %u, buffers %p.\n",
             iface, start_slot, buffer_count, buffers);
+
+    add_deferred_set_constant_buffers(context, DEFERRED_CSSETCONSTANTBUFFERS, start_slot, buffer_count, buffers);
 }
 
 static void STDMETHODCALLTYPE d3d11_deferred_context_VSGetConstantBuffers(ID3D11DeviceContext *iface,
