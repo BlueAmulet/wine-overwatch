@@ -62,6 +62,7 @@ enum deferred_cmd
     DEFERRED_DRAWINDEXEDINSTANCED,      /* draw_indexed_inst_info */
 
     DEFERRED_MAP,                       /* map_info */
+    DEFERRED_DISPATCH,                  /* dispatch_info */
 
     DEFERRED_CLEARSTATE,
 };
@@ -186,6 +187,12 @@ struct deferred_call
             void *buffer;
             UINT size;
         } map_info;
+        struct
+        {
+            UINT count_x;
+            UINT count_y;
+            UINT count_z;
+        } dispatch_info;
     };
 };
 
@@ -429,6 +436,10 @@ static void free_deferred_calls(struct list *commands)
                 ID3D11Resource_Release(call->map_info.resource);
                 break;
             }
+            case DEFERRED_DISPATCH:
+            {
+                break; /* nothing to do */
+            }
             case DEFERRED_CLEARSTATE:
             {
                 break; /* nothing to do */
@@ -612,6 +623,12 @@ static void exec_deferred_calls(ID3D11DeviceContext *iface, struct list *command
                 else
                     FIXME("Failed to map subresource!\n");
 
+                break;
+            }
+            case DEFERRED_DISPATCH:
+            {
+                ID3D11DeviceContext_Dispatch(iface, call->dispatch_info.count_x,
+                        call->dispatch_info.count_y, call->dispatch_info.count_z);
                 break;
             }
             case DEFERRED_CLEARSTATE:
@@ -3407,8 +3424,19 @@ static void STDMETHODCALLTYPE d3d11_deferred_context_DrawInstancedIndirect(ID3D1
 static void STDMETHODCALLTYPE d3d11_deferred_context_Dispatch(ID3D11DeviceContext *iface,
         UINT thread_group_count_x, UINT thread_group_count_y, UINT thread_group_count_z)
 {
-    FIXME("iface %p, thread_group_count_x %u, thread_group_count_y %u, thread_group_count_z %u stub!\n",
+    struct d3d11_deferred_context *context = impl_from_deferred_ID3D11DeviceContext(iface);
+    struct deferred_call *call;
+
+    TRACE("iface %p, thread_group_count_x %u, thread_group_count_y %u, thread_group_count_z %u.\n",
             iface, thread_group_count_x, thread_group_count_y, thread_group_count_z);
+
+    if (!(call = add_deferred_call(context, 0)))
+        return;
+
+    call->cmd = DEFERRED_DISPATCH;
+    call->dispatch_info.count_x = thread_group_count_x;
+    call->dispatch_info.count_y = thread_group_count_y;
+    call->dispatch_info.count_z = thread_group_count_z;
 }
 
 static void STDMETHODCALLTYPE d3d11_deferred_context_DispatchIndirect(ID3D11DeviceContext *iface,
