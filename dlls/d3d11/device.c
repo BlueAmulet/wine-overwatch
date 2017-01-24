@@ -67,6 +67,7 @@ enum deferred_cmd
     DEFERRED_DISPATCH,                  /* dispatch_info */
 
     DEFERRED_CLEARSTATE,
+    DEFERRED_CLEARRENDERTARGETVIEW,     /* clear_rtv_info */
 };
 
 struct deferred_call
@@ -202,6 +203,11 @@ struct deferred_call
             UINT count_y;
             UINT count_z;
         } dispatch_info;
+        struct
+        {
+            ID3D11RenderTargetView *rtv;
+            float color[4];
+        } clear_rtv_info;
     };
 };
 
@@ -462,6 +468,12 @@ static void free_deferred_calls(struct list *commands)
             {
                 break; /* nothing to do */
             }
+            case DEFERRED_CLEARRENDERTARGETVIEW:
+            {
+                if (call->clear_rtv_info.rtv)
+                    ID3D11RenderTargetView_Release(call->clear_rtv_info.rtv);
+                break;
+            }
             default:
             {
                 FIXME("Unimplemented command type %u\n", call->cmd);
@@ -658,6 +670,12 @@ static void exec_deferred_calls(ID3D11DeviceContext *iface, struct list *command
             case DEFERRED_CLEARSTATE:
             {
                 ID3D11DeviceContext_ClearState(iface);
+                break;
+            }
+            case DEFERRED_CLEARRENDERTARGETVIEW:
+            {
+                ID3D11DeviceContext_ClearRenderTargetView(iface, call->clear_rtv_info.rtv,
+                        call->clear_rtv_info.color);
                 break;
             }
             default:
@@ -3542,8 +3560,21 @@ static void STDMETHODCALLTYPE d3d11_deferred_context_CopyStructureCount(ID3D11De
 static void STDMETHODCALLTYPE d3d11_deferred_context_ClearRenderTargetView(ID3D11DeviceContext *iface,
         ID3D11RenderTargetView *render_target_view, const float color_rgba[4])
 {
-    FIXME("iface %p, render_target_view %p, color_rgba %s stub!\n",
+    struct d3d11_deferred_context *context = impl_from_deferred_ID3D11DeviceContext(iface);
+    struct deferred_call *call;
+    int i;
+
+    TRACE("iface %p, render_target_view %p, color_rgba %s.\n",
             iface, render_target_view, debug_float4(color_rgba));
+
+    if (!(call = add_deferred_call(context, 0)))
+        return;
+
+    call->cmd = DEFERRED_CLEARRENDERTARGETVIEW;
+    if (render_target_view) ID3D11RenderTargetView_AddRef(render_target_view);
+    call->clear_rtv_info.rtv = render_target_view;
+    for (i = 0; i < 4; i++)
+        call->clear_rtv_info.color[i] = color_rgba[i];
 }
 
 static void STDMETHODCALLTYPE d3d11_deferred_context_ClearUnorderedAccessViewUint(ID3D11DeviceContext *iface,
