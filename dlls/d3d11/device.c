@@ -69,6 +69,7 @@ enum deferred_cmd
 
     DEFERRED_CLEARSTATE,
     DEFERRED_CLEARRENDERTARGETVIEW,     /* clear_rtv_info */
+    DEFERRED_CLEARDEPTHSTENCILVIEW,     /* clear_depth_info */
 };
 
 struct deferred_call
@@ -214,6 +215,13 @@ struct deferred_call
             ID3D11RenderTargetView *rtv;
             float color[4];
         } clear_rtv_info;
+        struct
+        {
+            ID3D11DepthStencilView *view;
+            UINT flags;
+            FLOAT depth;
+            UINT8 stencil;
+        } clear_depth_info;
     };
 };
 
@@ -481,6 +489,12 @@ static void free_deferred_calls(struct list *commands)
                     ID3D11RenderTargetView_Release(call->clear_rtv_info.rtv);
                 break;
             }
+            case DEFERRED_CLEARDEPTHSTENCILVIEW:
+            {
+                if (call->clear_depth_info.view)
+                    ID3D11DepthStencilView_Release(call->clear_depth_info.view);
+                break;
+            }
             default:
             {
                 FIXME("Unimplemented command type %u\n", call->cmd);
@@ -688,6 +702,13 @@ static void exec_deferred_calls(ID3D11DeviceContext *iface, struct list *command
             {
                 ID3D11DeviceContext_ClearRenderTargetView(iface, call->clear_rtv_info.rtv,
                         call->clear_rtv_info.color);
+                break;
+            }
+            case DEFERRED_CLEARDEPTHSTENCILVIEW:
+            {
+                ID3D11DeviceContext_ClearDepthStencilView(iface, call->clear_depth_info.view,
+                        call->clear_depth_info.flags, call->clear_depth_info.depth,
+                        call->clear_depth_info.stencil);
                 break;
             }
             default:
@@ -3616,8 +3637,21 @@ static void STDMETHODCALLTYPE d3d11_deferred_context_ClearUnorderedAccessViewFlo
 static void STDMETHODCALLTYPE d3d11_deferred_context_ClearDepthStencilView(ID3D11DeviceContext *iface,
         ID3D11DepthStencilView *depth_stencil_view, UINT flags, FLOAT depth, UINT8 stencil)
 {
-    FIXME("iface %p, depth_stencil_view %p, flags %#x, depth %.8e, stencil %u stub!\n",
+    struct d3d11_deferred_context *context = impl_from_deferred_ID3D11DeviceContext(iface);
+    struct deferred_call *call;
+
+    TRACE("iface %p, depth_stencil_view %p, flags %#x, depth %.8e, stencil %u.\n",
             iface, depth_stencil_view, flags, depth, stencil);
+
+    if (!(call = add_deferred_call(context, 0)))
+        return;
+
+    call->cmd = DEFERRED_CLEARDEPTHSTENCILVIEW;
+    if (depth_stencil_view) ID3D11DepthStencilView_AddRef(depth_stencil_view);
+    call->clear_depth_info.view = depth_stencil_view;
+    call->clear_depth_info.flags = flags;
+    call->clear_depth_info.depth = depth;
+    call->clear_depth_info.stencil = stencil;
 }
 
 static void STDMETHODCALLTYPE d3d11_deferred_context_GenerateMips(ID3D11DeviceContext *iface,
