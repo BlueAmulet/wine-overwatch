@@ -407,14 +407,11 @@ static void sync_window_region( struct x11drv_win_data *data, HRGN win_region )
 
 
 /***********************************************************************
- *              sync_window_opacity
+ *              set_window_opacity
  */
-static void sync_window_opacity( Display *display, Window win,
-                                 COLORREF key, BYTE alpha, DWORD flags )
+static void set_window_opacity( Display *display, Window win, BYTE alpha )
 {
-    unsigned long opacity = 0xffffffff;
-
-    if (flags & LWA_ALPHA) opacity = (0xffffffff / 0xff) * alpha;
+    unsigned long opacity = (0xffffffff / 0xff) * alpha;
 
     if (opacity == 0xffffffff)
         XDeleteProperty( display, win, x11drv_atom(_NET_WM_WINDOW_OPACITY) );
@@ -1524,7 +1521,7 @@ static void create_whole_window( struct x11drv_win_data *data )
 
     /* set the window opacity */
     if (!GetLayeredWindowAttributes( data->hwnd, &key, &alpha, &layered_flags )) layered_flags = 0;
-    sync_window_opacity( data->display, data->whole_window, key, alpha, layered_flags );
+    set_window_opacity( data->display, data->whole_window, (layered_flags & LWA_ALPHA) ? alpha : 0xff );
 
     XFlush( data->display );  /* make sure the window exists before we start painting to it */
 
@@ -1644,7 +1641,7 @@ void CDECL X11DRV_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style )
     {
         data->layered = FALSE;
         set_window_visual( data, &default_visual );
-        sync_window_opacity( data->display, data->whole_window, 0, 0, 0 );
+        set_window_opacity( data->display, data->whole_window, 0xff );
         if (data->surface) set_surface_color_key( data->surface, CLR_INVALID );
     }
 done:
@@ -2533,7 +2530,7 @@ void CDECL X11DRV_SetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alph
     if (data)
     {
         if (data->whole_window)
-            sync_window_opacity( data->display, data->whole_window, key, alpha, flags );
+            set_window_opacity( data->display, data->whole_window, (flags & LWA_ALPHA) ? alpha : 0xff );
         if (data->surface)
             set_surface_color_key( data->surface, (flags & LWA_COLORKEY) ? key : CLR_INVALID );
 
@@ -2557,7 +2554,7 @@ void CDECL X11DRV_SetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alph
         Window win = X11DRV_get_whole_window( hwnd );
         if (win)
         {
-            sync_window_opacity( gdi_display, win, key, alpha, flags );
+            set_window_opacity( gdi_display, win, (flags & LWA_ALPHA) ? alpha : 0xff );
             if (flags & LWA_COLORKEY)
                 FIXME( "LWA_COLORKEY not supported on foreign process window %p\n", hwnd );
         }
@@ -2573,7 +2570,6 @@ BOOL CDECL X11DRV_UpdateLayeredWindow( HWND hwnd, const UPDATELAYEREDWINDOWINFO 
 {
     struct window_surface *surface;
     struct x11drv_win_data *data;
-    BLENDFUNCTION blend = { AC_SRC_OVER, 0, 255, 0 };
     COLORREF color_key = (info->dwFlags & ULW_COLORKEY) ? info->crKey : CLR_INVALID;
     char buffer[FIELD_OFFSET( BITMAPINFO, bmiColors[256] )];
     BITMAPINFO *bmi = (BITMAPINFO *)buffer;
@@ -2601,6 +2597,10 @@ BOOL CDECL X11DRV_UpdateLayeredWindow( HWND hwnd, const UPDATELAYEREDWINDOWINFO 
     }
     else set_surface_color_key( surface, color_key );
 
+    if (data->whole_window)
+        set_window_opacity( data->display, data->whole_window,
+                            (info->dwFlags & ULW_ALPHA) ? info->pblend->SourceConstantAlpha : 0xff );
+
     if (surface) window_surface_add_ref( surface );
     release_win_data( data );
 
@@ -2624,14 +2624,12 @@ BOOL CDECL X11DRV_UpdateLayeredWindow( HWND hwnd, const UPDATELAYEREDWINDOWINFO 
     {
         IntersectRect( &rect, &rect, info->prcDirty );
         memcpy( src_bits, dst_bits, bmi->bmiHeader.biSizeImage );
-        PatBlt( hdc, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, BLACKNESS );
     }
-    ret = GdiAlphaBlend( hdc, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
-                         info->hdcSrc,
-                         rect.left + (info->pptSrc ? info->pptSrc->x : 0),
-                         rect.top + (info->pptSrc ? info->pptSrc->y : 0),
-                         rect.right - rect.left, rect.bottom - rect.top,
-                         (info->dwFlags & ULW_ALPHA) ? *info->pblend : blend );
+    ret = BitBlt( hdc, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
+                  info->hdcSrc,
+                  rect.left + (info->pptSrc ? info->pptSrc->x : 0),
+                  rect.top + (info->pptSrc ? info->pptSrc->y : 0),
+                  SRCCOPY );
     if (ret)
     {
         memcpy( dst_bits, src_bits, bmi->bmiHeader.biSizeImage );
