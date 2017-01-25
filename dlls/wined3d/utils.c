@@ -4628,7 +4628,11 @@ void get_projection_matrix(const struct wined3d_context *context, const struct w
         float y_offset = flip
                 ? (center_offset - (2.0f * y) - h) / h
                 : (center_offset - (2.0f * y) - h) / -h;
+#if !defined(STAGING_CSMT)
         enum wined3d_depth_buffer_type zenable = state->fb->depth_stencil ?
+#else  /* STAGING_CSMT */
+        enum wined3d_depth_buffer_type zenable = state->fb.depth_stencil ?
+#endif /* STAGING_CSMT */
                 state->render_states[WINED3D_RS_ZENABLE] : WINED3D_ZB_FALSE;
         float z_scale = zenable ? clip_control ? 1.0f : 2.0f : 0.0f;
         float z_offset = zenable ? clip_control ? 0.0f : -1.0f : 0.0f;
@@ -5427,7 +5431,11 @@ void gen_ffp_frag_op(const struct wined3d_context *context, const struct wined3d
                 break;
         }
     }
+#if !defined(STAGING_CSMT)
     settings->sRGB_write = !gl_info->supported[ARB_FRAMEBUFFER_SRGB] && needs_srgb_write(context, state, state->fb);
+#else  /* STAGING_CSMT */
+    settings->sRGB_write = !gl_info->supported[ARB_FRAMEBUFFER_SRGB] && needs_srgb_write(context, state, &state->fb);
+#endif /* STAGING_CSMT */
     if (d3d_info->vs_clipping || !use_vs(state) || !state->render_states[WINED3D_RS_CLIPPING]
             || !state->render_states[WINED3D_RS_CLIPPLANEENABLE])
     {

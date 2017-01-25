@@ -214,6 +214,9 @@ HRESULT resource_init(struct wined3d_resource *resource, struct wined3d_device *
             ERR("Failed to allocate system memory.\n");
             return E_OUTOFMEMORY;
         }
+#if defined(STAGING_CSMT)
+        resource->heap_memory = resource->map_heap_memory;
+#endif /* STAGING_CSMT */
     }
     else
     {
@@ -242,6 +245,9 @@ static void wined3d_resource_destroy_object(void *object)
     struct wined3d_resource *resource = object;
 
     wined3d_resource_free_sysmem(resource);
+#if defined(STAGING_CSMT)
+    resource->map_heap_memory = NULL;
+#endif /* STAGING_CSMT */
     context_resource_released(resource->device, resource, resource->type);
     wined3d_resource_release(resource);
 }
@@ -315,6 +321,7 @@ void CDECL wined3d_resource_get_desc(const struct wined3d_resource *resource, st
     desc->size = resource->size;
 }
 
+#if !defined(STAGING_CSMT)
 static DWORD wined3d_resource_sanitise_map_flags(const struct wined3d_resource *resource, DWORD flags)
 {
     /* Not all flags make sense together, but Windows never returns an error.
@@ -348,15 +355,20 @@ static DWORD wined3d_resource_sanitise_map_flags(const struct wined3d_resource *
     return flags;
 }
 
+#endif /* STAGING_CSMT */
 HRESULT CDECL wined3d_resource_map(struct wined3d_resource *resource, unsigned int sub_resource_idx,
         struct wined3d_map_desc *map_desc, const struct wined3d_box *box, DWORD flags)
 {
     TRACE("resource %p, sub_resource_idx %u, map_desc %p, box %s, flags %#x.\n",
             resource, sub_resource_idx, map_desc, debug_box(box), flags);
 
+#if !defined(STAGING_CSMT)
     flags = wined3d_resource_sanitise_map_flags(resource, flags);
 
     return wined3d_cs_map(resource->device->cs, resource, sub_resource_idx, map_desc, box, flags);
+#else  /* STAGING_CSMT */
+    return resource->resource_ops->resource_sub_resource_map(resource, sub_resource_idx, map_desc, box, flags);
+#endif /* STAGING_CSMT */
 }
 
 HRESULT CDECL wined3d_resource_map_info(struct wined3d_resource *resource, unsigned int sub_resource_idx,
@@ -371,7 +383,11 @@ HRESULT CDECL wined3d_resource_unmap(struct wined3d_resource *resource, unsigned
 {
     TRACE("resource %p, sub_resource_idx %u.\n", resource, sub_resource_idx);
 
+#if !defined(STAGING_CSMT)
     return wined3d_cs_unmap(resource->device->cs, resource, sub_resource_idx);
+#else  /* STAGING_CSMT */
+    return resource->resource_ops->resource_sub_resource_unmap(resource, sub_resource_idx);
+#endif /* STAGING_CSMT */
 }
 
 void CDECL wined3d_resource_preload(struct wined3d_resource *resource)
@@ -391,7 +407,11 @@ BOOL wined3d_resource_allocate_sysmem(struct wined3d_resource *resource)
     p = (void **)(((ULONG_PTR)mem + align) & ~(RESOURCE_ALIGNMENT - 1)) - 1;
     *p = mem;
 
+#if !defined(STAGING_CSMT)
     resource->heap_memory = ++p;
+#else  /* STAGING_CSMT */
+    resource->map_heap_memory = ++p;
+#endif /* STAGING_CSMT */
 
     return TRUE;
 }
@@ -407,6 +427,41 @@ void wined3d_resource_free_sysmem(struct wined3d_resource *resource)
     resource->heap_memory = NULL;
 }
 
+#if defined(STAGING_CSMT)
+DWORD wined3d_resource_sanitize_map_flags(const struct wined3d_resource *resource, DWORD flags)
+{
+    /* Not all flags make sense together, but Windows never returns an error.
+     * Catch the cases that could cause issues. */
+    if (flags & WINED3D_MAP_READONLY)
+    {
+        if (flags & WINED3D_MAP_DISCARD)
+        {
+            WARN("WINED3D_MAP_READONLY combined with WINED3D_MAP_DISCARD, ignoring flags.\n");
+            return 0;
+        }
+        if (flags & WINED3D_MAP_NOOVERWRITE)
+        {
+            WARN("WINED3D_MAP_READONLY combined with WINED3D_MAP_NOOVERWRITE, ignoring flags.\n");
+            return 0;
+        }
+    }
+    else if ((flags & (WINED3D_MAP_DISCARD | WINED3D_MAP_NOOVERWRITE))
+            == (WINED3D_MAP_DISCARD | WINED3D_MAP_NOOVERWRITE))
+    {
+        WARN("WINED3D_MAP_DISCARD and WINED3D_MAP_NOOVERWRITE used together, ignoring.\n");
+        return 0;
+    }
+    else if (flags & (WINED3D_MAP_DISCARD | WINED3D_MAP_NOOVERWRITE)
+            && !(resource->usage & WINED3DUSAGE_DYNAMIC))
+    {
+        WARN("DISCARD or NOOVERWRITE map on non-dynamic buffer, ignoring.\n");
+        return 0;
+    }
+
+    return flags;
+}
+
+#endif /* STAGING_CSMT */
 GLbitfield wined3d_resource_gl_map_flags(DWORD d3d_flags)
 {
     GLbitfield ret = 0;

@@ -196,10 +196,19 @@ static void draw_primitive_immediate_mode(struct wined3d_context *context, const
     if (instance_count)
         FIXME("Instancing not implemented.\n");
 
+#if !defined(STAGING_CSMT)
     /* Immediate mode drawing can't make use of indices in a VBO - get the
      * data from the index buffer. */
     if (idx_size)
         idx_data = wined3d_buffer_load_sysmem(state->index_buffer, context) + state->index_offset;
+#else  /* STAGING_CSMT */
+    /* Immediate mode drawing can't make use of indices in a vbo - get the
+     * data from the index buffer. If the index buffer has no vbo (not
+     * supported or other reason), or with user pointer drawing idx_data
+     * will be non-NULL. */
+    if (idx_size && !idx_data)
+        idx_data = wined3d_buffer_load_sysmem(state->index_buffer, context);
+#endif /* STAGING_CSMT */
 
     ops = &d3d_info->ffp_attrib_ops;
 
@@ -411,7 +420,11 @@ void draw_primitive(struct wined3d_device *device, const struct wined3d_state *s
         int base_vertex_idx, unsigned int start_idx, unsigned int index_count,
         unsigned int start_instance, unsigned int instance_count, BOOL indexed)
 {
+#if !defined(STAGING_CSMT)
     const struct wined3d_fb_state *fb = state->fb;
+#else  /* STAGING_CSMT */
+    const struct wined3d_fb_state *fb = &state->fb;
+#endif /* STAGING_CSMT */
     const struct wined3d_stream_info *stream_info;
     struct wined3d_event_query *ib_query = NULL;
     struct wined3d_stream_info si_emulated;
@@ -468,8 +481,13 @@ void draw_primitive(struct wined3d_device *device, const struct wined3d_state *s
         {
             RECT current_rect, draw_rect, r;
 
+#if !defined(STAGING_CSMT)
             if (!context->render_offscreen && ds != device->onscreen_depth_stencil)
                 device_switch_onscreen_ds(device, context, ds);
+#else  /* STAGING_CSMT */
+            if (!context->render_offscreen && ds != device->cs->onscreen_depth_stencil)
+                wined3d_cs_switch_onscreen_ds(device->cs, context, ds);
+#endif /* STAGING_CSMT */
 
             if (surface_get_sub_resource(ds)->locations & location)
                 SetRect(&current_rect, 0, 0, ds->ds_current_size.cx, ds->ds_current_size.cy);

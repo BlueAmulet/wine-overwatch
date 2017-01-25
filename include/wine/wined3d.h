@@ -890,6 +890,7 @@ enum wined3d_format_support
 
 #define WINED3DDP_MAXTEXCOORD                                   8
 
+#if !defined(STAGING_CSMT)
 #define WINED3D_BIND_VERTEX_BUFFER                              0x00000001
 #define WINED3D_BIND_INDEX_BUFFER                               0x00000002
 #define WINED3D_BIND_CONSTANT_BUFFER                            0x00000004
@@ -899,6 +900,7 @@ enum wined3d_format_support
 #define WINED3D_BIND_DEPTH_STENCIL                              0x00000040
 #define WINED3D_BIND_UNORDERED_ACCESS                           0x00000080
 
+#endif /* STAGING_CSMT */
 #define WINED3DUSAGE_RENDERTARGET                               0x00000001
 #define WINED3DUSAGE_DEPTHSTENCIL                               0x00000002
 #define WINED3DUSAGE_WRITEONLY                                  0x00000008

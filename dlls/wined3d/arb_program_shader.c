@@ -704,7 +704,11 @@ static void shader_arb_load_constants_internal(struct shader_arb_priv *priv,
     {
         const struct wined3d_shader *pshader = state->shader[WINED3D_SHADER_TYPE_PIXEL];
         const struct arb_ps_compiled_shader *gl_shader = priv->compiled_fprog;
+#if !defined(STAGING_CSMT)
         UINT rt_height = state->fb->render_targets[0]->height;
+#else  /* STAGING_CSMT */
+        UINT rt_height = state->fb.render_targets[0]->height;
+#endif /* STAGING_CSMT */
 
         /* Load DirectX 9 float constants for pixel shader */
         priv->highest_dirty_ps_const = shader_arb_load_constants_f(pshader, gl_info, GL_FRAGMENT_PROGRAM_ARB,
@@ -729,6 +733,14 @@ static void shader_arb_update_float_vertex_constants(struct wined3d_device *devi
 {
     struct wined3d_context *context = context_get_current();
     struct shader_arb_priv *priv = device->shader_priv;
+#if defined(STAGING_CSMT)
+    unsigned int i;
+
+    for (i = 0; i < device->context_count; ++i)
+    {
+        device->contexts[i]->constant_update_mask |= WINED3D_SHADER_CONST_VS_F;
+    }
+#endif /* STAGING_CSMT */
 
     /* We don't want shader constant dirtification to be an O(contexts), so just dirtify the active
      * context. On a context switch the old context will be fully dirtified */
@@ -743,6 +755,14 @@ static void shader_arb_update_float_pixel_constants(struct wined3d_device *devic
 {
     struct wined3d_context *context = context_get_current();
     struct shader_arb_priv *priv = device->shader_priv;
+#if defined(STAGING_CSMT)
+    unsigned int i;
+
+    for (i = 0; i < device->context_count; ++i)
+    {
+        device->contexts[i]->constant_update_mask |= WINED3D_SHADER_CONST_PS_F;
+    }
+#endif /* STAGING_CSMT */
 
     /* We don't want shader constant dirtification to be an O(contexts), so just dirtify the active
      * context. On a context switch the old context will be fully dirtified */
@@ -4727,7 +4747,11 @@ static void shader_arb_select(void *shader_priv, struct wined3d_context *context
         }
         else
         {
+#if !defined(STAGING_CSMT)
             UINT rt_height = state->fb->render_targets[0]->height;
+#else  /* STAGING_CSMT */
+            UINT rt_height = state->fb.render_targets[0]->height;
+#endif /* STAGING_CSMT */
             shader_arb_ps_local_constants(compiled, context, state, rt_height);
         }
 
@@ -8010,8 +8034,16 @@ static void arbfp_blit_surface(struct wined3d_device *device, enum wined3d_blit_
     /* Leave the opengl state valid for blitting */
     arbfp_blit_unset(context->gl_info);
 
+#if !defined(STAGING_CSMT)
     if (wined3d_settings.strict_draw_ordering
             || (dst_texture->swapchain && (dst_texture->swapchain->front_buffer == dst_texture)))
+#else  /* STAGING_CSMT */
+    if (wined3d_settings.cs_multithreaded)
+        context->gl_info->gl_ops.gl.p_glFinish();
+    else if (wined3d_settings.strict_draw_ordering
+            || (dst_texture->swapchain
+            && (dst_texture->swapchain->front_buffer == dst_texture)))
+#endif /* STAGING_CSMT */
         context->gl_info->gl_ops.gl.p_glFlush(); /* Flush to ensure ordering across contexts. */
 
     context_release(context);

@@ -1561,7 +1561,11 @@ static void shader_glsl_load_constants(void *shader_priv, struct wined3d_context
         const struct wined3d_vec4 correction_params =
         {
             /* Position is relative to the framebuffer, not the viewport. */
+#if !defined(STAGING_CSMT)
             context->render_offscreen ? 0.0f : (float)state->fb->render_targets[0]->height,
+#else  /* STAGING_CSMT */
+            context->render_offscreen ? 0.0f : (float)state->fb.render_targets[0]->height,
+#endif /* STAGING_CSMT */
             context->render_offscreen ? 1.0f : -1.0f,
             0.0f,
             0.0f,
@@ -1667,6 +1671,13 @@ static void shader_glsl_update_float_vertex_constants(struct wined3d_device *dev
     {
         update_heap_entry(heap, i, priv->next_constant_version);
     }
+#if defined(STAGING_CSMT)
+
+    for (i = 0; i < device->context_count; ++i)
+    {
+        device->contexts[i]->constant_update_mask |= WINED3D_SHADER_CONST_VS_F;
+    }
+#endif /* STAGING_CSMT */
 }
 
 static void shader_glsl_update_float_pixel_constants(struct wined3d_device *device, UINT start, UINT count)
@@ -1679,6 +1690,13 @@ static void shader_glsl_update_float_pixel_constants(struct wined3d_device *devi
     {
         update_heap_entry(heap, i, priv->next_constant_version);
     }
+#if defined(STAGING_CSMT)
+
+    for (i = 0; i < device->context_count; ++i)
+    {
+        device->contexts[i]->constant_update_mask |= WINED3D_SHADER_CONST_PS_F;
+    }
+#endif /* STAGING_CSMT */
 }
 
 static unsigned int vec4_varyings(DWORD shader_major, const struct wined3d_gl_info *gl_info)
