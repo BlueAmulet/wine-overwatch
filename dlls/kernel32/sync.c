@@ -1475,7 +1475,7 @@ BOOL WINAPI PeekNamedPipe( HANDLE hPipe, LPVOID lpvBuffer, DWORD cbBuffer,
         ULONG read_size = io.Information - FIELD_OFFSET( FILE_PIPE_PEEK_BUFFER, Data );
         if (lpcbAvail) *lpcbAvail = buffer->ReadDataAvailable;
         if (lpcbRead) *lpcbRead = read_size;
-        if (lpcbMessage) *lpcbMessage = 0;  /* FIXME */
+        if (lpcbMessage) *lpcbMessage = buffer->MessageLength;
         if (lpvBuffer) memcpy( lpvBuffer, buffer->Data, read_size );
     }
     else SetLastError( RtlNtStatusToDosError(status) );
@@ -2451,4 +2451,149 @@ BOOL WINAPI SleepConditionVariableSRW( RTL_CONDITION_VARIABLE *variable, RTL_SRW
         return FALSE;
     }
     return TRUE;
+}
+
+
+/***********************************************************************
+ *           CreateUmsCompletionList   (KERNEL32.@)
+ */
+BOOL WINAPI CreateUmsCompletionList( PUMS_COMPLETION_LIST *list )
+{
+    FIXME( "%p: stub\n", list );
+    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+    return FALSE;
+}
+
+
+/***********************************************************************
+ *           DequeueUmsCompletionListItems   (KERNEL32.@)
+ */
+BOOL WINAPI DequeueUmsCompletionListItems( void *list, DWORD timeout, PUMS_CONTEXT *ctx )
+{
+    FIXME( "%p,%08x,%p: stub\n", list, timeout, ctx );
+    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+    return FALSE;
+}
+
+
+/***********************************************************************
+ *           DeleteUmsCompletionList   (KERNEL32.@)
+ */
+BOOL WINAPI DeleteUmsCompletionList( PUMS_COMPLETION_LIST list )
+{
+    FIXME( "%p: stub\n", list );
+    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+    return FALSE;
+}
+
+
+/***********************************************************************
+ *           GetUmsCompletionListEvent   (KERNEL32.@)
+ */
+BOOL WINAPI GetUmsCompletionListEvent( PUMS_COMPLETION_LIST list, HANDLE *event )
+{
+    FIXME( "%p,%p: stub\n", list, event );
+    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+    return FALSE;
+}
+
+
+/***********************************************************************
+ *           CreateUmsThreadContext   (KERNEL32.@)
+ */
+BOOL WINAPI CreateUmsThreadContext( PUMS_CONTEXT *ctx )
+{
+    FIXME( "%p: stub\n", ctx );
+    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+    return FALSE;
+}
+
+
+/***********************************************************************
+ *           DeleteUmsThreadContext   (KERNEL32.@)
+ */
+BOOL WINAPI DeleteUmsThreadContext( PUMS_CONTEXT ctx )
+{
+    FIXME( "%p: stub\n", ctx );
+    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+    return FALSE;
+}
+
+
+/***********************************************************************
+ *           EnterUmsSchedulingMode   (KERNEL32.@)
+ */
+BOOL WINAPI EnterUmsSchedulingMode( UMS_SCHEDULER_STARTUP_INFO *info )
+{
+    FIXME( "%p: stub\n", info );
+    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+    return FALSE;
+}
+
+
+/***********************************************************************
+ *           ExecuteUmsThread   (KERNEL32.@)
+ */
+BOOL WINAPI ExecuteUmsThread( PUMS_CONTEXT ctx )
+{
+    FIXME( "%p: stub\n", ctx );
+    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+    return FALSE;
+}
+
+
+/***********************************************************************
+ *           GetCurrentUmsThread   (KERNEL32.@)
+ */
+PUMS_CONTEXT WINAPI GetCurrentUmsThread( void )
+{
+    FIXME( "stub\n" );
+    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+    return FALSE;
+}
+
+
+/***********************************************************************
+ *           GetNextUmsListItem   (KERNEL32.@)
+ */
+PUMS_CONTEXT WINAPI GetNextUmsListItem( PUMS_CONTEXT ctx )
+{
+    FIXME( "%p: stub\n", ctx );
+    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+    return NULL;
+}
+
+
+/***********************************************************************
+ *           QueryUmsThreadInformation   (KERNEL32.@)
+ */
+BOOL WINAPI QueryUmsThreadInformation( PUMS_CONTEXT ctx, UMS_THREAD_INFO_CLASS class,
+                                       void *buf, ULONG length, ULONG *ret_length )
+{
+    FIXME( "%p,%08x,%p,%08x,%p: stub\n", ctx, class, buf, length, ret_length );
+    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+    return FALSE;
+}
+
+
+/***********************************************************************
+ *           SetUmsThreadInformation   (KERNEL32.@)
+ */
+BOOL WINAPI SetUmsThreadInformation( PUMS_CONTEXT ctx, UMS_THREAD_INFO_CLASS class,
+                                     void *buf, ULONG length )
+{
+    FIXME( "%p,%08x,%p,%08x: stub\n", ctx, class, buf, length );
+    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+    return FALSE;
+}
+
+
+/***********************************************************************
+ *           UmsThreadYield   (KERNEL32.@)
+ */
+BOOL WINAPI UmsThreadYield( void *param )
+{
+    FIXME( "%p: stub\n", param );
+    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+    return FALSE;
 }

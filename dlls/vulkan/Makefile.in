@@ -1,0 +1,8 @@
+MODULE    = vulkan.dll
+IMPORTS   = user32
+EXTRAINCL = $(X_CFLAGS)
+EXTRALIBS = $(X_LIBS) $(X_EXTRA_LIBS)
+
+C_SRCS = \
+	vulkan_main.c \
+	vulkan_thunks.c

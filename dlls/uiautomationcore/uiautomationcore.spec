@@ -53,14 +53,16 @@
 @ stub TransformPattern_Rotate
 @ stub UiaAddEvent
 @ stdcall UiaClientsAreListening()
+@ stub UiaDisconnectAllProviders
+@ stub UiaDisconnectProvider
 @ stub UiaEventAddWindow
 @ stub UiaEventRemoveWindow
 @ stub UiaFind
 @ stub UiaGetErrorDescription
 @ stub UiaGetPatternProvider
 @ stub UiaGetPropertyValue
-@ stub UiaGetReservedMixedAttributeValue
-@ stub UiaGetReservedNotSupportedValue
+@ stdcall UiaGetReservedMixedAttributeValue(ptr)
+@ stdcall UiaGetReservedNotSupportedValue(ptr)
 @ stub UiaGetRootNode
 @ stub UiaGetRuntimeId
 @ stub UiaGetUpdatedCache
@@ -69,7 +71,8 @@
 @ stub UiaHUiaNodeFromVariant
 @ stub UiaHasServerSideProvider
 @ stub UiaHostProviderFromHwnd
-@ stub UiaLookupId
+@ stub UiaIAccessibleFromProvider
+@ stdcall UiaLookupId(long ptr)
 @ stub UiaNavigate
 @ stub UiaNodeFromFocus
 @ stub UiaNodeFromHandle
@@ -77,13 +80,16 @@
 @ stub UiaNodeFromProvider
 @ stub UiaNodeRelease
 @ stub UiaPatternRelease
+@ stub UiaProviderForNonClient
+@ stub UiaProviderFromIAccessible
 @ stub UiaRaiseAsyncContentLoadedEvent
 @ stub UiaRaiseAutomationEvent
 @ stub UiaRaiseAutomationPropertyChangedEvent
 @ stub UiaRaiseStructureChangedEvent
+@ stub UiaRaiseTextEditTextChangedEvent
 @ stub UiaRegisterProviderCallback
 @ stub UiaRemoveEvent
-@ stub UiaReturnRawElementProvider
+@ stdcall UiaReturnRawElementProvider(long long long ptr)
 @ stub UiaSetFocus
 @ stub UiaTextRangeRelease
 @ stub ValuePattern_SetValue

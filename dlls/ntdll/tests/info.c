@@ -561,6 +561,62 @@ done:
     HeapFree( GetProcessHeap(), 0, shi);
 }
 
+static void test_query_handle_ex(void)
+{
+    NTSTATUS status;
+    ULONG ExpectedLength, ReturnLength;
+    ULONG SystemInformationLength = sizeof(SYSTEM_HANDLE_INFORMATION_EX);
+    SYSTEM_HANDLE_INFORMATION_EX* shi = HeapAlloc(GetProcessHeap(), 0, SystemInformationLength);
+    HANDLE EventHandle;
+    BOOL found;
+    INT i;
+
+    EventHandle = CreateEventA(NULL, FALSE, FALSE, NULL);
+    ok( EventHandle != NULL, "CreateEventA failed %u\n", GetLastError() );
+
+    ReturnLength = 0xdeadbeef;
+    status = pNtQuerySystemInformation(SystemExtendedHandleInformation, shi, SystemInformationLength, &ReturnLength);
+    ok( status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
+    ok( ReturnLength != 0xdeadbeef, "Expected valid ReturnLength\n" );
+
+    SystemInformationLength = ReturnLength;
+    shi = HeapReAlloc(GetProcessHeap(), 0, shi , SystemInformationLength);
+    memset(shi, 0x55, SystemInformationLength);
+
+    ReturnLength = 0xdeadbeef;
+    status = pNtQuerySystemInformation(SystemExtendedHandleInformation, shi, SystemInformationLength, &ReturnLength);
+    ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status );
+    ExpectedLength = FIELD_OFFSET(SYSTEM_HANDLE_INFORMATION_EX, Handle[shi->Count]);
+    ok( ReturnLength == ExpectedLength, "Expected length %u, got %u\n", ExpectedLength, ReturnLength );
+    ok( shi->Count > 1, "Expected more than 1 handle, got %u\n", (DWORD)shi->Count );
+
+    for (i = 0, found = FALSE; i < shi->Count && !found; i++)
+        found = (shi->Handle[i].UniqueProcessId == GetCurrentProcessId()) &&
+                ((HANDLE)(ULONG_PTR)shi->Handle[i].HandleValue == EventHandle);
+    ok( found, "Expected to find event handle %p (pid %x) in handle list\n", EventHandle, GetCurrentProcessId() );
+
+    if (!found)
+    {
+        for (i = 0; i < shi->Count; i++)
+            trace( "%d: handle %x pid %x\n", i, (DWORD)shi->Handle[i].HandleValue, (DWORD)shi->Handle[i].UniqueProcessId );
+    }
+
+    CloseHandle(EventHandle);
+
+    ReturnLength = 0xdeadbeef;
+    status = pNtQuerySystemInformation(SystemExtendedHandleInformation, shi, SystemInformationLength, &ReturnLength);
+    ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status );
+    for (i = 0, found = FALSE; i < shi->Count && !found; i++)
+        found = (shi->Handle[i].UniqueProcessId == GetCurrentProcessId()) &&
+                ((HANDLE)(ULONG_PTR)shi->Handle[i].HandleValue == EventHandle);
+    ok( !found, "Unexpectedly found event handle in handle list\n" );
+
+    status = pNtQuerySystemInformation(SystemExtendedHandleInformation, NULL, SystemInformationLength, &ReturnLength);
+    ok( status == STATUS_ACCESS_VIOLATION, "Expected STATUS_ACCESS_VIOLATION, got %08x\n", status );
+
+    HeapFree( GetProcessHeap(), 0, shi);
+}
+
 static void test_query_cache(void)
 {
     NTSTATUS status;
@@ -1078,10 +1134,7 @@ static void test_query_process_vm(void)
 
     /* Check if we have some return values */
     trace("WorkingSetSize : %ld\n", pvi.WorkingSetSize);
-    todo_wine
-    {
-        ok( pvi.WorkingSetSize > 0, "Expected a WorkingSetSize > 0\n");
-    }
+    ok( pvi.WorkingSetSize > 0, "Expected a WorkingSetSize > 0\n");
 }
 
 static void test_query_process_io(void)
@@ -1251,6 +1304,40 @@ static void test_query_process_debug_port(int argc, char **argv)
     ok(ret, "CloseHandle failed, last error %#x.\n", GetLastError());
     ret = CloseHandle(pi.hProcess);
     ok(ret, "CloseHandle failed, last error %#x.\n", GetLastError());
+}
+
+static void test_query_process_priority(void)
+{
+    PROCESS_PRIORITY_CLASS priority[2];
+    ULONG ReturnLength;
+    DWORD orig_priority;
+    NTSTATUS status;
+    BOOL ret;
+
+    status = pNtQueryInformationProcess(NULL, ProcessPriorityClass, NULL, sizeof(priority[0]), NULL);
+    ok(status == STATUS_ACCESS_VIOLATION || broken(status == STATUS_INVALID_HANDLE) /* w2k3 */,
+       "Expected STATUS_ACCESS_VIOLATION, got %08x\n", status);
+
+    status = pNtQueryInformationProcess(NULL, ProcessPriorityClass, &priority, sizeof(priority[0]), NULL);
+    ok(status == STATUS_INVALID_HANDLE, "Expected STATUS_INVALID_HANDLE, got %08x\n", status);
+
+    status = pNtQueryInformationProcess(GetCurrentProcess(), ProcessPriorityClass, &priority, 1, &ReturnLength);
+    ok(status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
+
+    status = pNtQueryInformationProcess(GetCurrentProcess(), ProcessPriorityClass, &priority, sizeof(priority), &ReturnLength);
+    ok(status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
+
+    orig_priority = GetPriorityClass(GetCurrentProcess());
+    ret = SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
+    ok(ret, "Failed to set priority class: %u\n", GetLastError());
+
+    status = pNtQueryInformationProcess(GetCurrentProcess(), ProcessPriorityClass, &priority, sizeof(priority[0]), &ReturnLength);
+    ok(status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
+    ok(priority[0].PriorityClass == PROCESS_PRIOCLASS_BELOW_NORMAL,
+       "Expected PROCESS_PRIOCLASS_BELOW_NORMAL, got %u\n", priority[0].PriorityClass);
+
+    ret = SetPriorityClass(GetCurrentProcess(), orig_priority);
+    ok(ret, "Failed to reset priority class: %u\n", GetLastError());
 }
 
 static void test_query_process_handlecount(void)
@@ -1714,6 +1801,8 @@ static void test_queryvirtualmemory(void)
     MEMORY_BASIC_INFORMATION mbi;
     char stackbuf[42];
     HMODULE module;
+    char buffer_name[sizeof(MEMORY_SECTION_NAME) + MAX_PATH * sizeof(WCHAR)];
+    MEMORY_SECTION_NAME *msn = (MEMORY_SECTION_NAME *)buffer_name;
 
     module = GetModuleHandleA( "ntdll.dll" );
     trace("Check flags of the PE header of NTDLL.DLL at %p\n", module);
@@ -1787,6 +1876,39 @@ static void test_queryvirtualmemory(void)
             "mbi.Protect is 0x%x\n", mbi.Protect);
     }
     else skip( "bss is outside of module\n" );  /* this can happen on Mac OS */
+
+    trace("Check section name of NTDLL.DLL with invalid size\n");
+    module = GetModuleHandleA( "ntdll.dll" );
+    memset(msn, 0, sizeof(*msn));
+    readcount = 0;
+    status = pNtQueryVirtualMemory(NtCurrentProcess(), module, MemorySectionName, msn, sizeof(*msn), &readcount);
+    ok( status == STATUS_BUFFER_OVERFLOW, "Expected STATUS_BUFFER_OVERFLOW, got %08x\n", status);
+    ok( readcount > 0, "Expected readcount to be > 0\n");
+
+    trace("Check section name of NTDLL.DLL with invalid size\n");
+    module = GetModuleHandleA( "ntdll.dll" );
+    memset(msn, 0, sizeof(*msn));
+    readcount = 0;
+    status = pNtQueryVirtualMemory(NtCurrentProcess(), module, MemorySectionName, msn, sizeof(*msn) - 1, &readcount);
+    ok( status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
+    ok( readcount > 0, "Expected readcount to be > 0\n");
+
+    trace("Check section name of NTDLL.DLL\n");
+    module = GetModuleHandleA( "ntdll.dll" );
+    memset(msn, 0x55, sizeof(*msn));
+    memset(buffer_name, 0x77, sizeof(buffer_name));
+    readcount = 0;
+    status = pNtQueryVirtualMemory(NtCurrentProcess(), module, MemorySectionName, msn, sizeof(buffer_name), &readcount);
+    ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
+    ok( readcount > 0, "Expected readcount to be > 0\n");
+    trace ("Section Name: %s\n", wine_dbgstr_w(msn->SectionFileName.Buffer));
+
+    trace("Check section name of non mapped memory\n");
+    memset(msn, 0, sizeof(*msn));
+    readcount = 0;
+    status = pNtQueryVirtualMemory(NtCurrentProcess(), &buffer_name, MemorySectionName, msn, sizeof(buffer_name), &readcount);
+    ok( status == STATUS_INVALID_ADDRESS, "Expected STATUS_INVALID_ADDRESS, got %08x\n", status);
+    ok( readcount == 0 || broken(readcount != 0) /* wow64 */, "Expected readcount to be 0\n");
 }
 
 static void test_affinity(void)
@@ -2013,6 +2135,26 @@ static void test_query_data_alignment(void)
     ok(value == 64, "Expected 64, got %u\n", value);
 }
 
+static void test_working_set_limit(void)
+{
+    DWORD_PTR lower = 0, upper = ~(DWORD_PTR)0;
+    MEMORY_BASIC_INFORMATION mbi;
+    SIZE_T readcount;
+    NTSTATUS status;
+
+    while (lower != upper)
+    {
+        DWORD_PTR check = (lower >> 1) + (upper >> 1) + (lower & upper & 1);
+        status = pNtQueryVirtualMemory(NtCurrentProcess(), (void *)check, MemoryBasicInformation,
+                                       &mbi, sizeof(MEMORY_BASIC_INFORMATION), &readcount);
+        if (status == STATUS_INVALID_PARAMETER) upper = check;
+        else lower = check + 1;
+    }
+
+    trace("working set limit is %p\n", (void *)upper);
+    ok(upper != ~(DWORD_PTR)0, "expected != ~(DWORD_PTR)0\n");
+}
+
 START_TEST(info)
 {
     char **argv;
@@ -2057,6 +2199,10 @@ START_TEST(info)
     /* 0x10 SystemHandleInformation */
     trace("Starting test_query_handle()\n");
     test_query_handle();
+
+    /* 0x40 SystemHandleInformation */
+    trace("Starting test_query_handle_ex()\n");
+    test_query_handle_ex();
 
     /* 0x15 SystemCacheInformation */
     trace("Starting test_query_cache()\n");
@@ -2107,6 +2253,10 @@ START_TEST(info)
     trace("Starting test_process_debug_port()\n");
     test_query_process_debug_port(argc, argv);
 
+    /* 0x12 ProcessPriorityClass */
+    trace("Starting test_query_process_priority()\n");
+    test_query_process_priority();
+
     /* 0x14 ProcessHandleCount */
     trace("Starting test_query_process_handlecount()\n");
     test_query_process_handlecount();
@@ -2148,4 +2298,7 @@ START_TEST(info)
 
     trace("Starting test_query_data_alignment()\n");
     test_query_data_alignment();
+
+    trace("Starting test_working_set_limit()\n");
+    test_working_set_limit();
 }

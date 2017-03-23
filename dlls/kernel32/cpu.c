@@ -216,14 +216,8 @@ BOOL WINAPI IsProcessorFeaturePresent (
  */
 BOOL WINAPI K32GetPerformanceInfo(PPERFORMANCE_INFORMATION info, DWORD size)
 {
-    union
-    {
-        SYSTEM_PERFORMANCE_INFORMATION performance;
-        SYSTEM_PROCESS_INFORMATION process;
-        SYSTEM_BASIC_INFORMATION basic;
-    } *sysinfo;
-    SYSTEM_PROCESS_INFORMATION *spi;
-    DWORD process_info_size;
+    SYSTEM_PERFORMANCE_INFORMATION performance;
+    SYSTEM_BASIC_INFORMATION basic;
     NTSTATUS status;
 
     TRACE( "(%p, %d)\n", info, size );
@@ -237,53 +231,41 @@ BOOL WINAPI K32GetPerformanceInfo(PPERFORMANCE_INFORMATION info, DWORD size)
     memset( info, 0, sizeof(*info) );
     info->cb = sizeof(*info);
 
-    /* fields from SYSTEM_PROCESS_INFORMATION */
-    NtQuerySystemInformation( SystemProcessInformation, NULL, 0, &process_info_size );
-    for (;;)
+    SERVER_START_REQ( get_system_info )
     {
-        sysinfo = HeapAlloc( GetProcessHeap(), 0, max(process_info_size, sizeof(*sysinfo)) );
-        if (!sysinfo)
+        status = wine_server_call( req );
+        if (!status)
         {
-            SetLastError( ERROR_OUTOFMEMORY );
-            return FALSE;
+            info->ProcessCount = reply->processes;
+            info->HandleCount = reply->handles;
+            info->ThreadCount = reply->threads;
         }
-        status = NtQuerySystemInformation( SystemProcessInformation, &sysinfo->process,
-                                           process_info_size, &process_info_size );
-        if (!status) break;
-        if (status != STATUS_INFO_LENGTH_MISMATCH)
-            goto err;
-        HeapFree( GetProcessHeap(), 0, sysinfo );
     }
-    for (spi = &sysinfo->process;; spi = (SYSTEM_PROCESS_INFORMATION *)(((PCHAR)spi) + spi->NextEntryOffset))
-    {
-        info->ProcessCount++;
-        info->HandleCount += spi->HandleCount;
-        info->ThreadCount += spi->dwThreadCount;
-        if (spi->NextEntryOffset == 0) break;
-    }
+    SERVER_END_REQ;
+
+    if (status) goto err;
 
     /* fields from SYSTEM_PERFORMANCE_INFORMATION */
-    status = NtQuerySystemInformation( SystemPerformanceInformation, &sysinfo->performance,
-                                       sizeof(sysinfo->performance), NULL );
+    status = NtQuerySystemInformation( SystemPerformanceInformation, &performance,
+                                       sizeof(performance), NULL );
     if (status) goto err;
-    info->CommitTotal        = sysinfo->performance.TotalCommittedPages;
-    info->CommitLimit        = sysinfo->performance.TotalCommitLimit;
-    info->CommitPeak         = sysinfo->performance.PeakCommitment;
-    info->PhysicalAvailable  = sysinfo->performance.AvailablePages;
-    info->KernelTotal        = sysinfo->performance.PagedPoolUsage +
-                               sysinfo->performance.NonPagedPoolUsage;
-    info->KernelPaged        = sysinfo->performance.PagedPoolUsage;
-    info->KernelNonpaged     = sysinfo->performance.NonPagedPoolUsage;
+    info->CommitTotal        = performance.TotalCommittedPages;
+    info->CommitLimit        = performance.TotalCommitLimit;
+    info->CommitPeak         = performance.PeakCommitment;
+    info->PhysicalAvailable  = performance.AvailablePages;
+    info->KernelTotal        = performance.PagedPoolUsage +
+                               performance.NonPagedPoolUsage;
+    info->KernelPaged        = performance.PagedPoolUsage;
+    info->KernelNonpaged     = performance.NonPagedPoolUsage;
 
     /* fields from SYSTEM_BASIC_INFORMATION */
-    status = NtQuerySystemInformation( SystemBasicInformation, &sysinfo->basic,
-                                       sizeof(sysinfo->basic), NULL );
+    status = NtQuerySystemInformation( SystemBasicInformation, &basic,
+                                       sizeof(basic), NULL );
     if (status) goto err;
-    info->PhysicalTotal = sysinfo->basic.MmNumberOfPhysicalPages;
-    info->PageSize      = sysinfo->basic.PageSize;
+    info->PhysicalTotal = basic.MmNumberOfPhysicalPages;
+    info->PageSize      = basic.PageSize;
 
 err:
-    HeapFree( GetProcessHeap(), 0, sysinfo );
     if (status)
     {
         SetLastError( RtlNtStatusToDosError( status ) );
@@ -302,4 +284,59 @@ SIZE_T WINAPI GetLargePageMinimum(void)
 #endif
     FIXME("Not implemented on your platform/architecture.\n");
     return 0;
+}
+
+/***********************************************************************
+ *           GetActiveProcessorGroupCount (KERNEL32.@)
+ */
+WORD WINAPI GetActiveProcessorGroupCount(void)
+{
+    TRACE("()\n");
+
+    /* systems with less than 64 logical processors only have group 0 */
+    return 1;
+}
+
+/***********************************************************************
+ *           GetMaximumProcessorGroupCount (KERNEL32.@)
+ */
+WORD WINAPI GetMaximumProcessorGroupCount(void)
+{
+    TRACE("()\n");
+
+    /* systems with less than 64 logical processors only have group 0 */
+    return 1;
+}
+
+/***********************************************************************
+ *           GetActiveProcessorCount (KERNEL32.@)
+ */
+DWORD WINAPI GetActiveProcessorCount(WORD group)
+{
+    TRACE("(%u)\n", group);
+
+    if (group && group != ALL_PROCESSOR_GROUPS)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return 0;
+    }
+
+    return system_info.NumberOfProcessors;
+}
+
+/***********************************************************************
+ *           GetMaximumProcessorCount (KERNEL32.@)
+ */
+DWORD WINAPI GetMaximumProcessorCount(WORD group)
+{
+    TRACE("(%u)\n", group);
+
+    if (group && group != ALL_PROCESSOR_GROUPS)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return 0;
+    }
+
+    /* Wine only counts active processors so far */
+    return system_info.NumberOfProcessors;
 }

@@ -516,7 +516,7 @@ out:
 static inline IDirectSoundBufferImpl *impl_from_IDirectSoundBuffer(IDirectSoundBuffer *iface)
 {
     /* IDirectSoundBuffer and IDirectSoundBuffer8 use the same iface. */
-    return CONTAINING_RECORD(iface, IDirectSoundBufferImpl, IDirectSoundBuffer8_iface);
+    return CONTAINING_RECORD((IDirectSoundBuffer8 *)iface, IDirectSoundBufferImpl, IDirectSoundBuffer8_iface);
 }
 
 /* This sets this format for the primary buffer only */

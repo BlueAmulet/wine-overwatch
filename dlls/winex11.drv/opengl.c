@@ -450,6 +450,7 @@ static int GLXErrorHandler(Display *dpy, XErrorEvent *event, void *arg)
 static BOOL X11DRV_WineGL_InitOpenglInfo(void)
 {
     static const char legacy_extensions[] = " WGL_EXT_extensions_string WGL_EXT_swap_control";
+    static const char direct_extension[] = " WINE_EXT_direct_rendering";
 
     int screen = DefaultScreen(gdi_display);
     Window win = 0, root = 0;
@@ -501,10 +502,13 @@ static BOOL X11DRV_WineGL_InitOpenglInfo(void)
     }
     gl_renderer = (const char *)opengl_funcs.gl.p_glGetString(GL_RENDERER);
     WineGLInfo.glVersion = (const char *) opengl_funcs.gl.p_glGetString(GL_VERSION);
+    WineGLInfo.glxDirect = pglXIsDirect(gdi_display, ctx);
     str = (const char *) opengl_funcs.gl.p_glGetString(GL_EXTENSIONS);
-    WineGLInfo.glExtensions = HeapAlloc(GetProcessHeap(), 0, strlen(str)+sizeof(legacy_extensions));
+    WineGLInfo.glExtensions = HeapAlloc(GetProcessHeap(), 0, strlen(str)+sizeof(legacy_extensions)+sizeof(direct_extension));
     strcpy(WineGLInfo.glExtensions, str);
     strcat(WineGLInfo.glExtensions, legacy_extensions);
+    if (WineGLInfo.glxDirect)
+        strcat(WineGLInfo.glExtensions, direct_extension);
 
     /* Get the common GLX version supported by GLX client and server ( major/minor) */
     pglXQueryVersion(gdi_display, &WineGLInfo.glxVersion[0], &WineGLInfo.glxVersion[1]);
@@ -518,7 +522,7 @@ static BOOL X11DRV_WineGL_InitOpenglInfo(void)
     WineGLInfo.glxClientExtensions = pglXGetClientString(gdi_display, GLX_EXTENSIONS);
 
     WineGLInfo.glxExtensions = pglXQueryExtensionsString(gdi_display, screen);
-    WineGLInfo.glxDirect = pglXIsDirect(gdi_display, ctx);
+
 
     TRACE("GL version             : %s.\n", WineGLInfo.glVersion);
     TRACE("GL renderer            : %s.\n", gl_renderer);
@@ -1468,11 +1472,14 @@ static BOOL set_pixel_format(HDC hdc, int format, BOOL allow_change)
 
     TRACE("(%p,%d)\n", hdc, format);
 
-    if (!hwnd || hwnd == GetDesktopWindow())
+    if (!hwnd)
     {
         WARN( "not a valid window DC %p/%p\n", hdc, hwnd );
         return FALSE;
     }
+
+    if (hwnd == GetDesktopWindow())
+        FIXME("Using desktop window for OpenGL is not supported on windows\n");
 
     fmt = get_pixel_format(gdi_display, format, FALSE /* Offscreen */);
     if (!fmt)
@@ -1971,18 +1978,16 @@ static BOOL glxdrv_wglShareLists(struct wgl_context *org, struct wgl_context *de
      * current or when it hasn't shared display lists before.
      */
 
-    if((org->has_been_current && dest->has_been_current) || dest->has_been_current)
-    {
-        ERR("Could not share display lists, one of the contexts has been current already !\n");
-        return FALSE;
-    }
-    else if(dest->sharing)
+    if(dest->sharing)
     {
         ERR("Could not share display lists because hglrc2 has already shared lists before\n");
         return FALSE;
     }
     else
     {
+        if(dest->has_been_current)
+            ERR("Recreating OpenGL context to share display lists, although the context has been current!\n");
+
         /* Re-create the GLX context and share display lists */
         pglXDestroyContext(gdi_display, dest->ctx);
         dest->ctx = create_glxcontext(gdi_display, dest, org->ctx);

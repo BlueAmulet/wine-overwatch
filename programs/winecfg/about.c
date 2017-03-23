@@ -118,7 +118,7 @@ AboutDlgProc (HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
             SendMessageW(hWnd, WM_SETFONT, (WPARAM)titleFont, TRUE);
             SetWindowTextA(hWnd, PACKAGE_NAME);
         }
-        SetDlgItemTextA(hDlg, IDC_ABT_PANEL_TEXT, PACKAGE_VERSION);
+        SetDlgItemTextA(hDlg, IDC_ABT_PANEL_TEXT, PACKAGE_VERSION " (Staging)");
 
         /* prepare the web link */
         SetDlgItemTextA(hDlg, IDC_ABT_WEB_LINK, "<a href=\"" PACKAGE_URL "\">" PACKAGE_URL "</a>");

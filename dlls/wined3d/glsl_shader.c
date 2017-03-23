@@ -2212,6 +2212,13 @@ static void shader_generate_glsl_declarations(const struct wined3d_context *cont
                 sampler_type = "samplerCube";
                 break;
 
+            case WINED3D_SHADER_RESOURCE_TEXTURE_1DARRAY:
+                if (shadow_sampler)
+                    sampler_type = "sampler1DArrayShadow";
+                else
+                    sampler_type = "sampler1DArray";
+                break;
+
             case WINED3D_SHADER_RESOURCE_TEXTURE_2DARRAY:
                 if (shadow_sampler)
                     sampler_type = "sampler2DArrayShadow";
@@ -8789,7 +8796,7 @@ static void set_glsl_shader_program(const struct wined3d_context *context, const
     GLuint vs_id = 0;
     GLuint gs_id = 0;
     GLuint ps_id = 0;
-    struct list *ps_list, *vs_list;
+    struct list *ps_list = NULL, *vs_list = NULL;
     WORD attribs_map;
     struct wined3d_string_buffer *tmp_name;
 

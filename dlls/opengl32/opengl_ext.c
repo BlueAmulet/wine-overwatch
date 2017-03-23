@@ -1954,24 +1954,6 @@ static void WINAPI glCurrentPaletteMatrixARB( GLint index ) {
   funcs->ext.p_glCurrentPaletteMatrixARB( index );
 }
 
-static void WINAPI glDebugMessageCallback( void * callback, const void* userParam ) {
-  const struct opengl_funcs *funcs = NtCurrentTeb()->glTable;
-  TRACE("(%p, %p)\n", callback, userParam );
-  funcs->ext.p_glDebugMessageCallback( callback, userParam );
-}
-
-static void WINAPI glDebugMessageCallbackAMD( void * callback, void* userParam ) {
-  const struct opengl_funcs *funcs = NtCurrentTeb()->glTable;
-  TRACE("(%p, %p)\n", callback, userParam );
-  funcs->ext.p_glDebugMessageCallbackAMD( callback, userParam );
-}
-
-static void WINAPI glDebugMessageCallbackARB( void * callback, const void* userParam ) {
-  const struct opengl_funcs *funcs = NtCurrentTeb()->glTable;
-  TRACE("(%p, %p)\n", callback, userParam );
-  funcs->ext.p_glDebugMessageCallbackARB( callback, userParam );
-}
-
 static void WINAPI glDebugMessageControl( GLenum source, GLenum type, GLenum severity, GLsizei count, const GLuint* ids, GLboolean enabled ) {
   const struct opengl_funcs *funcs = NtCurrentTeb()->glTable;
   TRACE("(%d, %d, %d, %d, %p, %d)\n", source, type, severity, count, ids, enabled );

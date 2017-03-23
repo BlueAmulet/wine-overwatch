@@ -771,6 +771,13 @@ void __thiscall _Condition_variable_notify_all(_Condition_variable *this)
         ptr = next;
     }
 }
+
+/* ?_Id@_CurrentScheduler@details@Concurrency@@SAIXZ */
+unsigned int __cdecl _CurrentScheduler_Id(void)
+{
+    FIXME("stub\n");
+    return -1;
+}
 #endif
 
 #if _MSVCR_VER >= 100

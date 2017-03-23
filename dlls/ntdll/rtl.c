@@ -45,6 +45,7 @@
 #include "wine/unicode.h"
 #include "ntdll_misc.h"
 #include "inaddr.h"
+#include "in6addr.h"
 #include "ddk/ntddk.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(ntdll);
@@ -893,12 +894,24 @@ void WINAPI RtlCopyLuidAndAttributesArray(
     for (i = 0; i < Count; i++) Dest[i] = Src[i];
 }
 
-NTSTATUS WINAPI RtlIpv4StringToAddressExW(PULONG IP, PULONG Port,
-                                          LPCWSTR Buffer, PULONG MaxSize)
+/***********************************************************************
+ * RtlIpv4StringToAddressExW [NTDLL.@]
+ */
+NTSTATUS WINAPI RtlIpv4StringToAddressExW(LPCWSTR str, BOOLEAN strict, IN_ADDR *address, PUSHORT port)
 {
-    FIXME("(%p,%p,%p,%p): stub\n", IP, Port, Buffer, MaxSize);
+    FIXME("(%s, %u, %p, %p): stub\n", debugstr_w(str), strict, address, port);
 
     return STATUS_SUCCESS;
+}
+
+/***********************************************************************
+ * RtlIpv6StringToAddressExW [NTDLL.@]
+ */
+NTSTATUS NTAPI RtlIpv6StringToAddressExW(LPCWSTR str, IN6_ADDR *address, PULONG scope, PUSHORT port)
+{
+    FIXME("(%s, %p, %p, %p): stub\n", debugstr_w(str), address, scope, port);
+
+    return STATUS_INVALID_PARAMETER;
 }
 
 /***********************************************************************
@@ -1651,4 +1664,14 @@ NTSTATUS WINAPI RtlCreateUserProcess(UNICODE_STRING *path, ULONG attributes, RTL
     FIXME("(%p %u %p %p %p %p %d %p %p %p): stub\n", path, attributes, parameters, process_descriptor, thread_descriptor,
                                      parent, inherit, debug, exception, info);
     return STATUS_NOT_IMPLEMENTED;
+}
+
+/*********************************************************************
+ *           RtlQueryPackageIdentity [NTDLL.@]
+ */
+NTSTATUS WINAPI RtlQueryPackageIdentity(HANDLE token, WCHAR *fullname, SIZE_T *fullname_size,
+                                        WCHAR *appid, SIZE_T *appid_size, BOOLEAN *packaged)
+{
+    FIXME("(%p, %p, %p, %p, %p, %p): stub\n", token, fullname, fullname_size, appid, appid_size, packaged);
+    return STATUS_NOT_FOUND;
 }

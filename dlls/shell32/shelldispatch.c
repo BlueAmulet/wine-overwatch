@@ -1053,7 +1053,8 @@ static HRESULT WINAPI FolderItemsImpl_get_Count(FolderItems3 *iface, LONG *count
 {
     FIXME("(%p,%p)\n", iface, count);
 
-    return E_NOTIMPL;
+    if (count) *count = 0;
+    return S_OK;
 }
 
 static HRESULT WINAPI FolderItemsImpl_get_Application(FolderItems3 *iface, IDispatch **ppid)

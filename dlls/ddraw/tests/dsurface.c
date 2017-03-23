@@ -2210,7 +2210,7 @@ static void zbufferbitdepth_test(void)
     U3(ddsd.ddpfPixelFormat).dwZBitMask = 0x0000ffff;
     surface = NULL;
     hr = IDirectDraw_CreateSurface(lpDD, &ddsd, &surface, NULL);
-    ok(SUCCEEDED(hr), "IDirectDrawSurface_GetSurfaceDesc failed, hr %#x.\n", hr);
+    ok(SUCCEEDED(hr), "IDirectDraw_CreateSurface failed, hr %#x.\n", hr);
     reset_ddsd(&ddsd);
     hr = IDirectDrawSurface_GetSurfaceDesc(surface, &ddsd);
     ok(SUCCEEDED(hr), "IDirectDrawSurface_GetSurfaceDesc failed, hr %#x.\n", hr);
@@ -2285,7 +2285,7 @@ static void test_ddsd(DDSURFACEDESC *ddsd, BOOL expect_pf, BOOL expect_zd, const
     if (SUCCEEDED(hr))
     {
         hr = IDirectDrawSurface_Unlock(surface, NULL);
-        ok(SUCCEEDED(hr), "IDirectDrawSurface_GetSurfaceDesc failed, hr %#x.\n", hr);
+        ok(SUCCEEDED(hr), "IDirectDrawSurface_Unlock failed, hr %#x.\n", hr);
 
         /* DDSD_ZBUFFERBITDEPTH is never set on Nvidia, but follows GetSurfaceDesc rules on AMD */
         if (!expect_zd)

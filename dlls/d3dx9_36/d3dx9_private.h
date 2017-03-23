@@ -111,6 +111,8 @@ HRESULT load_volume_from_dds(IDirect3DVolume9 *dst_volume, const PALETTEENTRY *d
     const D3DXIMAGE_INFO *src_info) DECLSPEC_HIDDEN;
 HRESULT load_volume_texture_from_dds(IDirect3DVolumeTexture9 *volume_texture, const void *src_data,
     const PALETTEENTRY *palette, DWORD filter, DWORD color_key, const D3DXIMAGE_INFO *src_info) DECLSPEC_HIDDEN;
+HRESULT save_dds_texture_to_memory(ID3DXBuffer **dst_buffer, IDirect3DBaseTexture9 *src_texture,
+    const PALETTEENTRY *src_palette) DECLSPEC_HIDDEN;
 
 unsigned short float_32_to_16(const float in) DECLSPEC_HIDDEN;
 float float_16_to_32(const unsigned short in) DECLSPEC_HIDDEN;
@@ -234,5 +236,7 @@ HRESULT d3dx_evaluate_parameter(struct d3dx_param_eval *peval,
         const struct d3dx_parameter *param, void *param_value) DECLSPEC_HIDDEN;
 HRESULT d3dx_param_eval_set_shader_constants(struct IDirect3DDevice9 *device,
         struct d3dx_param_eval *peval) DECLSPEC_HIDDEN;
+
+HRESULT create_dummy_skin(ID3DXSkinInfo **iface) DECLSPEC_HIDDEN;
 
 #endif /* __WINE_D3DX9_PRIVATE_H */

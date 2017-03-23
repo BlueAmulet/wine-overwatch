@@ -90,6 +90,15 @@ static const WCHAR LowerFilters[] = {'L','o','w','e','r','F','i','l','t','e','r'
 static const WCHAR Phantom[] = {'P','h','a','n','t','o','m',0};
 static const WCHAR SymbolicLink[] = {'S','y','m','b','o','l','i','c','L','i','n','k',0};
 
+/* GUIDs */
+static const WCHAR displayGUIDW[] = {'{','4','d','3','6','e','9','6','8','-','e','3','2','5','-',
+                                     '1','1','c','e','-','b','f','c','1','-',
+                                     '0','8','0','0','2','b','e','1','0','3','1','8','}',0};
+static const WCHAR ddriverGUIDW[] = {'{','4','d','3','6','e','9','6','8','-','e','3','2','5','-',
+                                     '1','1','c','e','-','b','f','c','1','-',
+                                     '0','8','0','0','2','b','e','1','0','3','1','8','}',
+                                     '\\','0','0','0','0',0};
+
 /* is used to identify if a DeviceInfoSet pointer is
 valid or not */
 #define SETUP_DEVICE_INFO_SET_MAGIC 0xd00ff056
@@ -139,6 +148,96 @@ struct DeviceInfo
     LPWSTR                instanceId;
     struct list           interfaces;
 };
+
+static void create_display_keys(HKEY enumKey, int index, DISPLAY_DEVICEW *disp)
+{
+    static const WCHAR fmtW[] = {'1','3','&','1','2','3','4','5','&','%','d',0};
+    HKEY devKey, intKey;
+    WCHAR *str, buffer[50];
+    LONG l;
+
+    l = RegCreateKeyExW(enumKey, disp->DeviceID, 0, NULL, 0, KEY_ALL_ACCESS,
+                        NULL, &devKey, NULL);
+    if (l) return;
+
+    snprintfW(buffer, sizeof(buffer) / sizeof(WCHAR), fmtW, index);
+    l = RegCreateKeyExW(devKey, buffer, 0, NULL, 0, KEY_ALL_ACCESS,
+                        NULL, &intKey, NULL);
+    if (!l)
+    {
+        RegSetValueExW(intKey, ClassGUID, 0, REG_SZ, (BYTE *)displayGUIDW, sizeof(displayGUIDW));
+        RegSetValueExW(intKey, Driver, 0, REG_SZ, (BYTE *)ddriverGUIDW, sizeof(ddriverGUIDW));
+        if ((str = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, (strlenW(disp->DeviceID) + 2) * sizeof(WCHAR))))
+        {
+            strcpyW(str, disp->DeviceID); /* we need two \0 for REG_MULTI_SZ */
+            RegSetValueExW(intKey, HardwareId, 0, REG_MULTI_SZ, (BYTE *)str, (strlenW(str) + 2) * sizeof(WCHAR));
+            HeapFree(GetProcessHeap(), 0, str);
+        }
+        RegCloseKey(intKey);
+    }
+
+    RegCloseKey(devKey);
+}
+
+static void create_display_driver_keys(void)
+{
+    static const WCHAR DriverDateDataW[] = {'D','r','i','v','e','r','D','a','t','e','D','a','t','a',0};
+    HKEY classesKey, driverKey;
+    SYSTEMTIME systime;
+    FILETIME filetime;
+    LONG l;
+
+    l = RegCreateKeyExW(HKEY_LOCAL_MACHINE, ControlClass, 0, NULL, 0, KEY_ALL_ACCESS,
+                        NULL, &classesKey, NULL);
+    if (l) return;
+
+    l = RegCreateKeyExW(classesKey, ddriverGUIDW, 0, NULL, 0, KEY_ALL_ACCESS,
+                        NULL, &driverKey, NULL);
+    if (!l)
+    {
+        /* we are really keeping our drivers up to date */
+        GetSystemTime(&systime);
+        if (SystemTimeToFileTime(&systime, &filetime))
+            RegSetValueExW(driverKey, DriverDateDataW, 0, REG_BINARY, (BYTE *)&filetime, sizeof(filetime));
+
+        RegCloseKey(driverKey);
+    }
+
+    RegCloseKey(classesKey);
+}
+
+static LONG open_enum_key(HKEY *key)
+{
+    static BOOL initialized = FALSE;
+    DISPLAY_DEVICEW disp;
+    HKEY enumKey;
+    LONG l;
+
+    l = RegCreateKeyExW(HKEY_LOCAL_MACHINE, Enum, 0, NULL, 0, KEY_ALL_ACCESS,
+                        NULL, &enumKey, NULL);
+    if (l) return l;
+
+    if (!initialized)
+    {
+        /* Wine currently does not properly distinguish between monitors and
+         * display devices yet. On a multi monitor system the enumeration
+         * returns multiple devices although there is only one graphic card.
+         * To work around this, we stop the enumeration after the first device. */
+
+        TRACE("creating display keys\n");
+
+        disp.cb = sizeof(disp);
+        if (EnumDisplayDevicesW(NULL, 0, &disp, 0))
+            create_display_keys(enumKey, 0, &disp);
+
+        create_display_driver_keys();
+
+        initialized = TRUE;
+    }
+
+    *key = enumKey;
+    return ERROR_SUCCESS;
+}
 
 static void SETUPDI_GuidToString(const GUID *guid, LPWSTR guidStr)
 {
@@ -420,8 +519,7 @@ static HKEY SETUPDI_CreateDevKey(struct DeviceInfo *devInfo)
     HKEY enumKey, key = INVALID_HANDLE_VALUE;
     LONG l;
 
-    l = RegCreateKeyExW(HKEY_LOCAL_MACHINE, Enum, 0, NULL, 0, KEY_ALL_ACCESS,
-            NULL, &enumKey, NULL);
+    l = open_enum_key(&enumKey);
     if (!l)
     {
         RegCreateKeyExW(enumKey, devInfo->instanceId, 0, NULL, 0,
@@ -509,8 +607,7 @@ static void SETUPDI_FreeDeviceInfo(struct DeviceInfo *devInfo)
         HKEY enumKey;
         LONG l;
 
-        l = RegCreateKeyExW(HKEY_LOCAL_MACHINE, Enum, 0, NULL, 0,
-                KEY_ALL_ACCESS, NULL, &enumKey, NULL);
+        l = open_enum_key(&enumKey);
         if (!l)
         {
             RegDeleteTreeW(enumKey, devInfo->instanceId);
@@ -2046,8 +2143,7 @@ static void SETUPDI_EnumerateMatchingInterfaces(HDEVINFO DeviceInfoSet,
 
     TRACE("%s\n", debugstr_w(enumstr));
 
-    l = RegCreateKeyExW(HKEY_LOCAL_MACHINE, Enum, 0, NULL, 0, KEY_READ, NULL,
-            &enumKey, NULL);
+    l = open_enum_key(&enumKey);
     for (i = 0; !l; i++)
     {
         len = sizeof(subKeyName) / sizeof(subKeyName[0]);
@@ -2275,8 +2371,7 @@ static void SETUPDI_EnumerateDevices(HDEVINFO DeviceInfoSet, const GUID *class,
     TRACE("%p, %s, %s, %08x\n", DeviceInfoSet, debugstr_guid(class),
             debugstr_w(enumstr), flags);
 
-    l = RegCreateKeyExW(HKEY_LOCAL_MACHINE, Enum, 0, NULL, 0, KEY_READ, NULL,
-            &enumKey, NULL);
+    l = open_enum_key(&enumKey);
     if (enumKey != INVALID_HANDLE_VALUE)
     {
         if (enumstr)
@@ -2287,8 +2382,30 @@ static void SETUPDI_EnumerateDevices(HDEVINFO DeviceInfoSet, const GUID *class,
                     &enumStrKey);
             if (!l)
             {
-                SETUPDI_EnumerateMatchingDevices(DeviceInfoSet, enumstr,
-                        enumStrKey, class, flags);
+                WCHAR *bus, *device;
+                HKEY devKey;
+
+                if (!strchrW(enumstr, '\\'))
+                {
+                    SETUPDI_EnumerateMatchingDevices(DeviceInfoSet, enumstr,
+                                                     enumStrKey, class, flags);
+                }
+                else if ((bus = strdupW(enumstr)))
+                {
+                    device = strchrW(bus, '\\');
+                    *device++ = 0;
+
+                    l = RegOpenKeyExW(enumKey, enumstr, 0, KEY_READ, &devKey);
+                    if (!l)
+                    {
+                        SETUPDI_EnumerateMatchingDeviceInstances(DeviceInfoSet, bus, device,
+                                                                 devKey, class, flags);
+                        RegCloseKey(devKey);
+                    }
+
+                    HeapFree(GetProcessHeap(), 0, bus);
+                }
+
                 RegCloseKey(enumStrKey);
             }
         }
@@ -2966,8 +3083,6 @@ BOOL WINAPI SetupDiGetDeviceInterfaceDetailA(
                     NULL, NULL);
         else
             DeviceInterfaceDetailData->DevicePath[0] = '\0';
-        if (DeviceInfoData && DeviceInfoData->cbSize == sizeof(SP_DEVINFO_DATA))
-            *DeviceInfoData = *info->device;
         ret = TRUE;
     }
     else
@@ -2976,6 +3091,8 @@ BOOL WINAPI SetupDiGetDeviceInterfaceDetailA(
             *RequiredSize = bytesNeeded;
         SetLastError(ERROR_INSUFFICIENT_BUFFER);
     }
+    if (DeviceInfoData && DeviceInfoData->cbSize == sizeof(SP_DEVINFO_DATA))
+        *DeviceInfoData = *info->device;
     return ret;
 }
 
@@ -3034,8 +3151,6 @@ BOOL WINAPI SetupDiGetDeviceInterfaceDetailW(
             lstrcpyW(DeviceInterfaceDetailData->DevicePath, info->symbolicLink);
         else
             DeviceInterfaceDetailData->DevicePath[0] = '\0';
-        if (DeviceInfoData && DeviceInfoData->cbSize == sizeof(SP_DEVINFO_DATA))
-            *DeviceInfoData = *info->device;
         ret = TRUE;
     }
     else
@@ -3044,6 +3159,8 @@ BOOL WINAPI SetupDiGetDeviceInterfaceDetailW(
             *RequiredSize = bytesNeeded;
         SetLastError(ERROR_INSUFFICIENT_BUFFER);
     }
+    if (DeviceInfoData && DeviceInfoData->cbSize == sizeof(SP_DEVINFO_DATA))
+        *DeviceInfoData = *info->device;
     return ret;
 }
 
@@ -3740,8 +3857,7 @@ static HKEY SETUPDI_OpenDevKey(struct DeviceInfo *devInfo, REGSAM samDesired)
     HKEY enumKey, key = INVALID_HANDLE_VALUE;
     LONG l;
 
-    l = RegCreateKeyExW(HKEY_LOCAL_MACHINE, Enum, 0, NULL, 0, KEY_ALL_ACCESS,
-            NULL, &enumKey, NULL);
+    l = open_enum_key(&enumKey);
     if (!l)
     {
         RegOpenKeyExW(enumKey, devInfo->instanceId, 0, samDesired, &key);
@@ -3857,8 +3973,7 @@ static BOOL SETUPDI_DeleteDevKey(struct DeviceInfo *devInfo)
     BOOL ret = FALSE;
     LONG l;
 
-    l = RegCreateKeyExW(HKEY_LOCAL_MACHINE, Enum, 0, NULL, 0, KEY_ALL_ACCESS,
-            NULL, &enumKey, NULL);
+    l = open_enum_key(&enumKey);
     if (!l)
     {
         ret = RegDeleteTreeW(enumKey, devInfo->instanceId);
