@@ -2818,7 +2818,33 @@ static struct strarray output_sources( const struct makefile *make )
                               strmake( "p$(dlldir)/%s%s", make->module, dll_ext ));
             add_install_rule( make, install_rules, make->module, strmake( "%s.fake", make->module ),
                               strmake( "d$(fakedlldir)/%s", make->module ));
-            output( "%s%s %s.fake:", module_path, dll_ext, module_path );
+
+            output( "%s.fake: %s%s", module_path, module_path, dll_ext );
+            if (spec_file) output_filename( spec_file );
+            output_filenames_obj_dir( make, object_files );
+            output_filenames_obj_dir( make, res_files );
+            output_filenames( dep_libs );
+            output_filename( tools_path( make, "winebuild" ));
+            output_filename( tools_path( make, "winegcc" ));
+            output( "\n" );
+            output( "\t%s -o $@", tools_path( make, "winegcc" ));
+            output_filename( strmake( "-B%s", tools_dir_path( make, "winebuild" )));
+            if (tools_dir) output_filename( strmake( "--sysroot=%s", top_obj_dir_path( make, "" )));
+            output_filenames( target_flags );
+            output_filenames( unwind_flags );
+            if (spec_file)
+            {
+                output( " -shared %s", spec_file );
+                output_filenames( make->extradllflags );
+            }
+            else output_filenames( make->appmode );
+            output_filenames_obj_dir( make, object_files );
+            output_filenames_obj_dir( make, res_files );
+            output_filenames( all_libs );
+            output_filename( "$(LDFLAGS)" );
+            output( "\n" );
+
+            output( "%s%s:", module_path, dll_ext );
         }
         else
         {
