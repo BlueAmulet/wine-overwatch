@@ -101,6 +101,8 @@ typedef void* HPOWERNOTIFY;
 #define WSF_VISIBLE     1
 #define DF_ALLOWOTHERACCOUNTHOOK  1
 
+#define CWF_CREATE_ONLY 0x01
+
 typedef struct tagUSEROBJECTFLAGS {
     BOOL fInherit;
     BOOL fReserved;
@@ -1457,6 +1459,19 @@ DECL_WINELIB_TYPE_AW(LPHELPWININFO)
 #define	CDS_NORESET		0x10000000
 #define	CDS_SETRECT		0x20000000
 #define	CDS_RESET		0x40000000
+
+typedef enum tagAR_STATE
+{
+    AR_ENABLED       = 0x0,
+    AR_DISABLED      = 0x1,
+    AR_SUPPRESSED    = 0x2,
+    AR_REMOTESESSION = 0x4,
+    AR_MULTIMON      = 0x8,
+    AR_NOSENSOR      = 0x10,
+    AR_NOT_SUPPORTED = 0x20,
+    AR_DOCKED        = 0x40,
+    AR_LAPTOP        = 0x80
+} AR_STATE, *PAR_STATE;
 
 typedef struct tagWNDCLASSEXA
 {

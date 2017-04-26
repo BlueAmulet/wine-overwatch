@@ -539,6 +539,26 @@ static LRESULT CALLBACK testDlgWinProc (HWND hwnd, UINT uiMsg, WPARAM wParam,
     return DefDlgProcA (hwnd, uiMsg, wParam, lParam);
 }
 
+static LRESULT CALLBACK test_control_procA(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+{
+    switch(msg)
+    {
+        case WM_CREATE:
+        {
+            static const short sample[] = { 10,1,2,3,4,5 };
+            CREATESTRUCTA *cs = (CREATESTRUCTA *)lparam;
+            short *data = cs->lpCreateParams;
+            ok(!memcmp(data, sample, sizeof(sample)), "data mismatch: %d,%d,%d,%d,%d\n", data[0], data[1], data[2], data[3], data[4]);
+        }
+        return 0;
+
+    default:
+        break;
+    }
+
+    return DefWindowProcA(hwnd, msg, wparam, lparam);
+}
+
 static BOOL RegisterWindowClasses (void)
 {
     WNDCLASSA cls;
@@ -558,7 +578,10 @@ static BOOL RegisterWindowClasses (void)
 
     cls.lpfnWndProc = main_window_procA;
     cls.lpszClassName = "IsDialogMessageWindowClass";
+    if (!RegisterClassA (&cls)) return FALSE;
 
+    cls.lpfnWndProc = test_control_procA;
+    cls.lpszClassName = "TESTCONTROL";
     if (!RegisterClassA (&cls)) return FALSE;
 
     GetClassInfoA(0, "#32770", &cls);
@@ -1272,6 +1295,11 @@ static void test_DialogBoxParamA(void)
        "got %d, expected ERROR_RESOURCE_NAME_NOT_FOUND\n",GetLastError());
 
     SetLastError(0xdeadbeef);
+    ret = DialogBoxParamA(GetModuleHandleA(NULL), "TEST_DIALOG_INVALID_CLASS", 0, DestroyDlgWinProc, 0);
+    ok(ret == -1, "DialogBoxParamA returned %ld, expected -1\n", ret);
+    ok(GetLastError() == 0, "got %d\n", GetLastError());
+
+    SetLastError(0xdeadbeef);
     ret = DefDlgProcA(0, WM_ERASEBKGND, 0, 0);
     ok(ret == 0, "DefDlgProcA returned %ld, expected 0\n", ret);
     ok(GetLastError() == ERROR_INVALID_WINDOW_HANDLE ||
@@ -1522,12 +1550,137 @@ static void test_timer_message(void)
     DialogBoxA(g_hinst, "RADIO_TEST_DIALOG", NULL, timer_message_dlg_proc);
 }
 
+static INT_PTR CALLBACK custom_test_dialog_proc(HWND hdlg, UINT msg, WPARAM wparam, LPARAM lparam)
+{
+    if (msg == WM_INITDIALOG)
+        EndDialog(hdlg, 0);
+
+    return FALSE;
+}
+
+static void test_dialog_custom_data(void)
+{
+    DialogBoxA(g_hinst, "CUSTOM_TEST_DIALOG", NULL, custom_test_dialog_proc);
+}
+
+struct create_window_params
+{
+    BOOL owner;
+    char caption[64];
+    DWORD style;
+};
+
+static DWORD WINAPI create_window_thread(void *param)
+{
+    struct create_window_params *p = param;
+    HWND owner = 0;
+
+    if (p->owner)
+    {
+        owner = CreateWindowExA(0, "Static", NULL, WS_POPUP, 10, 10, 10, 10, 0, 0, 0, NULL);
+        ok(owner != 0, "failed to create owner window\n");
+    }
+
+    MessageBoxA(owner, NULL, p->caption, p->style);
+
+    if (owner) DestroyWindow(owner);
+
+    return 0;
+}
+
+static HWND wait_for_window(const char *caption)
+{
+    HWND hwnd;
+    DWORD timeout = 0;
+
+    for (;;)
+    {
+        hwnd = FindWindowA(NULL, caption);
+        if (hwnd) break;
+
+        Sleep(50);
+        timeout += 50;
+        if (timeout > 3000)
+        {
+            ok(0, "failed to wait for a window %s\n", caption);
+            break;
+        }
+    }
+
+    Sleep(50);
+    return hwnd;
+}
+
+static void test_MessageBox(void)
+{
+    static const struct
+    {
+        DWORD mb_style;
+        DWORD ex_style;
+    } test[] =
+    {
+        { MB_OK, 0 },
+        { MB_OK | MB_TASKMODAL, 0 },
+        { MB_OK | MB_SYSTEMMODAL, WS_EX_TOPMOST },
+    };
+    DWORD tid, i;
+    HANDLE thread;
+    struct create_window_params params;
+
+    sprintf(params.caption, "pid %08x, tid %08x, time %08x",
+            GetCurrentProcessId(), GetCurrentThreadId(), GetCurrentTime());
+
+    params.owner = FALSE;
+
+    for (i = 0; i < sizeof(test)/sizeof(test[0]); i++)
+    {
+        HWND hwnd;
+        DWORD ex_style;
+
+        params.style = test[i].mb_style;
+
+        thread = CreateThread(NULL, 0, create_window_thread, &params, 0, &tid);
+
+        hwnd = wait_for_window(params.caption);
+        ex_style = GetWindowLongA(hwnd, GWL_EXSTYLE);
+        ok((ex_style & WS_EX_TOPMOST) == test[i].ex_style, "%d: got window ex_style %#x\n", i, ex_style);
+
+        PostMessageA(hwnd, WM_COMMAND, IDCANCEL, 0);
+
+        ok(WaitForSingleObject(thread, 5000) != WAIT_TIMEOUT, "thread failed to terminate\n");
+        CloseHandle(thread);
+    }
+
+    params.owner = TRUE;
+
+    for (i = 0; i < sizeof(test)/sizeof(test[0]); i++)
+    {
+        HWND hwnd;
+        DWORD ex_style;
+
+        params.style = test[i].mb_style;
+
+        thread = CreateThread(NULL, 0, create_window_thread, &params, 0, &tid);
+
+        hwnd = wait_for_window(params.caption);
+        ex_style = GetWindowLongA(hwnd, GWL_EXSTYLE);
+        ok((ex_style & WS_EX_TOPMOST) == test[i].ex_style, "%d: got window ex_style %#x\n", i, ex_style);
+
+        PostMessageA(hwnd, WM_COMMAND, IDCANCEL, 0);
+
+        ok(WaitForSingleObject(thread, 5000) != WAIT_TIMEOUT, "thread failed to terminate\n");
+        CloseHandle(thread);
+    }
+}
+
 START_TEST(dialog)
 {
     g_hinst = GetModuleHandleA (0);
 
     if (!RegisterWindowClasses()) assert(0);
 
+    test_MessageBox();
+    test_dialog_custom_data();
     test_GetNextDlgItem();
     test_IsDialogMessage();
     test_WM_NEXTDLGCTL();

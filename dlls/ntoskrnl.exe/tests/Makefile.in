@@ -1,0 +1,8 @@
+TESTDLL   = ntoskrnl.exe
+IMPORTS   = advapi32
+
+C_SRCS = \
+	ntoskrnl.c
+
+RC_DLLS = \
+	driver.sys

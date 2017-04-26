@@ -58,7 +58,7 @@
 @ stub MFCreateSample
 @ stub MFCreateSocket
 @ stub MFCreateSocketListener
-@ stub MFCreateSourceResolver
+@ stdcall MFCreateSourceResolver(ptr)
 @ stub MFCreateStreamDescriptor
 @ stub MFCreateSystemTimeSource
 @ stub MFCreateSystemUnderlyingClock
@@ -134,13 +134,13 @@
 @ stdcall MFShutdown()
 @ stdcall MFStartup(long long)
 @ stub MFStreamDescriptorProtectMediaType
-@ stub MFTEnum
+@ stdcall MFTEnum(int128 long ptr ptr ptr ptr ptr)
 @ stub MFTEnumEx
 @ stub MFTGetInfo
-@ stub MFTRegister
+@ stdcall MFTRegister(int128 int128 wstr long long ptr long ptr ptr)
 @ stub MFTRegisterLocal
 @ stub MFTRegisterLocalByCLSID
-@ stub MFTUnregister
+@ stdcall MFTUnregister(int128)
 @ stub MFTUnregisterLocal
 @ stub MFTUnregisterLocalByCLSID
 @ stub MFTraceError

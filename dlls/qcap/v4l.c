@@ -71,6 +71,10 @@ WINE_DEFAULT_DEBUG_CHANNEL(qcap_v4l);
 
 #ifdef VIDIOCMCAPTURE
 
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0
+#endif
+
 static typeof(open) *video_open = open;
 static typeof(close) *video_close = close;
 static typeof(ioctl) *video_ioctl = ioctl;
@@ -806,6 +810,7 @@ Capture * qcap_driver_init( IPin *pOut, USHORT card )
         goto error;
     }
 
+    fcntl(capBox->fd, F_SETFD, FD_CLOEXEC);
     memset(&capa, 0, sizeof(capa));
 
     if (xioctl(capBox->fd, VIDIOCGCAP, &capa) == -1)

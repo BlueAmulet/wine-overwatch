@@ -670,8 +670,9 @@ enum wined3d_texture_filter_type
 enum wined3d_resource_type
 {
     WINED3D_RTYPE_BUFFER                    = 1,
-    WINED3D_RTYPE_TEXTURE_2D                = 2,
-    WINED3D_RTYPE_TEXTURE_3D                = 3,
+    WINED3D_RTYPE_TEXTURE_1D                = 2,
+    WINED3D_RTYPE_TEXTURE_2D                = 3,
+    WINED3D_RTYPE_TEXTURE_3D                = 4,
 };
 
 enum wined3d_pool
@@ -707,6 +708,27 @@ struct wined3d_query_data_timestamp_disjoint
 {
     UINT64 frequency;
     BOOL disjoint;
+};
+
+struct wined3d_query_data_so_statistics
+{
+    UINT64 written;
+    UINT64 needed;
+};
+
+struct wined3d_query_data_pipeline_statistics
+{
+    UINT64 ia_vertices;
+    UINT64 ia_primitives;
+    UINT64 vs_invocations;
+    UINT64 gs_invocations;
+    UINT64 gs_primitives;
+    UINT64 c_invocations;
+    UINT64 c_primitives;
+    UINT64 ps_invocations;
+    UINT64 hs_invocations;
+    UINT64 ds_invocations;
+    UINT64 cs_invocations;
 };
 
 #define WINED3DISSUE_BEGIN                                      (1u << 1)
@@ -804,6 +826,37 @@ enum wined3d_shader_byte_code_format
 {
     WINED3D_SHADER_BYTE_CODE_FORMAT_SM1     = 0,
     WINED3D_SHADER_BYTE_CODE_FORMAT_SM4     = 1,
+};
+
+enum wined3d_format_support
+{
+    WINED3D_FORMAT_SUPPORT_BUFFER                      = 0x0000001,
+    WINED3D_FORMAT_SUPPORT_IA_VERTEX_BUFFER            = 0x0000002,
+    WINED3D_FORMAT_SUPPORT_IA_INDEX_BUFFER             = 0x0000004,
+    WINED3D_FORMAT_SUPPORT_SO_BUFFER                   = 0x0000008,
+    WINED3D_FORMAT_SUPPORT_TEXTURE1D                   = 0x0000010,
+    WINED3D_FORMAT_SUPPORT_TEXTURE2D                   = 0x0000020,
+    WINED3D_FORMAT_SUPPORT_TEXTURE3D                   = 0x0000040,
+    WINED3D_FORMAT_SUPPORT_TEXTURECUBE                 = 0x0000080,
+    WINED3D_FORMAT_SUPPORT_SHADER_LOAD                 = 0x0000100,
+    WINED3D_FORMAT_SUPPORT_SHADER_SAMPLE               = 0x0000200,
+    WINED3D_FORMAT_SUPPORT_SHADER_SAMPLE_COMPARISON    = 0x0000400,
+    WINED3D_FORMAT_SUPPORT_SHADER_SAMPLE_MONO_TEXT     = 0x0000800,
+    WINED3D_FORMAT_SUPPORT_MIP                         = 0x0001000,
+    WINED3D_FORMAT_SUPPORT_MIP_AUTOGEN                 = 0x0002000,
+    WINED3D_FORMAT_SUPPORT_RENDER_TARGET               = 0x0004000,
+    WINED3D_FORMAT_SUPPORT_BLENDABLE                   = 0x0008000,
+    WINED3D_FORMAT_SUPPORT_DEPTH_STENCIL               = 0x0010000,
+    WINED3D_FORMAT_SUPPORT_CPU_LOCKABLE                = 0x0020000,
+    WINED3D_FORMAT_SUPPORT_MULTISAMPLE_RESOLVE         = 0x0040000,
+    WINED3D_FORMAT_SUPPORT_DISPLAY                     = 0x0080000,
+    WINED3D_FORMAT_SUPPORT_CAST_WITHIN_BIT_LAYOUT      = 0x0100000,
+    WINED3D_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET    = 0x0200000,
+    WINED3D_FORMAT_SUPPORT_MULTISAMPLE_LOAD            = 0x0400000,
+    WINED3D_FORMAT_SUPPORT_SHADER_GATHER               = 0x0800000,
+    WINED3D_FORMAT_SUPPORT_BACK_BUFFER_CAST            = 0x1000000,
+    WINED3D_FORMAT_SUPPORT_TYPED_UNORDERED_ACCESS_VIEW = 0x2000000,
+    WINED3D_FORMAT_SUPPORT_SHADER_GATHER_COMPARISON    = 0x4000000,
 };
 
 #define WINED3DCOLORWRITEENABLE_RED                             (1u << 0)
@@ -1754,6 +1807,13 @@ struct wined3d_map_desc
     void *data;
 };
 
+struct wined3d_map_info
+{
+    UINT row_pitch;
+    UINT slice_pitch;
+    UINT size;
+};
+
 struct wined3d_sub_resource_data
 {
     const void *data;
@@ -2105,6 +2165,8 @@ HRESULT __cdecl wined3d_check_device_format(const struct wined3d *wined3d, UINT 
 HRESULT __cdecl wined3d_check_device_format_conversion(const struct wined3d *wined3d, UINT adapter_idx,
         enum wined3d_device_type device_type, enum wined3d_format_id source_format_id,
         enum wined3d_format_id target_format_id);
+void CDECL wined3d_check_device_format_support(struct wined3d_device *device,
+        enum wined3d_format_id check_format_id, UINT *support);
 HRESULT __cdecl wined3d_check_device_multisample_type(const struct wined3d *wined3d, UINT adapter_idx,
         enum wined3d_device_type device_type, enum wined3d_format_id surface_format_id, BOOL windowed,
         enum wined3d_multisample_type multisample_type, DWORD *quality_levels);
@@ -2478,6 +2540,8 @@ void * __cdecl wined3d_resource_get_parent(const struct wined3d_resource *resour
 DWORD __cdecl wined3d_resource_get_priority(const struct wined3d_resource *resource);
 HRESULT __cdecl wined3d_resource_map(struct wined3d_resource *resource, unsigned int sub_resource_idx,
         struct wined3d_map_desc *map_desc, const struct wined3d_box *box, DWORD flags);
+HRESULT __cdecl wined3d_resource_map_info(struct wined3d_resource *resource, unsigned int sub_resource_idx,
+        struct wined3d_map_info *info, DWORD flags);
 void __cdecl wined3d_resource_preload(struct wined3d_resource *resource);
 void __cdecl wined3d_resource_set_parent(struct wined3d_resource *resource, void *parent);
 DWORD __cdecl wined3d_resource_set_priority(struct wined3d_resource *resource, DWORD priority);
@@ -2670,5 +2734,19 @@ static inline void wined3d_box_set(struct wined3d_box *box, unsigned int left, u
     box->front = front;
     box->back = back;
 }
+
+BOOL wined3d_dxt1_decode(const BYTE *src, BYTE *dst, DWORD pitch_in, DWORD pitch_out,
+                         enum wined3d_format_id format, unsigned int w, unsigned int h);
+BOOL wined3d_dxt1_encode(const BYTE *src, BYTE *dst, DWORD pitch_in, DWORD pitch_out,
+                         enum wined3d_format_id format, unsigned int w, unsigned int h);
+BOOL wined3d_dxt3_decode(const BYTE *src, BYTE *dst, DWORD pitch_in, DWORD pitch_out,
+                         enum wined3d_format_id format, unsigned int w, unsigned int h);
+BOOL wined3d_dxt3_encode(const BYTE *src, BYTE *dst, DWORD pitch_in, DWORD pitch_out,
+                         enum wined3d_format_id format, unsigned int w, unsigned int h);
+BOOL wined3d_dxt5_decode(const BYTE *src, BYTE *dst, DWORD pitch_in, DWORD pitch_out,
+                         enum wined3d_format_id format, unsigned int w, unsigned int h);
+BOOL wined3d_dxt5_encode(const BYTE *src, BYTE *dst, DWORD pitch_in, DWORD pitch_out,
+                         enum wined3d_format_id format, unsigned int w, unsigned int h);
+BOOL wined3d_dxtn_supported(void);
 
 #endif /* __WINE_WINED3D_H */

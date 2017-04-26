@@ -2021,8 +2021,8 @@ static void test_Input_mouse(void)
         }
     }
     ok(hittest_no && hittest_no<50, "expected WM_NCHITTEST message\n");
-    todo_wine ok(got_button_down, "expected WM_LBUTTONDOWN message\n");
-    todo_wine ok(got_button_up, "expected WM_LBUTTONUP message\n");
+    ok(got_button_down, "expected WM_LBUTTONDOWN message\n");
+    ok(got_button_up, "expected WM_LBUTTONUP message\n");
     DestroyWindow(static_win);
 
     /* click on HTTRANSPARENT top-level window that belongs to other thread */

@@ -100,13 +100,69 @@ INT PSDRV_ExtEscape( PHYSDEV dev, INT nEscape, INT cbInput, LPCVOID in_data,
 	    case CLIP_TO_PATH:
 	    case END_PATH:
 	    /*case DRAWPATTERNRECT:*/
+
+            /* PageMaker checks for it */
+            case DOWNLOADHEADER:
+
+            /* PageMaker doesn't check for DOWNLOADFACE and GETFACENAME but
+             * uses them, they are supposed to be supported by any PS printer.
+             */
+            case DOWNLOADFACE:
+
+            /* PageMaker checks for these as a part of process of detecting
+             * a "fully compatible" PS printer, but doesn't actually use them.
+             */
+            case OPENCHANNEL:
+            case CLOSECHANNEL:
 	        return TRUE;
+
+            /* Windows PS driver reports 0, but still supports this escape */
+            case GETFACENAME:
+                return FALSE; /* suppress the FIXME below */
 
 	    default:
 		FIXME("QUERYESCSUPPORT(%d) - not supported.\n", num);
 	        return FALSE;
 	    }
 	}
+
+    case OPENCHANNEL:
+        FIXME("OPENCHANNEL: stub\n");
+        return 1;
+
+    case CLOSECHANNEL:
+        FIXME("CLOSECHANNEL: stub\n");
+        return 1;
+
+    case DOWNLOADHEADER:
+        FIXME("DOWNLOADHEADER: stub\n");
+        /* should return name of the downloaded procset */
+        *(char *)out_data = 0;
+        return 1;
+
+    case GETFACENAME:
+        if (physDev->font.fontloc == Download)
+        {
+            char *name = PSDRV_get_download_name(dev, physDev->font.set);
+            if (name)
+            {
+                TRACE("font name: %s\n", debugstr_a(name));
+                lstrcpynA(out_data, name, cbOutput);
+                HeapFree(GetProcessHeap(), 0, name);
+            }
+            else
+                lstrcpynA(out_data, "Courier", cbOutput);
+        }
+        else
+        {
+            TRACE("font name: %s\n", debugstr_a(physDev->font.fontinfo.Builtin.afm->FontName));
+            lstrcpynA(out_data, physDev->font.fontinfo.Builtin.afm->FontName, cbOutput);
+        }
+        return 1;
+
+    case DOWNLOADFACE:
+        PSDRV_SetFont(dev, physDev->font.set);
+        return 1;
 
     case MFCOMMENT:
     {
@@ -368,15 +424,14 @@ INT PSDRV_StartPage( PHYSDEV dev )
 {
     PSDRV_PDEVICE *physDev = get_psdrv_dev( dev );
 
+    TRACE("%p\n", dev->hdc);
+
     if(!physDev->job.OutOfPage) {
         FIXME("Already started a page?\n");
 	return 1;
     }
 
-    if(physDev->job.PageNo++ == 0) {
-        if(!PSDRV_WriteHeader( dev, physDev->job.doc_name ))
-            return 0;
-    }
+    physDev->job.PageNo++;
 
     if(!PSDRV_WriteNewPage( dev ))
         return 0;
@@ -391,6 +446,8 @@ INT PSDRV_StartPage( PHYSDEV dev )
 INT PSDRV_EndPage( PHYSDEV dev )
 {
     PSDRV_PDEVICE *physDev = get_psdrv_dev( dev );
+
+    TRACE("%p\n", dev->hdc);
 
     if(physDev->job.OutOfPage) {
         FIXME("Already ended a page?\n");
@@ -452,6 +509,13 @@ INT PSDRV_StartDoc( PHYSDEV dev, const DOCINFOW *doc )
         ClosePrinter(physDev->job.hprinter);
 	return 0;
     }
+
+    if (!PSDRV_WriteHeader( dev, doc->lpszDocName )) {
+        WARN("Failed to write header\n");
+        ClosePrinter(physDev->job.hprinter);
+        return 0;
+    }
+
     physDev->job.banding = FALSE;
     physDev->job.OutOfPage = TRUE;
     physDev->job.PageNo = 0;
@@ -470,6 +534,8 @@ INT PSDRV_EndDoc( PHYSDEV dev )
 {
     PSDRV_PDEVICE *physDev = get_psdrv_dev( dev );
     INT ret = 1;
+
+    TRACE("%p\n", dev->hdc);
 
     if(!physDev->job.id) {
         FIXME("hJob == 0. Now what?\n");

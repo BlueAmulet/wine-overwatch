@@ -2616,21 +2616,14 @@ static void test_apc_deadlock(void)
     result = WaitForSingleObject(event, 1000);
     ok(result == WAIT_OBJECT_0, "expected WAIT_OBJECT_0, got %u\n", result);
 
-    for (i = 0; i < 1000 && info.running; i++)
+    for (i = 0; i < 1000; i++)
     {
         result = SuspendThread(pi.hThread);
         ok(result == 0, "expected 0, got %u\n", result);
 
         WaitForSingleObject(event, 0); /* reset event */
         result = WaitForSingleObject(event, 1000);
-        if (result == WAIT_TIMEOUT)
-        {
-            todo_wine
-            ok(result == WAIT_OBJECT_0, "expected WAIT_OBJECT_0, got %u\n", result);
-            info.running = FALSE;
-        }
-        else
-            ok(result == WAIT_OBJECT_0, "expected WAIT_OBJECT_0, got %u\n", result);
+        ok(result == WAIT_OBJECT_0, "expected WAIT_OBJECT_0, got %u\n", result);
 
         result = ResumeThread(pi.hThread);
         ok(result == 1, "expected 1, got %u\n", result);
