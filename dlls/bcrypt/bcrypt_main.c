@@ -1271,13 +1271,16 @@ NTSTATUS WINAPI BCryptEncrypt( BCRYPT_KEY_HANDLE handle, UCHAR *input, ULONG inp
 
         *ret_len = input_len;
         if (flags & BCRYPT_BLOCK_PADDING) return STATUS_INVALID_PARAMETER;
-        if (!output) return STATUS_SUCCESS;
-        if (output_len < *ret_len) return STATUS_BUFFER_TOO_SMALL;
 
         if (auth_info->pbAuthData && (status = key_set_auth_data( key, auth_info->pbAuthData, auth_info->cbAuthData )))
             return status;
-        if ((status = key_encrypt( key, input, input_len, output, output_len )))
-            return status;
+
+        if (input || output)
+        {
+            if (output_len < *ret_len) return STATUS_BUFFER_TOO_SMALL;
+            if ((status = key_encrypt( key, input, input_len, output, output_len )))
+                return status;
+        }
 
         return key_get_tag( key, auth_info->pbTag, auth_info->cbTag );
     }
