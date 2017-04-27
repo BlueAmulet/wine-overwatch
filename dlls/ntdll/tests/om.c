@@ -1487,14 +1487,11 @@ static void test_query_object(void)
     status = pNtQueryObject( handle, ObjectNameInformation, buffer, sizeof(buffer), &len );
     ok( status == STATUS_SUCCESS , "NtQueryObject returned %x\n", status );
     str = (UNICODE_STRING *)buffer;
-    todo_wine
     ok( len > sizeof(UNICODE_STRING), "unexpected len %u\n", len );
     str = (UNICODE_STRING *)buffer;
     expected_len = sizeof(UNICODE_STRING) + str->Length + sizeof(WCHAR);
-    todo_wine
     ok( len == expected_len || broken(len == expected_len - sizeof(WCHAR)), /* NT4 */
         "unexpected len %u\n", len );
-    todo_wine
     ok( len > sizeof(UNICODE_STRING) + sizeof("\\test_pipe") * sizeof(WCHAR),
         "name too short %s\n", wine_dbgstr_w(str->Buffer) );
     trace( "got %s len %u\n", wine_dbgstr_w(str->Buffer), len );

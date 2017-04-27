@@ -1363,13 +1363,50 @@ static void test_typelibmarshal(void)
     ok(!lstrcmpW(bstr, szCat), "IWidget_get_Name should have returned string \"Cat\" instead of %s\n", wine_dbgstr_w(bstr));
     SysFreeString(bstr);
 
-    /* call DoSomething */
+    /* call DoSomething without optional arguments */
     VariantInit(&vararg[0]);
     VariantInit(&vararg[1]);
     V_VT(&vararg[1]) = VT_R8;
     V_R8(&vararg[1]) = 3.141;
     dispparams.cNamedArgs = 0;
     dispparams.cArgs = 2;
+    dispparams.rgdispidNamedArgs = NULL;
+    dispparams.rgvarg = vararg;
+    VariantInit(&varresult);
+    hr = IDispatch_Invoke(pDispatch, DISPID_TM_DOSOMETHING, &IID_NULL, LOCALE_NEUTRAL, DISPATCH_METHOD, &dispparams, &varresult, &excepinfo, NULL);
+    ok_ole_success(hr, IDispatch_Invoke);
+    ok(V_VT(&varresult) == VT_EMPTY, "varresult should be VT_EMPTY\n");
+    VariantClear(&varresult);
+
+    /* call DoSomething with optional argument set to VT_EMPTY */
+    VariantInit(&vararg[0]);
+    VariantInit(&vararg[1]);
+    VariantInit(&vararg[2]);
+    V_VT(&vararg[2]) = VT_R8;
+    V_R8(&vararg[2]) = 3.141;
+    dispparams.cNamedArgs = 0;
+    dispparams.cArgs = 3;
+    dispparams.rgdispidNamedArgs = NULL;
+    dispparams.rgvarg = vararg;
+    VariantInit(&varresult);
+    hr = IDispatch_Invoke(pDispatch, DISPID_TM_DOSOMETHING, &IID_NULL, LOCALE_NEUTRAL, DISPATCH_METHOD, &dispparams, &varresult, &excepinfo, NULL);
+    ok_ole_success(hr, IDispatch_Invoke);
+    ok(V_VT(&varresult) == VT_EMPTY, "varresult should be VT_EMPTY\n");
+    VariantClear(&varresult);
+
+    /* call DoSomething with optional arguments set to VT_ERROR/DISP_E_PARAMNOTFOUND */
+    VariantInit(&vararg[0]);
+    VariantInit(&vararg[1]);
+    VariantInit(&vararg[2]);
+    VariantInit(&vararg[3]);
+    V_VT(&vararg[3]) = VT_R8;
+    V_R8(&vararg[3]) = 3.141;
+    V_VT(&vararg[1]) = VT_ERROR;
+    V_ERROR(&vararg[1]) = DISP_E_PARAMNOTFOUND;
+    V_VT(&vararg[0]) = VT_ERROR;
+    V_ERROR(&vararg[0]) = DISP_E_PARAMNOTFOUND;
+    dispparams.cNamedArgs = 0;
+    dispparams.cArgs = 4;
     dispparams.rgdispidNamedArgs = NULL;
     dispparams.rgvarg = vararg;
     VariantInit(&varresult);
@@ -1513,11 +1550,15 @@ static void test_typelibmarshal(void)
     dispparams.rgvarg = vararg;
     VariantInit(&varresult);
     hr = IDispatch_Invoke(pDispatch, DISPID_TM_COCLASS, &IID_NULL, LOCALE_NEUTRAL, DISPATCH_METHOD, &dispparams, &varresult, &excepinfo, NULL);
-    todo_wine ok_ole_success(hr, IDispatch_Invoke);
+    ok_ole_success(hr, IDispatch_Invoke);
     ok(excepinfo.wCode == 0x0 && excepinfo.scode == S_OK,
         "EXCEPINFO differs from expected: wCode = 0x%x, scode = 0x%08x\n",
         excepinfo.wCode, excepinfo.scode);
     VariantClear(&varresult);
+
+    /* call CoClass (direct) */
+    hr = IWidget_Coclass(pWidget, (void *)V_DISPATCH(&vararg[0]));
+    ok_ole_success(hr, IWidget_Coclass);
     VariantClear(&vararg[0]);
 
     /* call Value with a VT_VARIANT|VT_BYREF type */

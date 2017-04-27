@@ -370,8 +370,11 @@ static void LISTBOX_UpdatePage( LB_DESCR *descr )
 static void LISTBOX_UpdateSize( LB_DESCR *descr )
 {
     RECT rect;
+    LONG style = GetWindowLongW( descr->self, GWL_STYLE );
 
     GetClientRect( descr->self, &rect );
+    if (style & WS_HSCROLL)
+        rect.bottom += GetSystemMetrics(SM_CYHSCROLL);
     descr->width  = rect.right - rect.left;
     descr->height = rect.bottom - rect.top;
     if (!(descr->style & LBS_NOINTEGRALHEIGHT) && !(descr->style & LBS_OWNERDRAWVARIABLE))
@@ -1562,8 +1565,10 @@ static LRESULT LISTBOX_InsertItem( LB_DESCR *descr, INT index,
         mis.CtlType    = ODT_LISTBOX;
         mis.CtlID      = id;
         mis.itemID     = index;
-        mis.itemData   = descr->items[index].data;
+        mis.itemData   = (ULONG_PTR)str;
         mis.itemHeight = descr->item_height;
+        TRACE("owner=%p CtlID=%08x, itemID=%08x, itemData=%08lx\n",
+              descr->owner, mis.CtlID, mis.itemID, mis.itemData);
         SendMessageW( descr->owner, WM_MEASUREITEM, id, (LPARAM)&mis );
         item->height = mis.itemHeight ? mis.itemHeight : 1;
         TRACE("[%p]: measure item %d (%s) = %d\n",

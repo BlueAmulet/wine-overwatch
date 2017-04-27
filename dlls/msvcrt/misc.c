@@ -532,3 +532,11 @@ void CDECL MSVCRT__crt_debugger_hook(int reserved)
 {
     WARN("(%x)\n", reserved);
 }
+
+/*********************************************************************
+ * _SetWinRTOutOfMemoryExceptionCallback (MSVCR120.@)
+ */
+void CDECL MSVCR120__SetWinRTOutOfMemoryExceptionCallback(void *callback)
+{
+    FIXME("(%p): stub\n", callback);
+}

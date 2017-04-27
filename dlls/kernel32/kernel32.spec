@@ -225,6 +225,7 @@
 @ stdcall ClearCommError(long ptr ptr)
 @ stdcall CloseConsoleHandle(long)
 @ stdcall CloseHandle(long)
+@ stub ClosePackageInfo
 # @ stub ClosePrivateNamespace
 @ stdcall CloseProfileUserMapping()
 @ stub CloseSystemHandle
@@ -319,7 +320,7 @@
 # @ stub CreateProcessInternalWSecure
 @ stdcall CreateProcessW(wstr wstr ptr ptr long long ptr wstr ptr ptr)
 @ stdcall CreateRemoteThread(long ptr long ptr long long ptr)
-# @ stub CreateRemoteThreadEx
+@ stdcall CreateRemoteThreadEx(long ptr long ptr long long ptr ptr)
 @ stdcall CreateSemaphoreA(ptr long long str)
 @ stdcall CreateSemaphoreExA(ptr long long str long long)
 @ stdcall CreateSemaphoreExW(ptr long long wstr long long)
@@ -340,8 +341,8 @@
 @ stdcall CreateTimerQueue ()
 @ stdcall CreateTimerQueueTimer(ptr long ptr ptr long long long)
 @ stdcall CreateToolhelp32Snapshot(long long)
-# @ stub -arch=x86_64 CreateUmsCompletionList
-# @ stub -arch=x86_64 CreateUmsThreadContext
+@ stdcall -arch=x86_64 CreateUmsCompletionList(ptr)
+@ stdcall -arch=x86_64 CreateUmsThreadContext(ptr)
 @ stub CreateVirtualBuffer
 @ stdcall CreateWaitableTimerA(ptr long str)
 @ stdcall CreateWaitableTimerExA(ptr str long long)
@@ -373,11 +374,11 @@
 @ stdcall DeleteTimerQueue(long)
 @ stdcall DeleteTimerQueueEx (long long)
 @ stdcall DeleteTimerQueueTimer(long long long)
-# @ stub -arch=x86_64 DeleteUmsCompletionList
-# @ stub -arch=x86_64 DeleteUmsThreadContext
+@ stdcall -arch=x86_64 DeleteUmsCompletionList(ptr)
+@ stdcall -arch=x86_64 DeleteUmsThreadContext(ptr)
 @ stdcall DeleteVolumeMountPointA(str)
 @ stdcall DeleteVolumeMountPointW(wstr)
-# @ stub -arch=x86_64 DequeueUmsCompletionListItems
+@ stdcall -arch=x86_64 DequeueUmsCompletionListItems(ptr long ptr)
 @ stdcall DeviceIoControl(long long ptr long ptr long ptr ptr)
 @ stdcall DisableThreadLibraryCalls(long)
 @ stdcall DisconnectNamedPipe(long)
@@ -434,10 +435,10 @@
 @ stdcall EnumUILanguagesW(ptr long long)
 # @ stub EnumerateLocalComputerNamesA
 # @ stub EnumerateLocalComputerNamesW
-# @ stub -arch=x86_64 EnterUmsSchedulingMode
+@ stdcall -arch=x86_64 EnterUmsSchedulingMode(ptr)
 @ stdcall EraseTape(ptr long long)
 @ stdcall EscapeCommFunction(long long)
-# @ stub -arch=x86_64 ExecuteUmsThread
+@ stdcall -arch=x86_64 ExecuteUmsThread(ptr)
 @ stdcall ExitProcess(long)
 @ stdcall ExitThread(long)
 @ stub ExitVDM
@@ -506,6 +507,7 @@
 @ stdcall FindNextVolumeW(long ptr long)
 # @ stub FindNLSString
 # @ stub FindNLSStringEx
+@ stub FindPackagesByPackageFamily
 @ stdcall FindResourceA(long str str)
 @ stdcall FindResourceExA(long str str long)
 @ stdcall FindResourceExW(long wstr wstr long)
@@ -524,6 +526,7 @@
 @ stdcall FlushViewOfFile(ptr long)
 @ stdcall FoldStringA(long str long ptr long)
 @ stdcall FoldStringW(long wstr long ptr long)
+@ stub FormatApplicationUserModelId
 @ stdcall FormatMessageA(long ptr long long ptr long ptr)
 @ stdcall FormatMessageW(long ptr long long ptr long ptr)
 @ stdcall FreeConsole()
@@ -540,10 +543,12 @@
 @ stdcall GenerateConsoleCtrlEvent(long long)
 @ stdcall -i386 -private Get16DLLAddress(long str) krnl386.exe16.Get16DLLAddress
 @ stdcall GetACP()
-# @ stub GetActiveProcessorCount
-# @ stub GetActiveProcessorGroupCount
+@ stdcall GetActiveProcessorCount(long)
+@ stdcall GetActiveProcessorGroupCount()
 # @ stub GetApplicationRecoveryCallback
 # @ stub GetApplicationRestartSettings
+@ stub GetApplicationUserModelId
+@ stub GetApplicationUserModelIdFromToken
 @ stdcall GetAtomNameA(long ptr long)
 @ stdcall GetAtomNameW(long ptr long)
 @ stdcall GetBinaryType(str ptr) GetBinaryTypeA
@@ -624,18 +629,23 @@
 # @ stub GetCurrencyFormatEx
 @ stdcall GetCurrencyFormatW(long long str ptr str long)
 @ stdcall GetCurrentActCtx(ptr)
+@ stub GetCurrentApplicationUserModelId
 @ stdcall GetCurrentConsoleFont(long long ptr)
 # @ stub GetCurrentConsoleFontEx
 @ stdcall GetCurrentDirectoryA(long ptr)
 @ stdcall GetCurrentDirectoryW(long ptr)
+@ stdcall GetCurrentPackageFamilyName(ptr ptr)
+@ stdcall GetCurrentPackageFullName(ptr ptr)
 @ stdcall GetCurrentPackageId(ptr ptr)
+@ stub GetCurrentPackageInfo
+@ stub GetCurrentPackagePath
 @ stdcall -norelay GetCurrentProcess()
 @ stdcall -norelay GetCurrentProcessId()
 @ stdcall GetCurrentProcessorNumber() ntdll.NtGetCurrentProcessorNumber
 @ stdcall GetCurrentProcessorNumberEx(ptr) ntdll.RtlGetCurrentProcessorNumberEx
 @ stdcall -norelay GetCurrentThread()
 @ stdcall -norelay GetCurrentThreadId()
-# @ stub -arch=x86_64 GetCurrentUmsThread
+@ stdcall -arch=x86_64 GetCurrentUmsThread()
 @ stdcall GetDateFormatA(long long ptr str ptr long)
 @ stdcall GetDateFormatEx(wstr long ptr wstr ptr long wstr)
 @ stdcall GetDateFormatW(long long ptr wstr ptr long)
@@ -714,8 +724,8 @@
 # @ stub GetLongPathNameTransactedW
 @ stdcall GetLongPathNameW (wstr long long)
 @ stdcall GetMailslotInfo(long ptr ptr ptr ptr)
-# @ stub GetMaximumProcessorCount
-# @ stub GetMaximumProcessorGroupCount
+@ stdcall GetMaximumProcessorCount(long)
+@ stdcall GetMaximumProcessorGroupCount()
 @ stdcall GetModuleFileNameA(long ptr long)
 @ stdcall GetModuleFileNameW(long ptr long)
 @ stdcall GetModuleHandleA(str)
@@ -733,7 +743,7 @@
 # @ stub GetNamedPipeServerProcessId
 # @ stub GetNamedPipeServerSessionId
 @ stdcall GetNativeSystemInfo(ptr)
-# @ stub -arch=x86_64 GetNextUmsListItem
+@ stdcall -arch=x86_64 GetNextUmsListItem(ptr)
 @ stub GetNextVDMCommand
 @ stub GetNlsSectionName
 # @ stub GetNLSVersion
@@ -759,6 +769,16 @@
 @ stdcall GetOEMCP()
 @ stdcall GetOverlappedResult(long ptr ptr long)
 @ stdcall GetUserPreferredUILanguages(long ptr ptr ptr)
+@ stub GetPackageApplicationIds
+@ stub GetPackageFamilyName
+@ stub GetPackageFamilyNameFromToken
+@ stdcall GetPackageFullName(long ptr ptr)
+@ stub GetPackageFullNameFromToken
+@ stub GetPackageId
+@ stub GetPackageInfo
+@ stub GetPackagePath
+@ stub GetPackagePathByFullName
+@ stub GetPackagesByPackageFamily
 @ stdcall GetPhysicallyInstalledSystemMemory(ptr)
 @ stdcall GetPriorityClass(long)
 @ stdcall GetPrivateProfileIntA(str str long str)
@@ -805,6 +825,8 @@
 @ stub -i386 GetSLCallbackTemplate
 @ stdcall GetShortPathNameA(str ptr long)
 @ stdcall GetShortPathNameW(wstr ptr long)
+@ stub GetStagedPackageOrigin
+@ stub GetStagedPackagePathByFullName
 @ stdcall GetStartupInfoA(ptr)
 @ stdcall GetStartupInfoW(ptr)
 @ stdcall GetStdHandle(long)
@@ -863,7 +885,7 @@
 @ stdcall GetTimeZoneInformationForYear(long ptr ptr)
 @ stdcall GetThreadUILanguage()
 # @ stub GetUILanguageInfo
-# @ stub -arch=x86_64 GetUmsCompletionListEvent
+@ stdcall -arch=x86_64 GetUmsCompletionListEvent(ptr ptr)
 # @ stub -arch=x86_64 GetUmsSystemThreadInformation
 @ stdcall GetUserDefaultLCID()
 @ stdcall GetUserDefaultLangID()
@@ -1118,6 +1140,8 @@
 @ stdcall OpenJobObjectW(long long wstr)
 @ stdcall OpenMutexA(long long str)
 @ stdcall OpenMutexW(long long wstr)
+@ stub OpenPackageInfoByFullName
+@ stub OpenPackageInfoByFullNameForUser
 # @ stub OpenPrivateNamespaceA
 # @ stub OpenPrivateNamespaceW
 @ stdcall OpenProcess(long long long)
@@ -1132,6 +1156,12 @@
 @ stdcall OpenWaitableTimerW(long long wstr)
 @ stdcall OutputDebugStringA(str)
 @ stdcall OutputDebugStringW(wstr)
+@ stub PackageFamilyNameFromFullName
+@ stub PackageFamilyNameFromId
+@ stub PackageFullNameFromId
+@ stub PackageIdFromFullName
+@ stub PackageNameAndPublisherIdFromFamilyName
+@ stub ParseApplicationUserModelId
 @ stdcall PeekConsoleInputA(ptr ptr long ptr)
 @ stdcall PeekConsoleInputW(ptr ptr long ptr)
 @ stdcall PeekNamedPipe(long ptr long ptr ptr ptr)
@@ -1172,7 +1202,7 @@
 @ stdcall QueryThreadCycleTime(long ptr)
 # @ stub QueryThreadProfiling
 # @ stub QueryThreadpoolStackInformation
-# @ stub -arch=x86_64 QueryUmsThreadInformation
+@ stdcall -arch=x86_64 QueryUmsThreadInformation(ptr long ptr long ptr)
 @ stdcall QueryUnbiasedInterruptTime(ptr)
 @ stub QueryWin31IniFilesMappedToRegistry
 @ stdcall QueueUserAPC(ptr long long)
@@ -1446,7 +1476,7 @@
 @ stdcall SetThreadExecutionState(long)
 @ stdcall SetThreadGroupAffinity(long ptr ptr)
 @ stdcall SetThreadIdealProcessor(long long)
-# @ stub SetThreadIdealProcessorEx
+@ stdcall SetThreadIdealProcessorEx(long ptr ptr)
 @ stdcall SetThreadLocale(long)
 @ stdcall SetThreadPreferredUILanguages(long ptr ptr)
 @ stdcall SetThreadPriority(long long)
@@ -1461,7 +1491,7 @@
 @ stdcall SetThreadpoolWait(ptr long ptr)
 @ stdcall SetTimeZoneInformation(ptr)
 @ stub SetTimerQueueTimer
-# @ stub -arch=x86_64 SetUmsThreadInformation
+@ stdcall -arch=x86_64 SetUmsThreadInformation(ptr long ptr long)
 @ stdcall SetUnhandledExceptionFilter(ptr)
 @ stdcall SetUserGeoID(long)
 @ stub SetVDMCurrentDirectories
@@ -1521,7 +1551,7 @@
 # @ stub -arch=x86_64 uaw_wcsicmp
 # @ stub -arch=x86_64 uaw_wcslen
 # @ stub -arch=x86_64 uaw_wcsrchr
-# @ stub -arch=x86_64 UmsThreadYield
+@ stdcall -arch=x86_64 UmsThreadYield(ptr)
 # @ stub -arch=x86_64 __misaligned_access
 @ stdcall -i386 -private UTRegister(long str str str ptr ptr ptr) krnl386.exe16.UTRegister
 @ stdcall -i386 -private UTUnRegister(long) krnl386.exe16.UTUnRegister
@@ -1548,7 +1578,12 @@
 @ stdcall VerLanguageNameA(long str long)
 @ stdcall VerLanguageNameW(long wstr long)
 @ stdcall -ret64 VerSetConditionMask(long long long long) ntdll.VerSetConditionMask
+@ stub VerifyApplicationUserModelId
 @ stdcall VerifyConsoleIoHandle(long)
+@ stub VerifyPackageFamilyName
+@ stub VerifyPackageFullName
+@ stub VerifyPackageId
+@ stub VerifyPackageRelativeApplicationId
 # @ stub VerifyScripts
 @ stdcall VerifyVersionInfoA(long long int64)
 @ stdcall VerifyVersionInfoW(long long int64)

@@ -1253,6 +1253,40 @@ static void test_query_process_debug_port(int argc, char **argv)
     ok(ret, "CloseHandle failed, last error %#x.\n", GetLastError());
 }
 
+static void test_query_process_priority(void)
+{
+    PROCESS_PRIORITY_CLASS priority[2];
+    ULONG ReturnLength;
+    DWORD orig_priority;
+    NTSTATUS status;
+    BOOL ret;
+
+    status = pNtQueryInformationProcess(NULL, ProcessPriorityClass, NULL, sizeof(priority[0]), NULL);
+    ok(status == STATUS_ACCESS_VIOLATION || broken(status == STATUS_INVALID_HANDLE) /* w2k3 */,
+       "Expected STATUS_ACCESS_VIOLATION, got %08x\n", status);
+
+    status = pNtQueryInformationProcess(NULL, ProcessPriorityClass, &priority, sizeof(priority[0]), NULL);
+    ok(status == STATUS_INVALID_HANDLE, "Expected STATUS_INVALID_HANDLE, got %08x\n", status);
+
+    status = pNtQueryInformationProcess(GetCurrentProcess(), ProcessPriorityClass, &priority, 1, &ReturnLength);
+    ok(status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
+
+    status = pNtQueryInformationProcess(GetCurrentProcess(), ProcessPriorityClass, &priority, sizeof(priority), &ReturnLength);
+    ok(status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
+
+    orig_priority = GetPriorityClass(GetCurrentProcess());
+    ret = SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
+    ok(ret, "Failed to set priority class: %u\n", GetLastError());
+
+    status = pNtQueryInformationProcess(GetCurrentProcess(), ProcessPriorityClass, &priority, sizeof(priority[0]), &ReturnLength);
+    ok(status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
+    ok(priority[0].PriorityClass == PROCESS_PRIOCLASS_BELOW_NORMAL,
+       "Expected PROCESS_PRIOCLASS_BELOW_NORMAL, got %u\n", priority[0].PriorityClass);
+
+    ret = SetPriorityClass(GetCurrentProcess(), orig_priority);
+    ok(ret, "Failed to reset priority class: %u\n", GetLastError());
+}
+
 static void test_query_process_handlecount(void)
 {
     NTSTATUS status;
@@ -1714,6 +1748,8 @@ static void test_queryvirtualmemory(void)
     MEMORY_BASIC_INFORMATION mbi;
     char stackbuf[42];
     HMODULE module;
+    char buffer_name[sizeof(MEMORY_SECTION_NAME) + MAX_PATH * sizeof(WCHAR)];
+    MEMORY_SECTION_NAME *msn = (MEMORY_SECTION_NAME *)buffer_name;
 
     module = GetModuleHandleA( "ntdll.dll" );
     trace("Check flags of the PE header of NTDLL.DLL at %p\n", module);
@@ -1787,6 +1823,39 @@ static void test_queryvirtualmemory(void)
             "mbi.Protect is 0x%x\n", mbi.Protect);
     }
     else skip( "bss is outside of module\n" );  /* this can happen on Mac OS */
+
+    trace("Check section name of NTDLL.DLL with invalid size\n");
+    module = GetModuleHandleA( "ntdll.dll" );
+    memset(msn, 0, sizeof(*msn));
+    readcount = 0;
+    status = pNtQueryVirtualMemory(NtCurrentProcess(), module, MemorySectionName, msn, sizeof(*msn), &readcount);
+    ok( status == STATUS_BUFFER_OVERFLOW, "Expected STATUS_BUFFER_OVERFLOW, got %08x\n", status);
+    ok( readcount > 0, "Expected readcount to be > 0\n");
+
+    trace("Check section name of NTDLL.DLL with invalid size\n");
+    module = GetModuleHandleA( "ntdll.dll" );
+    memset(msn, 0, sizeof(*msn));
+    readcount = 0;
+    status = pNtQueryVirtualMemory(NtCurrentProcess(), module, MemorySectionName, msn, sizeof(*msn) - 1, &readcount);
+    ok( status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
+    ok( readcount > 0, "Expected readcount to be > 0\n");
+
+    trace("Check section name of NTDLL.DLL\n");
+    module = GetModuleHandleA( "ntdll.dll" );
+    memset(msn, 0x55, sizeof(*msn));
+    memset(buffer_name, 0x77, sizeof(buffer_name));
+    readcount = 0;
+    status = pNtQueryVirtualMemory(NtCurrentProcess(), module, MemorySectionName, msn, sizeof(buffer_name), &readcount);
+    ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
+    ok( readcount > 0, "Expected readcount to be > 0\n");
+    trace ("Section Name: %s\n", wine_dbgstr_w(msn->SectionFileName.Buffer));
+
+    trace("Check section name of non mapped memory\n");
+    memset(msn, 0, sizeof(*msn));
+    readcount = 0;
+    status = pNtQueryVirtualMemory(NtCurrentProcess(), &buffer_name, MemorySectionName, msn, sizeof(buffer_name), &readcount);
+    ok( status == STATUS_INVALID_ADDRESS, "Expected STATUS_INVALID_ADDRESS, got %08x\n", status);
+    ok( readcount == 0 || broken(readcount != 0) /* wow64 */, "Expected readcount to be 0\n");
 }
 
 static void test_affinity(void)
@@ -2106,6 +2175,10 @@ START_TEST(info)
     /* 0x7 ProcessDebugPort */
     trace("Starting test_process_debug_port()\n");
     test_query_process_debug_port(argc, argv);
+
+    /* 0x12 ProcessPriorityClass */
+    trace("Starting test_query_process_priority()\n");
+    test_query_process_priority();
 
     /* 0x14 ProcessHandleCount */
     trace("Starting test_query_process_handlecount()\n");

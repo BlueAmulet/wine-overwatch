@@ -68,6 +68,7 @@ extern NTSTATUS signal_alloc_thread( TEB **teb ) DECLSPEC_HIDDEN;
 extern void signal_free_thread( TEB *teb ) DECLSPEC_HIDDEN;
 extern void signal_init_thread( TEB *teb ) DECLSPEC_HIDDEN;
 extern void signal_init_process(void) DECLSPEC_HIDDEN;
+extern void signal_init_early(void) DECLSPEC_HIDDEN;
 extern void version_init( const WCHAR *appname ) DECLSPEC_HIDDEN;
 extern void debug_init(void) DECLSPEC_HIDDEN;
 extern HANDLE thread_init(void) DECLSPEC_HIDDEN;
@@ -75,6 +76,9 @@ extern void actctx_init(void) DECLSPEC_HIDDEN;
 extern void virtual_init(void) DECLSPEC_HIDDEN;
 extern void virtual_init_threading(void) DECLSPEC_HIDDEN;
 extern void fill_cpu_info(void) DECLSPEC_HIDDEN;
+
+/* heap routines */
+extern void *grow_virtual_heap( HANDLE handle, SIZE_T *size ) DECLSPEC_HIDDEN;
 extern void heap_set_debug_flags( HANDLE handle ) DECLSPEC_HIDDEN;
 
 /* server support */
@@ -100,6 +104,7 @@ extern int server_pipe( int fd[2] ) DECLSPEC_HIDDEN;
 extern NTSTATUS alloc_object_attributes( const OBJECT_ATTRIBUTES *attr, struct object_attributes **ret,
                                          data_size_t *ret_len ) DECLSPEC_HIDDEN;
 extern NTSTATUS validate_open_object_attributes( const OBJECT_ATTRIBUTES *attr ) DECLSPEC_HIDDEN;
+extern void *server_get_shared_memory( HANDLE thread ) DECLSPEC_HIDDEN;
 
 /* module handling */
 extern LIST_ENTRY tls_links DECLSPEC_HIDDEN;
@@ -152,7 +157,7 @@ extern NTSTATUS fill_file_info( const struct stat *st, ULONG attr, void *ptr,
                                 FILE_INFORMATION_CLASS class ) DECLSPEC_HIDDEN;
 extern NTSTATUS server_get_unix_name( HANDLE handle, ANSI_STRING *unix_name ) DECLSPEC_HIDDEN;
 extern void DIR_init_windows_dir( const WCHAR *windir, const WCHAR *sysdir ) DECLSPEC_HIDDEN;
-extern BOOL DIR_is_hidden_file( const UNICODE_STRING *name ) DECLSPEC_HIDDEN;
+extern BOOL DIR_is_hidden_file( const char *name ) DECLSPEC_HIDDEN;
 extern NTSTATUS DIR_unmount_device( HANDLE handle ) DECLSPEC_HIDDEN;
 extern NTSTATUS DIR_get_unix_cwd( char **cwd ) DECLSPEC_HIDDEN;
 extern unsigned int DIR_get_drives_info( struct drive_info info[MAX_DOS_DRIVES] ) DECLSPEC_HIDDEN;
@@ -164,14 +169,13 @@ extern NTSTATUS nt_to_unix_file_name_attr( const OBJECT_ATTRIBUTES *attr, ANSI_S
 extern void virtual_get_system_info( SYSTEM_BASIC_INFORMATION *info ) DECLSPEC_HIDDEN;
 extern NTSTATUS virtual_create_builtin_view( void *base ) DECLSPEC_HIDDEN;
 extern NTSTATUS virtual_alloc_thread_stack( TEB *teb, SIZE_T reserve_size, SIZE_T commit_size ) DECLSPEC_HIDDEN;
+extern NTSTATUS virtual_map_shared_memory( int fd, PVOID *addr_ptr, ULONG zero_bits, SIZE_T *size_ptr, ULONG protect ) DECLSPEC_HIDDEN;
 extern void virtual_clear_thread_stack(void) DECLSPEC_HIDDEN;
 extern BOOL virtual_handle_stack_fault( void *addr ) DECLSPEC_HIDDEN;
 extern BOOL virtual_is_valid_code_address( const void *addr, SIZE_T size ) DECLSPEC_HIDDEN;
 extern NTSTATUS virtual_handle_fault( LPCVOID addr, DWORD err, BOOL on_signal_stack ) DECLSPEC_HIDDEN;
 extern BOOL virtual_check_buffer_for_read( const void *ptr, SIZE_T size ) DECLSPEC_HIDDEN;
 extern BOOL virtual_check_buffer_for_write( void *ptr, SIZE_T size ) DECLSPEC_HIDDEN;
-extern SIZE_T virtual_uninterrupted_read_memory( const void *addr, void *buffer, SIZE_T size ) DECLSPEC_HIDDEN;
-extern SIZE_T virtual_uninterrupted_write_memory( void *addr, const void *buffer, SIZE_T size ) DECLSPEC_HIDDEN;
 extern void VIRTUAL_SetForceExec( BOOL enable ) DECLSPEC_HIDDEN;
 extern void virtual_release_address_space(void) DECLSPEC_HIDDEN;
 extern void virtual_set_large_address_space(void) DECLSPEC_HIDDEN;
@@ -203,6 +207,7 @@ enum loadorder
 };
 
 extern enum loadorder get_load_order( const WCHAR *app_name, const WCHAR *path ) DECLSPEC_HIDDEN;
+extern WCHAR* get_redirect( const WCHAR *app_name, const WCHAR *path, BYTE *buffer, ULONG size ) DECLSPEC_HIDDEN;
 
 struct debug_info
 {
@@ -238,7 +243,17 @@ struct ntdll_thread_data
     WINE_VM86_TEB_INFO vm86;          /* 1fc vm86 private data */
     void              *exit_frame;    /* 204 exit frame pointer */
 #endif
+    void              *pthread_stack; /* 208/318 pthread stack */
 };
+
+C_ASSERT( FIELD_OFFSET(TEB, SpareBytes1) + sizeof(struct ntdll_thread_data) <=
+          FIELD_OFFSET(TEB, GdiTebBatch) + sizeof(((TEB *)0)->GdiTebBatch) );
+
+#ifdef __i386__
+C_ASSERT( FIELD_OFFSET(TEB, SpareBytes1) + FIELD_OFFSET(struct ntdll_thread_data, vm86) == FIELD_OFFSET(TEB, GdiTebBatch) );
+C_ASSERT( FIELD_OFFSET(TEB, SpareBytes1) + FIELD_OFFSET(struct ntdll_thread_data, vm86) == 0x1fc );
+C_ASSERT( FIELD_OFFSET(TEB, SpareBytes1) + FIELD_OFFSET(struct ntdll_thread_data, gs)   == 0x1d8 );
+#endif
 
 static inline struct ntdll_thread_data *ntdll_get_thread_data(void)
 {
@@ -265,5 +280,10 @@ extern HANDLE keyed_event DECLSPEC_HIDDEN;
 #define HASH_STRING_ALGORITHM_INVALID  0xffffffff
 
 NTSTATUS WINAPI RtlHashUnicodeString(PCUNICODE_STRING,BOOLEAN,ULONG,ULONG*);
+
+/* version */
+extern const char * CDECL NTDLL_wine_get_version(void);
+extern const char * CDECL NTDLL_wine_get_build_id(void);
+extern void CDECL NTDLL_wine_get_host_version( const char **sysname, const char **release );
 
 #endif

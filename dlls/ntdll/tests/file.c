@@ -37,6 +37,7 @@
 #include "winternl.h"
 #include "winuser.h"
 #include "winioctl.h"
+#include "ntifs.h"
 
 #ifndef IO_COMPLETION_ALL_ACCESS
 #define IO_COMPLETION_ALL_ACCESS 0x001F0003
@@ -81,6 +82,7 @@ static NTSTATUS (WINAPI *pNtQueryDirectoryFile)(HANDLE,HANDLE,PIO_APC_ROUTINE,PV
 static NTSTATUS (WINAPI *pNtQueryVolumeInformationFile)(HANDLE,PIO_STATUS_BLOCK,PVOID,ULONG,FS_INFORMATION_CLASS);
 static NTSTATUS (WINAPI *pNtQueryFullAttributesFile)(const OBJECT_ATTRIBUTES*, FILE_NETWORK_OPEN_INFORMATION*);
 static NTSTATUS (WINAPI *pNtFlushBuffersFile)(HANDLE, IO_STATUS_BLOCK*);
+static NTSTATUS (WINAPI *pNtQueryEaFile)(HANDLE,PIO_STATUS_BLOCK,PVOID,ULONG,BOOLEAN,PVOID,ULONG,PULONG,BOOLEAN);
 
 static inline BOOL is_signaled( HANDLE obj )
 {
@@ -208,7 +210,6 @@ static void create_file_test(void)
     U(io).Status = 0xdeadbeef;
     offset.QuadPart = 0;
     status = pNtReadFile( dir, NULL, NULL, NULL, &io, buf, sizeof(buf), &offset, NULL );
-    todo_wine
     ok( status == STATUS_INVALID_DEVICE_REQUEST || status == STATUS_PENDING, "NtReadFile error %08x\n", status );
     if (status == STATUS_PENDING)
     {
@@ -1339,7 +1340,7 @@ static void test_file_full_size_information(void)
 
     /* Assume No Quota Settings configured on Wine Testbot */
     res = pNtQueryVolumeInformationFile(h, &io, &ffsi, sizeof ffsi, FileFsFullSizeInformation);
-    todo_wine ok(res == STATUS_SUCCESS, "cannot get attributes, res %x\n", res);
+    ok(res == STATUS_SUCCESS, "cannot get attributes, res %x\n", res);
     res = pNtQueryVolumeInformationFile(h, &io, &fsi, sizeof fsi, FileFsSizeInformation);
     ok(res == STATUS_SUCCESS, "cannot get attributes, res %x\n", res);
 
@@ -1355,8 +1356,6 @@ static void test_file_full_size_information(void)
     ok(fsi.BytesPerSector == 512, "[fsi] BytesPerSector expected 512, got %d\n",fsi.BytesPerSector);
     ok(fsi.SectorsPerAllocationUnit == 8, "[fsi] SectorsPerAllocationUnit expected 8, got %d\n",fsi.SectorsPerAllocationUnit);
 
-    todo_wine
-    {
     ok(ffsi.TotalAllocationUnits.QuadPart > 0,
         "[ffsi] TotalAllocationUnits expected positive, got negative value 0x%s\n",
         debugstr_longlong(ffsi.TotalAllocationUnits.QuadPart));
@@ -1374,14 +1373,10 @@ static void test_file_full_size_information(void)
         "[ffsi] CallerAvailableAllocationUnits error fsi:0x%s, ffsi: 0x%s\n",
         debugstr_longlong(fsi.AvailableAllocationUnits.QuadPart),
         debugstr_longlong(ffsi.CallerAvailableAllocationUnits.QuadPart));
-    }
 
     /* Assume file system is NTFS */
-    todo_wine
-    {
     ok(ffsi.BytesPerSector == 512, "[ffsi] BytesPerSector expected 512, got %d\n",ffsi.BytesPerSector);
     ok(ffsi.SectorsPerAllocationUnit == 8, "[ffsi] SectorsPerAllocationUnit expected 8, got %d\n",ffsi.SectorsPerAllocationUnit);
-    }
 
     CloseHandle( h );
 }
@@ -1415,7 +1410,7 @@ static void test_file_basic_information(void)
     memset(&fbi, 0, sizeof(fbi));
     res = pNtQueryInformationFile(h, &io, &fbi, sizeof fbi, FileBasicInformation);
     ok ( res == STATUS_SUCCESS, "can't get attributes\n");
-    todo_wine ok ( (fbi.FileAttributes & attrib_mask) == FILE_ATTRIBUTE_SYSTEM, "attribute %x not FILE_ATTRIBUTE_SYSTEM\n", fbi.FileAttributes );
+    ok ( (fbi.FileAttributes & attrib_mask) == FILE_ATTRIBUTE_SYSTEM, "attribute %x not FILE_ATTRIBUTE_SYSTEM (ok in old linux without xattr)\n", fbi.FileAttributes );
 
     /* Then HIDDEN */
     memset(&fbi, 0, sizeof(fbi));
@@ -1428,7 +1423,7 @@ static void test_file_basic_information(void)
     memset(&fbi, 0, sizeof(fbi));
     res = pNtQueryInformationFile(h, &io, &fbi, sizeof fbi, FileBasicInformation);
     ok ( res == STATUS_SUCCESS, "can't get attributes\n");
-    todo_wine ok ( (fbi.FileAttributes & attrib_mask) == FILE_ATTRIBUTE_HIDDEN, "attribute %x not FILE_ATTRIBUTE_HIDDEN\n", fbi.FileAttributes );
+    ok ( (fbi.FileAttributes & attrib_mask) == FILE_ATTRIBUTE_HIDDEN, "attribute %x not FILE_ATTRIBUTE_HIDDEN (ok in old linux without xattr)\n", fbi.FileAttributes );
 
     /* Check NORMAL last of all (to make sure we can clear attributes) */
     memset(&fbi, 0, sizeof(fbi));
@@ -1485,7 +1480,7 @@ static void test_file_all_information(void)
     memset(&fai_buf.fai, 0, sizeof(fai_buf.fai));
     res = pNtQueryInformationFile(h, &io, &fai_buf.fai, sizeof fai_buf, FileAllInformation);
     ok ( res == STATUS_SUCCESS, "can't get attributes, res %x\n", res);
-    todo_wine ok ( (fai_buf.fai.BasicInformation.FileAttributes & attrib_mask) == FILE_ATTRIBUTE_SYSTEM, "attribute %x not FILE_ATTRIBUTE_SYSTEM\n", fai_buf.fai.BasicInformation.FileAttributes );
+    ok ( (fai_buf.fai.BasicInformation.FileAttributes & attrib_mask) == FILE_ATTRIBUTE_SYSTEM, "attribute %x not FILE_ATTRIBUTE_SYSTEM (ok in old linux without xattr)\n", fai_buf.fai.BasicInformation.FileAttributes );
 
     /* Then HIDDEN */
     memset(&fai_buf.fai.BasicInformation, 0, sizeof(fai_buf.fai.BasicInformation));
@@ -1498,7 +1493,7 @@ static void test_file_all_information(void)
     memset(&fai_buf.fai, 0, sizeof(fai_buf.fai));
     res = pNtQueryInformationFile(h, &io, &fai_buf.fai, sizeof fai_buf, FileAllInformation);
     ok ( res == STATUS_SUCCESS, "can't get attributes\n");
-    todo_wine ok ( (fai_buf.fai.BasicInformation.FileAttributes & attrib_mask) == FILE_ATTRIBUTE_HIDDEN, "attribute %x not FILE_ATTRIBUTE_HIDDEN\n", fai_buf.fai.BasicInformation.FileAttributes );
+    ok ( (fai_buf.fai.BasicInformation.FileAttributes & attrib_mask) == FILE_ATTRIBUTE_HIDDEN, "attribute %x not FILE_ATTRIBUTE_HIDDEN (ok in old linux without xattr)\n", fai_buf.fai.BasicInformation.FileAttributes );
 
     /* Check NORMAL last of all (to make sure we can clear attributes) */
     memset(&fai_buf.fai.BasicInformation, 0, sizeof(fai_buf.fai.BasicInformation));
@@ -2149,8 +2144,8 @@ static void test_file_rename_information(void)
     res = pNtQueryInformationFile( handle, &io, fni, sizeof(FILE_NAME_INFORMATION) + MAX_PATH * sizeof(WCHAR), FileNameInformation );
     ok( res == STATUS_SUCCESS, "res expected STATUS_SUCCESS, got %x\n", res );
     fni->FileName[ fni->FileNameLength / sizeof(WCHAR) ] = 0;
-    todo_wine ok( !lstrcmpiW(fni->FileName, newpath + 2), "FileName expected %s, got %s\n",
-                  wine_dbgstr_w(newpath + 2), wine_dbgstr_w(fni->FileName) );
+    ok( !lstrcmpiW(fni->FileName, newpath + 2), "FileName expected %s, got %s\n",
+        wine_dbgstr_w(newpath + 2), wine_dbgstr_w(fni->FileName) );
     HeapFree( GetProcessHeap(), 0, fni );
 
     CloseHandle( handle );
@@ -2809,12 +2804,13 @@ static void test_file_disposition_information(void)
 {
     char tmp_path[MAX_PATH], buffer[MAX_PATH + 16];
     DWORD dirpos;
-    HANDLE handle, handle2;
+    HANDLE handle, handle2, mapping;
     NTSTATUS res;
     IO_STATUS_BLOCK io;
     FILE_DISPOSITION_INFORMATION fdi;
     BOOL fileDeleted;
     DWORD fdi2;
+    void *ptr;
 
     GetTempPathA( MAX_PATH, tmp_path );
 
@@ -2979,6 +2975,72 @@ static void test_file_disposition_information(void)
     todo_wine
     ok( !fileDeleted, "Directory shouldn't have been deleted\n" );
     RemoveDirectoryA( buffer );
+
+    /* cannot set disposition on file with file mapping opened */
+    GetTempFileNameA( tmp_path, "dis", 0, buffer );
+    handle = CreateFileA(buffer, GENERIC_READ | GENERIC_WRITE | DELETE, 0, NULL, CREATE_ALWAYS, 0, 0);
+    ok( handle != INVALID_HANDLE_VALUE, "failed to create temp file\n" );
+    mapping = CreateFileMappingA( handle, NULL, PAGE_READWRITE, 0, 64 * 1024, "DelFileTest" );
+    ok( mapping != NULL, "failed to create file mapping\n");
+    fdi.DoDeleteFile = TRUE;
+    res = pNtSetInformationFile( handle, &io, &fdi, sizeof fdi, FileDispositionInformation );
+    ok( res == STATUS_CANNOT_DELETE, "unexpected FileDispositionInformation result (expected STATUS_CANNOT_DELETE, got %x)\n", res );
+    CloseHandle( handle );
+    fileDeleted = GetFileAttributesA( buffer ) == INVALID_FILE_ATTRIBUTES && GetLastError() == ERROR_FILE_NOT_FOUND;
+    ok( !fileDeleted, "File shouldn't have been deleted\n" );
+    CloseHandle( mapping );
+    DeleteFileA( buffer );
+
+    /* can set disposition on file with file mapping closed */
+    GetTempFileNameA( tmp_path, "dis", 0, buffer );
+    handle = CreateFileA(buffer, GENERIC_READ | GENERIC_WRITE | DELETE, 0, NULL, CREATE_ALWAYS, 0, 0);
+    ok( handle != INVALID_HANDLE_VALUE, "failed to create temp file\n" );
+    mapping = CreateFileMappingA( handle, NULL, PAGE_READWRITE, 0, 64 * 1024, "DelFileTest" );
+    ok( mapping != NULL, "failed to create file mapping\n");
+    CloseHandle( mapping );
+    fdi.DoDeleteFile = TRUE;
+    res = pNtSetInformationFile( handle, &io, &fdi, sizeof fdi, FileDispositionInformation );
+    ok( res == STATUS_SUCCESS, "unexpected FileDispositionInformation result (expected STATUS_SUCCESS, got %x)\n", res );
+    CloseHandle( handle );
+    fileDeleted = GetFileAttributesA( buffer ) == INVALID_FILE_ATTRIBUTES && GetLastError() == ERROR_FILE_NOT_FOUND;
+    ok( fileDeleted, "File should have been deleted\n" );
+    DeleteFileA( buffer );
+
+    /* cannot set disposition on file which is mapped to memory */
+    GetTempFileNameA( tmp_path, "dis", 0, buffer );
+    handle = CreateFileA(buffer, GENERIC_READ | GENERIC_WRITE | DELETE, 0, NULL, CREATE_ALWAYS, 0, 0);
+    ok( handle != INVALID_HANDLE_VALUE, "failed to create temp file\n" );
+    mapping = CreateFileMappingA( handle, NULL, PAGE_READWRITE, 0, 64 * 1024, "DelFileTest" );
+    ok( mapping != NULL, "failed to create file mapping\n");
+    ptr = MapViewOfFile( mapping, FILE_MAP_READ, 0, 0, 4096 );
+    ok( ptr != NULL, "MapViewOfFile failed\n");
+    CloseHandle( mapping );
+    fdi.DoDeleteFile = TRUE;
+    res = pNtSetInformationFile( handle, &io, &fdi, sizeof fdi, FileDispositionInformation );
+    ok( res == STATUS_CANNOT_DELETE, "unexpected FileDispositionInformation result (expected STATUS_CANNOT_DELETE, got %x)\n", res );
+    CloseHandle( handle );
+    fileDeleted = GetFileAttributesA( buffer ) == INVALID_FILE_ATTRIBUTES && GetLastError() == ERROR_FILE_NOT_FOUND;
+    ok( !fileDeleted, "File shouldn't have been deleted\n" );
+    UnmapViewOfFile( ptr );
+    DeleteFileA( buffer );
+
+    /* can set disposition on file which is mapped to memory and unmapped again */
+    GetTempFileNameA( tmp_path, "dis", 0, buffer );
+    handle = CreateFileA(buffer, GENERIC_READ | GENERIC_WRITE | DELETE, 0, NULL, CREATE_ALWAYS, 0, 0);
+    ok( handle != INVALID_HANDLE_VALUE, "failed to create temp file\n" );
+    mapping = CreateFileMappingA( handle, NULL, PAGE_READWRITE, 0, 64 * 1024, "DelFileTest" );
+    ok( mapping != NULL, "failed to create file mapping\n");
+    ptr = MapViewOfFile( mapping, FILE_MAP_READ, 0, 0, 4096 );
+    ok( ptr != NULL, "MapViewOfFile failed\n");
+    CloseHandle( mapping );
+    UnmapViewOfFile( ptr );
+    fdi.DoDeleteFile = TRUE;
+    res = pNtSetInformationFile( handle, &io, &fdi, sizeof fdi, FileDispositionInformation );
+    ok( res == STATUS_SUCCESS, "unexpected FileDispositionInformation result (expected STATUS_SUCCESS, got %x)\n", res );
+    CloseHandle( handle );
+    fileDeleted = GetFileAttributesA( buffer ) == INVALID_FILE_ATTRIBUTES && GetLastError() == ERROR_FILE_NOT_FOUND;
+    ok( fileDeleted, "File should have been deleted\n" );
+    DeleteFileA( buffer );
 }
 
 static void test_iocompletion(void)
@@ -3279,12 +3341,11 @@ static void test_file_completion_information(void)
     if (!(h = create_temp_file(0))) return;
 
     status = pNtSetInformationFile(h, &io, &info, sizeof(info) - 1, FileIoCompletionNotificationInformation);
-    todo_wine
     ok(status == STATUS_INFO_LENGTH_MISMATCH || status == STATUS_INVALID_INFO_CLASS /* XP */,
        "expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
     if (status == STATUS_INVALID_INFO_CLASS || status == STATUS_NOT_IMPLEMENTED)
     {
-        skip("FileIoCompletionNotificationInformation class not supported\n");
+        win_skip("FileIoCompletionNotificationInformation class not supported\n");
         CloseHandle(h);
         return;
     }
@@ -3306,6 +3367,11 @@ static void test_file_completion_information(void)
 
     CloseHandle(h);
     if (!(h = create_temp_file(FILE_FLAG_OVERLAPPED))) return;
+
+    info.Flags = ~0U;
+    status = pNtQueryInformationFile(h, &io, &info, sizeof(info), FileIoCompletionNotificationInformation);
+    ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08x\n", status);
+    ok(!(info.Flags & FILE_SKIP_COMPLETION_PORT_ON_SUCCESS), "got %08x\n", info.Flags);
 
     memset(&ov, 0, sizeof(ov));
     ov.hEvent = CreateEventA(NULL, TRUE, FALSE, NULL);
@@ -3341,6 +3407,11 @@ static void test_file_completion_information(void)
     status = pNtSetInformationFile(h, &io, &info, sizeof(info), FileIoCompletionNotificationInformation);
     ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08x\n", status);
 
+    info.Flags = 0;
+    status = pNtQueryInformationFile(h, &io, &info, sizeof(info), FileIoCompletionNotificationInformation);
+    ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08x\n", status);
+    ok((info.Flags & FILE_SKIP_COMPLETION_PORT_ON_SUCCESS) != 0, "got %08x\n", info.Flags);
+
     for (i = 0; i < 10; i++)
     {
         SetLastError(0xdeadbeef);
@@ -3365,6 +3436,11 @@ static void test_file_completion_information(void)
     info.Flags = 0;
     status = pNtSetInformationFile(h, &io, &info, sizeof(info), FileIoCompletionNotificationInformation);
     ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08x\n", status);
+
+    info.Flags = 0;
+    status = pNtQueryInformationFile(h, &io, &info, sizeof(info), FileIoCompletionNotificationInformation);
+    ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08x\n", status);
+    ok((info.Flags & FILE_SKIP_COMPLETION_PORT_ON_SUCCESS) != 0, "got %08x\n", info.Flags);
 
     for (i = 0; i < 10; i++)
     {
@@ -3433,6 +3509,29 @@ static void test_file_id_information(void)
     CloseHandle( h );
 }
 
+static void test_file_access_information(void)
+{
+    FILE_ACCESS_INFORMATION info;
+    IO_STATUS_BLOCK io;
+    NTSTATUS status;
+    HANDLE h;
+
+    if (!(h = create_temp_file(0))) return;
+
+    status = pNtQueryInformationFile( h, &io, &info, sizeof(info) - 1, FileAccessInformation );
+    ok( status == STATUS_INFO_LENGTH_MISMATCH, "expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status );
+
+    status = pNtQueryInformationFile( (HANDLE)0xdeadbeef, &io, &info, sizeof(info), FileAccessInformation );
+    ok( status == STATUS_INVALID_HANDLE, "expected STATUS_INVALID_HANDLE, got %08x\n", status );
+
+    memset(&info, 0x11, sizeof(info));
+    status = pNtQueryInformationFile( h, &io, &info, sizeof(info), FileAccessInformation );
+    ok( status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08x\n", status );
+    ok( info.AccessFlags == 0x13019f, "got %08x\n", info.AccessFlags );
+
+    CloseHandle( h );
+}
+
 static void test_query_volume_information_file(void)
 {
     NTSTATUS status;
@@ -3466,11 +3565,11 @@ static void test_query_volume_information_file(void)
 
     ffvi = (FILE_FS_VOLUME_INFORMATION *)buf;
 
-todo_wine
-{
     ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %d\n", status);
     ok(U(io).Status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %d\n", U(io).Status);
 
+todo_wine
+{
     ok(io.Information == (FIELD_OFFSET(FILE_FS_VOLUME_INFORMATION, VolumeLabel) + ffvi->VolumeLabelLength),
     "expected %d, got %lu\n", (FIELD_OFFSET(FILE_FS_VOLUME_INFORMATION, VolumeLabel) + ffvi->VolumeLabelLength),
      io.Information);
@@ -3617,6 +3716,83 @@ static void test_NtCreateFile(void)
     pRtlFreeUnicodeString( &nameW );
     SetFileAttributesW(path, FILE_ATTRIBUTE_ARCHIVE);
     DeleteFileW( path );
+}
+
+static void test_readonly(void)
+{
+    static const WCHAR fooW[] = {'f','o','o',0};
+    NTSTATUS status;
+    HANDLE handle;
+    WCHAR path[MAX_PATH];
+    OBJECT_ATTRIBUTES attr;
+    IO_STATUS_BLOCK io;
+    UNICODE_STRING nameW;
+
+    GetTempPathW(MAX_PATH, path);
+    GetTempFileNameW(path, fooW, 0, path);
+    DeleteFileW(path);
+    pRtlDosPathNameToNtPathName_U(path, &nameW, NULL, NULL);
+
+    attr.Length = sizeof(attr);
+    attr.RootDirectory = NULL;
+    attr.ObjectName = &nameW;
+    attr.Attributes = OBJ_CASE_INSENSITIVE;
+    attr.SecurityDescriptor = NULL;
+    attr.SecurityQualityOfService = NULL;
+
+    status = pNtCreateFile(&handle, GENERIC_READ, &attr, &io, NULL, FILE_ATTRIBUTE_READONLY,
+                           FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, FILE_CREATE, 0, NULL, 0);
+    ok(status == STATUS_SUCCESS, "got %#x\n", status);
+    CloseHandle(handle);
+
+    status = pNtOpenFile(&handle, GENERIC_WRITE,  &attr, &io,
+                         FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, FILE_OPEN_FOR_BACKUP_INTENT);
+    ok(status == STATUS_ACCESS_DENIED, "got %#x\n", status);
+    CloseHandle(handle);
+
+    status = pNtOpenFile(&handle, GENERIC_READ,  &attr, &io,
+                         FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, FILE_OPEN_FOR_BACKUP_INTENT);
+    ok(status == STATUS_SUCCESS, "got %#x\n", status);
+    CloseHandle(handle);
+
+    status = pNtOpenFile(&handle, FILE_READ_ATTRIBUTES,  &attr, &io,
+                         FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, FILE_OPEN_FOR_BACKUP_INTENT);
+    ok(status == STATUS_SUCCESS, "got %#x\n", status);
+    CloseHandle(handle);
+
+    status = pNtOpenFile(&handle, FILE_WRITE_ATTRIBUTES,  &attr, &io,
+                         FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, FILE_OPEN_FOR_BACKUP_INTENT);
+    ok(status == STATUS_SUCCESS, "got %#x\n", status);
+    CloseHandle(handle);
+
+    status = pNtOpenFile(&handle, DELETE,  &attr, &io,
+                         FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, FILE_OPEN_FOR_BACKUP_INTENT);
+    ok(status == STATUS_SUCCESS, "got %#x\n", status);
+    CloseHandle(handle);
+
+    status = pNtOpenFile(&handle, READ_CONTROL,  &attr, &io,
+                         FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, FILE_OPEN_FOR_BACKUP_INTENT);
+    ok(status == STATUS_SUCCESS, "got %#x\n", status);
+    CloseHandle(handle);
+
+    status = pNtOpenFile(&handle, WRITE_DAC,  &attr, &io,
+                         FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, FILE_OPEN_FOR_BACKUP_INTENT);
+    ok(status == STATUS_SUCCESS, "got %#x\n", status);
+    CloseHandle(handle);
+
+    status = pNtOpenFile(&handle, WRITE_OWNER,  &attr, &io,
+                         FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, FILE_OPEN_FOR_BACKUP_INTENT);
+    ok(status == STATUS_SUCCESS, "got %#x\n", status);
+    CloseHandle(handle);
+
+    status = pNtOpenFile(&handle, SYNCHRONIZE,  &attr, &io,
+                         FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, FILE_OPEN_FOR_BACKUP_INTENT);
+    ok(status == STATUS_SUCCESS, "got %#x\n", status);
+    CloseHandle( handle );
+
+    pRtlFreeUnicodeString(&nameW);
+    SetFileAttributesW(path, FILE_ATTRIBUTE_ARCHIVE);
+    DeleteFileW(path);
 }
 
 static void test_read_write(void)
@@ -4447,6 +4623,257 @@ static void test_flush_buffers_file(void)
     DeleteFileA(buffer);
 }
 
+static void test_query_ea(void)
+{
+    #define EA_BUFFER_SIZE 4097
+    unsigned char data[EA_BUFFER_SIZE + 8];
+    unsigned char *buffer = (void *)(((DWORD_PTR)data + 7) & ~7);
+    DWORD buffer_len, i;
+    IO_STATUS_BLOCK io;
+    NTSTATUS status;
+    HANDLE handle;
+
+    if (!(handle = create_temp_file(0))) return;
+
+    /* test with INVALID_HANDLE_VALUE */
+    U(io).Status = 0xdeadbeef;
+    io.Information = 0xdeadbeef;
+    memset(buffer, 0xcc, EA_BUFFER_SIZE);
+    buffer_len = EA_BUFFER_SIZE - 1;
+    status = pNtQueryEaFile(INVALID_HANDLE_VALUE, &io, buffer, buffer_len, TRUE, NULL, 0, NULL, FALSE);
+    ok(status == STATUS_OBJECT_TYPE_MISMATCH, "expected STATUS_OBJECT_TYPE_MISMATCH, got %x\n", status);
+    ok(U(io).Status == 0xdeadbeef, "expected 0xdeadbeef, got %x\n", U(io).Status);
+    ok(io.Information == 0xdeadbeef, "expected 0xdeadbeef, got %lu\n", io.Information);
+    ok(buffer[0] == 0xcc, "data at position 0 overwritten\n");
+
+    /* test with 0xdeadbeef */
+    U(io).Status = 0xdeadbeef;
+    io.Information = 0xdeadbeef;
+    memset(buffer, 0xcc, EA_BUFFER_SIZE);
+    buffer_len = EA_BUFFER_SIZE - 1;
+    status = pNtQueryEaFile((void *)0xdeadbeef, &io, buffer, buffer_len, TRUE, NULL, 0, NULL, FALSE);
+    ok(status == STATUS_INVALID_HANDLE, "expected STATUS_INVALID_HANDLE, got %x\n", status);
+    ok(U(io).Status == 0xdeadbeef, "expected 0xdeadbeef, got %x\n", U(io).Status);
+    ok(io.Information == 0xdeadbeef, "expected 0xdeadbeef, got %lu\n", io.Information);
+    ok(buffer[0] == 0xcc, "data at position 0 overwritten\n");
+
+    /* test without buffer */
+    U(io).Status = 0xdeadbeef;
+    io.Information = 0xdeadbeef;
+    status = pNtQueryEaFile(handle, &io, NULL, 0, TRUE, NULL, 0, NULL, FALSE);
+    ok(status == STATUS_NO_EAS_ON_FILE, "expected STATUS_NO_EAS_ON_FILE, got %x\n", status);
+    ok(U(io).Status == 0xdeadbeef, "expected 0xdeadbeef, got %x\n", U(io).Status);
+    ok(io.Information == 0xdeadbeef, "expected 0xdeadbeef, got %lu\n", io.Information);
+
+    /* test with zero buffer */
+    U(io).Status = 0xdeadbeef;
+    io.Information = 0xdeadbeef;
+    status = pNtQueryEaFile(handle, &io, buffer, 0, TRUE, NULL, 0, NULL, FALSE);
+    ok(status == STATUS_NO_EAS_ON_FILE, "expected STATUS_NO_EAS_ON_FILE, got %x\n", status);
+    ok(U(io).Status == 0xdeadbeef, "expected 0xdeadbeef, got %x\n", U(io).Status);
+    ok(io.Information == 0xdeadbeef, "expected 0xdeadbeef, got %lu\n", io.Information);
+
+    /* test with very small buffer */
+    U(io).Status = 0xdeadbeef;
+    io.Information = 0xdeadbeef;
+    memset(buffer, 0xcc, EA_BUFFER_SIZE);
+    buffer_len = 4;
+    status = pNtQueryEaFile(handle, &io, buffer, buffer_len, TRUE, NULL, 0, NULL, FALSE);
+    ok(status == STATUS_NO_EAS_ON_FILE, "expected STATUS_NO_EAS_ON_FILE, got %x\n", status);
+    ok(U(io).Status == 0xdeadbeef, "expected 0xdeadbeef, got %x\n", U(io).Status);
+    ok(io.Information == 0xdeadbeef, "expected 0xdeadbeef, got %lu\n", io.Information);
+    for (i = 0; i < buffer_len && !buffer[i]; i++);
+    ok(i == buffer_len,  "expected %u bytes filled with 0x00, got %u bytes\n", buffer_len, i);
+    ok(buffer[i] == 0xcc, "data at position %u overwritten\n", buffer[i]);
+
+    /* test with very big buffer */
+    U(io).Status = 0xdeadbeef;
+    io.Information = 0xdeadbeef;
+    memset(buffer, 0xcc, EA_BUFFER_SIZE);
+    buffer_len = EA_BUFFER_SIZE - 1;
+    status = pNtQueryEaFile(handle, &io, buffer, buffer_len, TRUE, NULL, 0, NULL, FALSE);
+    ok(status == STATUS_NO_EAS_ON_FILE, "expected STATUS_NO_EAS_ON_FILE, got %x\n", status);
+    ok(U(io).Status == 0xdeadbeef, "expected 0xdeadbeef, got %x\n", U(io).Status);
+    ok(io.Information == 0xdeadbeef, "expected 0xdeadbeef, got %lu\n", io.Information);
+    for (i = 0; i < buffer_len && !buffer[i]; i++);
+    ok(i == buffer_len,  "expected %u bytes filled with 0x00, got %u bytes\n", buffer_len, i);
+    ok(buffer[i] == 0xcc, "data at position %u overwritten\n", buffer[i]);
+
+    CloseHandle(handle);
+    #undef EA_BUFFER_SIZE
+}
+
+static INT build_reparse_buffer(WCHAR *filename, REPARSE_DATA_BUFFER **pbuffer)
+{
+    REPARSE_DATA_BUFFER *buffer;
+    INT buffer_len, string_len;
+    WCHAR *dest;
+
+    string_len = (lstrlenW(filename)+1)*sizeof(WCHAR);
+    buffer_len = FIELD_OFFSET(REPARSE_DATA_BUFFER, MountPointReparseBuffer.PathBuffer[1]) + string_len;
+    buffer = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, buffer_len);
+    buffer->ReparseTag = IO_REPARSE_TAG_MOUNT_POINT;
+    buffer->ReparseDataLength = sizeof(buffer->MountPointReparseBuffer) + string_len;
+    buffer->MountPointReparseBuffer.SubstituteNameLength = string_len - sizeof(WCHAR);
+    buffer->MountPointReparseBuffer.PrintNameOffset = string_len;
+    dest = &buffer->MountPointReparseBuffer.PathBuffer[0];
+    memcpy(dest, filename, string_len);
+    *pbuffer = buffer;
+    return buffer_len;
+}
+
+static void test_junction_points(void)
+{
+    static const WCHAR junctionW[] = {'\\','j','u','n','c','t','i','o','n',0};
+    WCHAR path[MAX_PATH], junction_path[MAX_PATH], target_path[MAX_PATH];
+    static const WCHAR targetW[] = {'\\','t','a','r','g','e','t',0};
+    FILE_BASIC_INFORMATION old_attrib, new_attrib;
+    static const WCHAR fooW[] = {'f','o','o',0};
+    static WCHAR volW[] = {'c',':','\\',0};
+    REPARSE_GUID_DATA_BUFFER guid_buffer;
+    static const WCHAR dotW[] = {'.',0};
+    REPARSE_DATA_BUFFER *buffer = NULL;
+    DWORD dwret, dwLen, dwFlags, err;
+    INT buffer_len, string_len;
+    IO_STATUS_BLOCK iosb;
+    UNICODE_STRING nameW;
+    HANDLE hJunction;
+    WCHAR *dest;
+    BOOL bret;
+
+    /* Create a temporary folder for the junction point tests */
+    GetTempFileNameW(dotW, fooW, 0, path);
+    DeleteFileW(path);
+    if (!CreateDirectoryW(path, NULL))
+    {
+        win_skip("Unable to create a temporary junction point directory.\n");
+        return;
+    }
+
+    /* Check that the volume this folder is located on supports junction points */
+    pRtlDosPathNameToNtPathName_U(path, &nameW, NULL, NULL);
+    volW[0] = nameW.Buffer[4];
+    pRtlFreeUnicodeString( &nameW );
+    GetVolumeInformationW(volW, 0, 0, 0, &dwLen, &dwFlags, 0, 0);
+    if (!(dwFlags & FILE_SUPPORTS_REPARSE_POINTS))
+    {
+        skip("File system does not support junction points.\n");
+        RemoveDirectoryW(path);
+        return;
+    }
+
+    /* Create the folder to be replaced by a junction point */
+    lstrcpyW(junction_path, path);
+    lstrcatW(junction_path, junctionW);
+    bret = CreateDirectoryW(junction_path, NULL);
+    ok(bret, "Failed to create junction point directory.\n");
+
+    /* Create a destination folder for the junction point to target */
+    lstrcpyW(target_path, path);
+    lstrcatW(target_path, targetW);
+    bret = CreateDirectoryW(target_path, NULL);
+    ok(bret, "Failed to create junction point target directory.\n");
+    pRtlDosPathNameToNtPathName_U(target_path, &nameW, NULL, NULL);
+
+    /* Create the junction point */
+    hJunction = CreateFileW(junction_path, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING,
+                            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, 0);
+    if (hJunction == INVALID_HANDLE_VALUE)
+    {
+        win_skip("Failed to open junction point directory handle (0x%x).\n", GetLastError());
+        goto cleanup;
+    }
+    dwret = NtQueryInformationFile(hJunction, &iosb, &old_attrib, sizeof(old_attrib), FileBasicInformation);
+    ok(dwret == STATUS_SUCCESS, "Failed to get junction point folder's attributes (0x%x).\n", dwret);
+    buffer_len = build_reparse_buffer(nameW.Buffer, &buffer);
+    bret = DeviceIoControl(hJunction, FSCTL_SET_REPARSE_POINT, (LPVOID)buffer, buffer_len, NULL, 0, &dwret, 0);
+    ok(bret, "Failed to create junction point! (0x%x)\n", GetLastError());
+
+    /* Check the file attributes of the junction point */
+    dwret = GetFileAttributesW(junction_path);
+    ok(dwret != (DWORD)~0, "Junction point doesn't exist (attributes: 0x%x)!\n", dwret);
+    ok(dwret & FILE_ATTRIBUTE_REPARSE_POINT, "File is not a junction point! (attributes: %d)\n", dwret);
+
+    /* Read back the junction point */
+    HeapFree(GetProcessHeap(), 0, buffer);
+    buffer_len = sizeof(*buffer) + MAX_PATH*sizeof(WCHAR);
+    buffer = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, buffer_len);
+    bret = DeviceIoControl(hJunction, FSCTL_GET_REPARSE_POINT, NULL, 0, (LPVOID)buffer, buffer_len, &dwret, 0);
+    string_len = buffer->MountPointReparseBuffer.SubstituteNameLength;
+    dest = &buffer->MountPointReparseBuffer.PathBuffer[buffer->MountPointReparseBuffer.SubstituteNameOffset/sizeof(WCHAR)];
+    ok(bret, "Failed to read junction point!\n");
+    ok((memcmp(dest, nameW.Buffer, string_len) == 0), "Junction point destination does not match ('%s' != '%s')!\n",
+                                                      wine_dbgstr_w(dest), wine_dbgstr_w(nameW.Buffer));
+
+    /* Delete the junction point */
+    memset(&old_attrib, 0x00, sizeof(old_attrib));
+    old_attrib.LastAccessTime.QuadPart = 0x200deadcafebeef;
+    dwret = NtSetInformationFile(hJunction, &iosb, &old_attrib, sizeof(old_attrib), FileBasicInformation);
+    ok(dwret == STATUS_SUCCESS, "Failed to set junction point folder's attributes (0x%x).\n", dwret);
+    memset(&guid_buffer, 0x00, sizeof(guid_buffer));
+    guid_buffer.ReparseTag = IO_REPARSE_TAG_MOUNT_POINT;
+    bret = DeviceIoControl(hJunction, FSCTL_DELETE_REPARSE_POINT, (LPVOID)&guid_buffer,
+                           REPARSE_GUID_DATA_BUFFER_HEADER_SIZE, NULL, 0, &dwret, 0);
+    ok(bret, "Failed to delete junction point! (0x%x)\n", GetLastError());
+    memset(&new_attrib, 0x00, sizeof(new_attrib));
+    dwret = NtQueryInformationFile(hJunction, &iosb, &new_attrib, sizeof(new_attrib), FileBasicInformation);
+    ok(dwret == STATUS_SUCCESS, "Failed to get junction point folder's attributes (0x%x).\n", dwret);
+    ok(old_attrib.LastAccessTime.QuadPart == new_attrib.LastAccessTime.QuadPart,
+       "Junction point folder's access time does not match.\n");
+    CloseHandle(hJunction);
+
+    /* Check deleting a junction point as if it were a directory */
+    HeapFree(GetProcessHeap(), 0, buffer);
+    hJunction = CreateFileW(junction_path, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING,
+                            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, 0);
+    buffer_len = build_reparse_buffer(nameW.Buffer, &buffer);
+    bret = DeviceIoControl(hJunction, FSCTL_SET_REPARSE_POINT, (LPVOID)buffer, buffer_len, NULL, 0, &dwret, 0);
+    ok(bret, "Failed to create junction point! (0x%x)\n", GetLastError());
+    CloseHandle(hJunction);
+    bret = RemoveDirectoryW(junction_path);
+    ok(bret, "Failed to delete junction point as directory!\n");
+    dwret = GetFileAttributesW(junction_path);
+    ok(dwret == (DWORD)~0, "Junction point still exists (attributes: 0x%x)!\n", dwret);
+
+    /* Check deleting a junction point as if it were a file */
+    HeapFree(GetProcessHeap(), 0, buffer);
+    bret = CreateDirectoryW(junction_path, NULL);
+    ok(bret, "Failed to create junction point target directory.\n");
+    hJunction = CreateFileW(junction_path, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING,
+                            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, 0);
+    buffer_len = build_reparse_buffer(nameW.Buffer, &buffer);
+    bret = DeviceIoControl(hJunction, FSCTL_SET_REPARSE_POINT, (LPVOID)buffer, buffer_len, NULL, 0, &dwret, 0);
+    ok(bret, "Failed to create junction point! (0x%x)\n", GetLastError());
+    CloseHandle(hJunction);
+    bret = DeleteFileW(junction_path);
+    ok(!bret, "Succeeded in deleting junction point as file!\n");
+    err = GetLastError();
+    ok(err == ERROR_ACCESS_DENIED, "Expected last error 0x%x for DeleteFile on junction point (actually 0x%x)!\n",
+                                   ERROR_ACCESS_DENIED, err);
+    dwret = GetFileAttributesW(junction_path);
+    ok(dwret != (DWORD)~0, "Junction point doesn't exist (attributes: 0x%x)!\n", dwret);
+    ok(dwret & FILE_ATTRIBUTE_REPARSE_POINT, "File is not a junction point! (attributes: 0x%x)\n", dwret);
+
+    /* Test deleting a junction point's target */
+    dwret = GetFileAttributesW(junction_path);
+    ok(dwret == 0x410 || broken(dwret == 0x430) /* win2k */,
+       "Unexpected junction point attributes (0x%x != 0x410)!\n", dwret);
+    bret = RemoveDirectoryW(target_path);
+    ok(bret, "Failed to delete junction point target!\n");
+    bret = CreateDirectoryW(target_path, NULL);
+    ok(bret, "Failed to create junction point target directory.\n");
+
+cleanup:
+    /* Cleanup */
+    pRtlFreeUnicodeString( &nameW );
+    HeapFree(GetProcessHeap(), 0, buffer);
+    bret = RemoveDirectoryW(junction_path);
+    ok(bret, "Failed to remove temporary junction point directory!\n");
+    bret = RemoveDirectoryW(target_path);
+    ok(bret, "Failed to remove temporary target directory!\n");
+    RemoveDirectoryW(path);
+}
+
 START_TEST(file)
 {
     HMODULE hkernel32 = GetModuleHandleA("kernel32.dll");
@@ -4485,9 +4912,11 @@ START_TEST(file)
     pNtQueryVolumeInformationFile = (void *)GetProcAddress(hntdll, "NtQueryVolumeInformationFile");
     pNtQueryFullAttributesFile = (void *)GetProcAddress(hntdll, "NtQueryFullAttributesFile");
     pNtFlushBuffersFile = (void *)GetProcAddress(hntdll, "NtFlushBuffersFile");
+    pNtQueryEaFile          = (void *)GetProcAddress(hntdll, "NtQueryEaFile");
 
     test_read_write();
     test_NtCreateFile();
+    test_readonly();
     create_file_test();
     open_file_test();
     delete_file_test();
@@ -4506,8 +4935,11 @@ START_TEST(file)
     test_file_disposition_information();
     test_file_completion_information();
     test_file_id_information();
+    test_file_access_information();
     test_query_volume_information_file();
     test_query_attribute_information_file();
     test_ioctl();
     test_flush_buffers_file();
+    test_query_ea();
+    test_junction_points();
 }

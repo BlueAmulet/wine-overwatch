@@ -2502,7 +2502,7 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
     }
     else
     {
-        msg->hwnd = WINPOS_WindowFromPoint( msg->hwnd, msg->pt, &hittest );
+        msg->hwnd = WINPOS_WindowFromPoint( 0, msg->pt, &hittest );
     }
 
     if (!msg->hwnd || !WIN_IsCurrentThread( msg->hwnd ))
@@ -2737,6 +2737,18 @@ static BOOL peek_message( MSG *msg, HWND hwnd, UINT first, UINT last, UINT flags
     unsigned int hw_id = 0;  /* id of previous hardware message */
     void *buffer;
     size_t buffer_size = 256;
+    shmlocal_t *shm = wine_get_shmlocal();
+
+    /* From time to time we are forced to do a wineserver call in
+     * order to update last_msg_time stored for each server thread. */
+    if (shm && GetTickCount() - thread_info->last_get_msg < 500)
+    {
+        int filter = flags >> 16;
+        if (!filter) filter = QS_ALLINPUT;
+        filter |= QS_SENDMESSAGE;
+        if (filter & QS_INPUT) filter |= QS_INPUT;
+        if (!(shm->queue_bits & filter)) return FALSE;
+    }
 
     if (!(buffer = HeapAlloc( GetProcessHeap(), 0, buffer_size ))) return FALSE;
 
@@ -2749,6 +2761,7 @@ static BOOL peek_message( MSG *msg, HWND hwnd, UINT first, UINT last, UINT flags
         size_t size = 0;
         const message_data_t *msg_data = buffer;
 
+        if (shm) thread_info->last_get_msg = GetTickCount();
         SERVER_START_REQ( get_message )
         {
             req->flags     = flags;
@@ -4452,7 +4465,7 @@ UINT_PTR WINAPI SetCoalescableTimer( HWND hwnd, UINT_PTR id, UINT timeout, TIMER
 
     if (proc) winproc = WINPROC_AllocProc( (WNDPROC)proc, FALSE );
 
-    timeout = min( max( USER_TIMER_MINIMUM, timeout ), USER_TIMER_MAXIMUM );
+    timeout = min( max( 5, timeout ), USER_TIMER_MAXIMUM );
 
     SERVER_START_REQ( set_win_timer )
     {

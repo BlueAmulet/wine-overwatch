@@ -61,6 +61,7 @@
 
 #include "process.h"
 #include "file.h"
+#include "sock.h"
 #include "handle.h"
 #include "thread.h"
 #include "request.h"
@@ -86,6 +87,7 @@
 #define FD_CLOSE                   0x00000020
 
 /* internal per-socket flags */
+#define FD_WINE_REUSE              0x08000000
 #define FD_WINE_LISTENING          0x10000000
 #define FD_WINE_NONBLOCKING        0x20000000
 #define FD_WINE_CONNECTED          0x40000000
@@ -132,10 +134,10 @@ static enum server_fd_type sock_get_fd_type( struct fd *fd );
 static obj_handle_t sock_ioctl( struct fd *fd, ioctl_code_t code, struct async *async, int blocking );
 static void sock_queue_async( struct fd *fd, struct async *async, int type, int count );
 static void sock_reselect_async( struct fd *fd, struct async_queue *queue );
+static int sock_close_handle( struct object *obj, struct process *process, obj_handle_t handle );
 
 static int sock_get_ntstatus( int err );
 static int sock_get_error( int err );
-static void sock_set_error(void);
 
 static const struct object_ops sock_ops =
 {
@@ -155,7 +157,8 @@ static const struct object_ops sock_ops =
     no_link_name,                 /* link_name */
     NULL,                         /* unlink_name */
     no_open_file,                 /* open_file */
-    fd_close_handle,              /* close_handle */
+    no_alloc_handle,              /* alloc_handle */
+    sock_close_handle,            /* close_handle */
     sock_destroy                  /* destroy */
 };
 
@@ -610,6 +613,47 @@ static struct fd *sock_get_fd( struct object *obj )
     return (struct fd *)grab_object( sock->fd );
 }
 
+static int init_sockfd( int family, int type, int protocol )
+{
+    int sockfd;
+
+    sockfd = socket( family, type, protocol );
+    if (debug_level)
+        fprintf(stderr,"socket(%d,%d,%d)=%d\n",family,type,protocol,sockfd);
+    if (sockfd == -1)
+    {
+        sock_set_error();
+        return sockfd;
+    }
+    fcntl(sockfd, F_SETFL, O_NONBLOCK); /* make socket nonblocking */
+    return sockfd;
+}
+
+static int sock_close_handle( struct object *obj, struct process *process, obj_handle_t handle )
+{
+    struct sock *sock = (struct sock *)obj;
+
+    assert( obj->ops == &sock_ops );
+    if (!fd_close_handle( obj, process, handle ))
+        return FALSE;
+
+    if (sock->state & FD_WINE_REUSE)
+    {
+        struct fd *fd;
+        int sockfd;
+
+        if ((sockfd = init_sockfd( sock->family, sock->type, sock->proto )) == -1)
+            return TRUE;
+        if (!(fd = create_anonymous_fd( &sock_fd_ops, sockfd, &sock->obj, get_fd_options(sock->fd) )))
+            return TRUE;
+        shutdown( get_unix_fd(sock->fd), SHUT_RDWR );
+        release_object( sock->fd );
+        sock->fd = fd;
+        return FALSE;
+    }
+    return TRUE;
+}
+
 static void sock_destroy( struct object *obj )
 {
     struct sock *sock = (struct sock *)obj;
@@ -662,15 +706,8 @@ static struct object *create_socket( int family, int type, int protocol, unsigne
     struct sock *sock;
     int sockfd;
 
-    sockfd = socket( family, type, protocol );
-    if (debug_level)
-        fprintf(stderr,"socket(%d,%d,%d)=%d\n",family,type,protocol,sockfd);
-    if (sockfd == -1)
-    {
-        sock_set_error();
+    if ((sockfd = init_sockfd( family, type, protocol )) == -1)
         return NULL;
-    }
-    fcntl(sockfd, F_SETFL, O_NONBLOCK); /* make socket nonblocking */
     if (!(sock = alloc_object( &sock_ops )))
     {
         close( sockfd );
@@ -940,7 +977,7 @@ static int sock_get_ntstatus( int err )
 }
 
 /* set the last error depending on errno */
-static void sock_set_error(void)
+void sock_set_error(void)
 {
     set_error( sock_get_ntstatus( errno ) );
 }
@@ -982,6 +1019,7 @@ static const struct object_ops ifchange_ops =
     no_link_name,            /* link_name */
     NULL,                    /* unlink_name */
     no_open_file,            /* open_file */
+    no_alloc_handle,         /* alloc_handle */
     no_close_handle,         /* close_handle */
     ifchange_destroy         /* destroy */
 };
@@ -1238,6 +1276,17 @@ DECL_HANDLER(accept_into_socket)
     release_object( sock );
 }
 
+/* mark a socket to be recreated on close */
+DECL_HANDLER(reuse_socket)
+{
+    struct sock *sock;
+
+    if (!(sock = (struct sock *)get_handle_obj( current->process, req->handle,
+                                                FILE_WRITE_ATTRIBUTES, &sock_ops))) return;
+    sock->state |= FD_WINE_REUSE;
+    release_object( &sock->obj );
+}
+
 /* set socket event parameters */
 DECL_HANDLER(set_socket_event)
 {
@@ -1362,6 +1411,16 @@ DECL_HANDLER(get_socket_info)
     reply->family   = sock->family;
     reply->type     = sock->type;
     reply->protocol = sock->proto;
+    reply->connect_time = -(current_time - sock->connect_time);
 
     release_object( &sock->obj );
+}
+
+DECL_HANDLER(socket_cleanup)
+{
+    unsigned int index = 0;
+    obj_handle_t sock;
+
+    while ((sock = enumerate_handles(current->process, &sock_ops, &index, NULL)))
+        close_handle(current->process, sock);
 }

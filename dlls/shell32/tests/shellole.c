@@ -877,14 +877,14 @@ static void test_SHCreateSessionKey(void)
     hkey = (HKEY)0xdeadbeef;
     hr = pSHCreateSessionKey(0, &hkey);
     todo_wine ok(hr == E_ACCESSDENIED, "got 0x%08x\n", hr);
-    ok(hkey == NULL, "got %p\n", hkey);
+    todo_wine ok(hkey == NULL, "got %p\n", hkey);
 
     hr = pSHCreateSessionKey(KEY_READ, &hkey);
-    todo_wine ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
 
     hr = pSHCreateSessionKey(KEY_READ, &hkey2);
-    todo_wine ok(hr == S_OK, "got 0x%08x\n", hr);
-    todo_wine ok(hkey != hkey2, "got %p, %p\n", hkey, hkey2);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(hkey != hkey2, "got %p, %p\n", hkey, hkey2);
 
     RegCloseKey(hkey);
     RegCloseKey(hkey2);

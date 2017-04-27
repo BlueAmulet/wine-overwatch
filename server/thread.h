@@ -88,6 +88,9 @@ struct thread
     timeout_t              creation_time; /* Thread creation time */
     timeout_t              exit_time;     /* Thread exit time */
     struct token          *token;         /* security token associated with this thread */
+    struct timeout_user   *exit_poll;     /* poll if the thread/process has exited already */
+    int                    shm_fd;        /* file descriptor for thread local shared memory */
+    shmlocal_t            *shm;           /* thread local shared memory pointer */
 };
 
 struct thread_snapshot
@@ -145,5 +148,10 @@ static inline void clear_error(void)             { set_error(0); }
 static inline void set_win32_error( unsigned int err ) { set_error( 0xc0010000 | err ); }
 
 static inline thread_id_t get_thread_id( struct thread *thread ) { return thread->id; }
+
+/* scheduler functions */
+
+extern void init_scheduler( void );
+extern void set_scheduler_priority( struct thread *thread );
 
 #endif  /* __WINE_SERVER_THREAD_H */

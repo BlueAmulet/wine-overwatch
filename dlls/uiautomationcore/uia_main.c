@@ -1,4 +1,5 @@
 /*
+ * Copyright 2016 Michael Müller
  * Copyright 2017 Jacek Caban for CodeWeavers
  *
  * This library is free software; you can redistribute it and/or
@@ -16,7 +17,11 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "uiautomationcore.h"
+#include <stdarg.h>
+#include "windef.h"
+#include "winbase.h"
+#define COBJMACROS
+#include "uiautomationcoreapi.h"
 
 #include "wine/debug.h"
 
@@ -37,11 +42,91 @@ BOOL WINAPI DllMain(HINSTANCE hInstDLL, DWORD fdwReason, void *lpv)
     return TRUE;
 }
 
+static HRESULT WINAPI dummy_QueryInterface(IUnknown *iface, REFIID iid, void **ppv)
+{
+    TRACE("(%p, %s, %p)\n", iface, debugstr_guid(iid), ppv);
+
+    if (!ppv) return E_INVALIDARG;
+
+    if (!IsEqualIID(&IID_IUnknown, iid))
+    {
+        FIXME("Unknown interface: %s\n", debugstr_guid(iid));
+        *ppv = NULL;
+        return E_NOINTERFACE;
+    }
+
+    *ppv = iface;
+    IUnknown_AddRef((IUnknown *)*ppv);
+    return S_OK;
+}
+
+static ULONG WINAPI dummy_AddRef(IUnknown *iface)
+{
+    FIXME("(%p): stub\n", iface);
+    return 1;
+}
+
+static ULONG WINAPI dummy_Release(IUnknown *iface)
+{
+    FIXME("(%p): stub\n", iface);
+    return 1;
+}
+
+static const IUnknownVtbl dummy_Vtbl =
+{
+    dummy_QueryInterface,
+    dummy_AddRef,
+    dummy_Release,
+};
+
+static IUnknown dummy = { &dummy_Vtbl };
+
+/***********************************************************************
+ *          UiaLookupId (uiautomationcore.@)
+ */
+int WINAPI UiaLookupId(AutomationIdentifierType type, const GUID *guid)
+{
+    FIXME("(%d, %s)\n", type, debugstr_guid(guid));
+    return 1;
+}
+
+/***********************************************************************
+ *          UiaGetReservedMixedAttributeValue (uiautomationcore.@)
+ */
+HRESULT WINAPI UiaGetReservedMixedAttributeValue(IUnknown **value)
+{
+    FIXME("(%p): stub\n", value);
+
+    *value = &dummy;
+    return S_OK;
+}
+
+/***********************************************************************
+ *          UiaGetReservedNotSupportedValue (uiautomationcore.@)
+ */
+HRESULT WINAPI UiaGetReservedNotSupportedValue(IUnknown **value)
+{
+    FIXME("(%p): stub\n", value);
+
+    *value = &dummy;
+    return S_OK;
+}
+
+/***********************************************************************
+ *          UiaReturnRawElementProvider (uiautomationcore.@)
+ */
+LRESULT WINAPI UiaReturnRawElementProvider(HWND hwnd, WPARAM wparam, LPARAM lparam,
+                                           IRawElementProviderSimple *provider)
+{
+    FIXME("(%p, %lx, %lx, %p): stub\n", hwnd, wparam, lparam, provider);
+    return 0;
+}
+
 /***********************************************************************
  *          UiaClientsAreListening (uiautomationcore.@)
  */
 BOOL WINAPI UiaClientsAreListening(void)
 {
-    FIXME("()\n");
+    FIXME("(): stub\n");
     return FALSE;
 }

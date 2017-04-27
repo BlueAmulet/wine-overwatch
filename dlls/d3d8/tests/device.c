@@ -50,8 +50,8 @@ struct device_desc
 
 static DEVMODEW registry_mode;
 
-static HRESULT (WINAPI *ValidateVertexShader)(DWORD *, DWORD *, DWORD *, int, DWORD *);
-static HRESULT (WINAPI *ValidatePixelShader)(DWORD *, DWORD *, int, DWORD *);
+static HRESULT (WINAPI *ValidateVertexShader)(DWORD *, DWORD *, DWORD *, BOOL, char **);
+static HRESULT (WINAPI *ValidatePixelShader)(DWORD *, DWORD *, BOOL, char **);
 
 static BOOL (WINAPI *pGetCursorInfo)(PCURSORINFO);
 
@@ -4248,18 +4248,31 @@ static void test_validate_vs(void)
         0x00000009, 0xc0080000, 0x90e40000, 0xa0e40003,                         /* dp4 oPos.w, v0, c3           */
         0x0000ffff,                                                             /* end                          */
     };
+    char *errors;
     HRESULT hr;
 
     hr = ValidateVertexShader(0, 0, 0, 0, 0);
     ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
     hr = ValidateVertexShader(0, 0, 0, 1, 0);
     ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
+
+    errors = (void *)0xdeadbeef;
+    hr = ValidateVertexShader(0, 0, 0, 0, &errors);
+    ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
+    ok(!strcmp(errors, ""), "Got unexpected string '%s'.\n", errors);
+    HeapFree(GetProcessHeap(), 0, errors);
+
+    errors = (void *)0xdeadbeef;
+    hr = ValidateVertexShader(0, 0, 0, 1, &errors);
+    ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
+    ok(strstr(errors, "Validation Error") != NULL, "Got unexpected string '%s'.\n", errors);
+    HeapFree(GetProcessHeap(), 0, errors);
+
     hr = ValidateVertexShader(vs, 0, 0, 0, 0);
     ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
-
     hr = ValidateVertexShader(vs, 0, 0, 1, 0);
     ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
-    /* Seems to do some version checking. */
+
     *vs = 0xfffe0100;                                                           /* vs_1_0                       */
     hr = ValidateVertexShader(vs, 0, 0, 0, 0);
     ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
@@ -4267,21 +4280,18 @@ static void test_validate_vs(void)
     *vs = 0xfffe0102;                                                           /* bogus version                */
     hr = ValidateVertexShader(vs, 0, 0, 1, 0);
     ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
-    /* I've seen that applications always pass the 2nd and 3rd parameter as 0.
-     * Simple test with non-zero parameters. */
-    *vs = 0xfffe0101;                                                           /* vs_1_1                       */
-    hr = ValidateVertexShader(vs, vs, 0, 1, 0);
-    ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
 
-    hr = ValidateVertexShader(vs, 0, vs, 1, 0);
+    errors = (void *)0xdeadbeef;
+    hr = ValidateVertexShader(vs, 0, 0, 0, &errors);
     ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
-    /* I've seen the 4th parameter always passed as either 0 or 1, but passing
-     * other values doesn't seem to hurt. */
-    hr = ValidateVertexShader(vs, 0, 0, 12345, 0);
-    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
-    /* What is the 5th parameter? The following seems to work ok. */
-    hr = ValidateVertexShader(vs, 0, 0, 1, vs);
-    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    ok(!strcmp(errors, ""), "Got unexpected string '%s'.\n", errors);
+    HeapFree(GetProcessHeap(), 0, errors);
+
+    errors = (void *)0xdeadbeef;
+    hr = ValidateVertexShader(vs, 0, 0, 1, &errors);
+    ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
+    ok(strstr(errors, "Validation Error") != NULL, "Got unexpected string '%s'.\n", errors);
+    HeapFree(GetProcessHeap(), 0, errors);
 }
 
 static void test_validate_ps(void)
@@ -4296,33 +4306,39 @@ static void test_validate_ps(void)
         0x00000005, 0x800f0000, 0xb0e40000, 0x80e40000,                         /* mul r0, t0, r0               */
         0x0000ffff,                                                             /* end                          */
     };
+    char *errors;
     HRESULT hr;
 
     hr = ValidatePixelShader(0, 0, 0, 0);
     ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
     hr = ValidatePixelShader(0, 0, 1, 0);
     ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
+
+    errors = (void *)0xdeadbeef;
+    hr = ValidatePixelShader(0, 0, 1, &errors);
+    ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
+    ok(errors == (void *)0xdeadbeef, "Expected 0xdeadbeef, got %p.\n", errors);
+
     hr = ValidatePixelShader(ps, 0, 0, 0);
     ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
-
     hr = ValidatePixelShader(ps, 0, 1, 0);
     ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
-    /* Seems to do some version checking. */
+
     *ps = 0xffff0105;                                                           /* bogus version                */
     hr = ValidatePixelShader(ps, 0, 1, 0);
     ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
-    /* I've seen that applications always pass the 2nd parameter as 0.
-     * Simple test with a non-zero parameter. */
-    *ps = 0xffff0101;                                                           /* ps_1_1                       */
-    hr = ValidatePixelShader(ps, ps, 1, 0);
+
+    errors = (void *)0xdeadbeef;
+    hr = ValidatePixelShader(ps, 0, 0, &errors);
     ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
-    /* I've seen the 3rd parameter always passed as either 0 or 1, but passing
-     * other values doesn't seem to hurt. */
-    hr = ValidatePixelShader(ps, 0, 12345, 0);
-    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
-    /* What is the 4th parameter? The following seems to work ok. */
-    hr = ValidatePixelShader(ps, 0, 1, ps);
-    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    ok(!strcmp(errors, ""), "Got unexpected string '%s'.\n", errors);
+    HeapFree(GetProcessHeap(), 0, errors);
+
+    errors = (void *)0xdeadbeef;
+    hr = ValidatePixelShader(ps, 0, 1, &errors);
+    ok(hr == E_FAIL, "Got unexpected hr %#x.\n", hr);
+    ok(strstr(errors, "Validation Error") != NULL, "Got unexpected string '%s'.\n", errors);
+    HeapFree(GetProcessHeap(), 0, errors);
 }
 
 static void test_volume_get_container(void)

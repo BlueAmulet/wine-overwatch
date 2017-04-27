@@ -2066,9 +2066,11 @@ NTSTATUS context_from_server( CONTEXT *to, const context_t *from )
 extern void raise_func_trampoline( EXCEPTION_RECORD *rec, CONTEXT *context, raise_func func );
 __ASM_GLOBAL_FUNC( raise_func_trampoline,
                    __ASM_CFI(".cfi_signal_frame\n\t")
-                   __ASM_CFI(".cfi_def_cfa %rbp,144\n\t")  /* red zone + rip + rbp */
-                   __ASM_CFI(".cfi_rel_offset %rip,8\n\t")
-                   __ASM_CFI(".cfi_rel_offset %rbp,0\n\t")
+                   __ASM_CFI(".cfi_def_cfa %rbp,160\n\t")  /* red zone + rip + rbp + rdi + rsi */
+                   __ASM_CFI(".cfi_rel_offset %rip,24\n\t")
+                   __ASM_CFI(".cfi_rel_offset %rbp,16\n\t")
+                   __ASM_CFI(".cfi_rel_offset %rdi,8\n\t")
+                   __ASM_CFI(".cfi_rel_offset %rsi,0\n\t")
                    "call *%rdx\n\t"
                    "int $3")
 
@@ -2085,12 +2087,13 @@ static EXCEPTION_RECORD *setup_exception( ucontext_t *sigcontext, raise_func fun
     {
         CONTEXT           context;
         EXCEPTION_RECORD  rec;
+        ULONG64           rsi;
+        ULONG64           rdi;
         ULONG64           rbp;
         ULONG64           rip;
         ULONG64           red_zone[16];
     } *stack;
     ULONG64 *rsp_ptr;
-    DWORD exception_code = 0;
 
     stack = (struct stack_layout *)(RSP_sig(sigcontext) & ~15);
 
@@ -2125,8 +2128,7 @@ static EXCEPTION_RECORD *setup_exception( ucontext_t *sigcontext, raise_func fun
     else if ((char *)(stack - 1) < (char *)NtCurrentTeb()->Tib.StackLimit)
     {
         /* stack access below stack limit, may be recoverable */
-        if (virtual_handle_stack_fault( stack - 1 )) exception_code = EXCEPTION_STACK_OVERFLOW;
-        else
+        if (!virtual_handle_stack_fault( stack - 1 ))
         {
             UINT diff = (char *)NtCurrentTeb()->Tib.StackLimit - (char *)(stack - 1);
             ERR( "stack overflow %u bytes in thread %04x eip %016lx esp %016lx stack %p-%p-%p\n",
@@ -2144,7 +2146,7 @@ static EXCEPTION_RECORD *setup_exception( ucontext_t *sigcontext, raise_func fun
     VALGRIND_MAKE_WRITABLE(stack, sizeof(*stack));
 #endif
     stack->rec.ExceptionRecord  = NULL;
-    stack->rec.ExceptionCode    = exception_code;
+    stack->rec.ExceptionCode    = STATUS_SUCCESS;
     stack->rec.ExceptionFlags   = EXCEPTION_CONTINUABLE;
     stack->rec.ExceptionAddress = (void *)RIP_sig(sigcontext);
     stack->rec.NumberParameters = 0;
@@ -2154,6 +2156,8 @@ static EXCEPTION_RECORD *setup_exception( ucontext_t *sigcontext, raise_func fun
     rsp_ptr = (ULONG64 *)RSP_sig(sigcontext) - 16;
     *(--rsp_ptr) = RIP_sig(sigcontext);
     *(--rsp_ptr) = RBP_sig(sigcontext);
+    *(--rsp_ptr) = RDI_sig(sigcontext);
+    *(--rsp_ptr) = RSI_sig(sigcontext);
 
     /* now modify the sigcontext to return to the raise function */
     RIP_sig(sigcontext) = (ULONG_PTR)raise_func_trampoline;
@@ -2618,8 +2622,9 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
         virtual_handle_stack_fault( siginfo->si_addr ))
     {
         /* check if this was the last guard page */
-        if ((char *)siginfo->si_addr < (char *)NtCurrentTeb()->DeallocationStack + 2*4096)
+        if ((char *)siginfo->si_addr < (char *)NtCurrentTeb()->DeallocationStack + 3*4096)
         {
+            virtual_handle_stack_fault( (char *)siginfo->si_addr - 4096 );
             rec = setup_exception( sigcontext, raise_segv_exception );
             rec->ExceptionCode = EXCEPTION_STACK_OVERFLOW;
         }
@@ -2627,7 +2632,6 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
     }
 
     rec = setup_exception( sigcontext, raise_segv_exception );
-    if (rec->ExceptionCode == EXCEPTION_STACK_OVERFLOW) return;
 
     switch(TRAP_sig(ucontext))
     {
@@ -2845,11 +2849,18 @@ NTSTATUS signal_alloc_thread( TEB **teb )
 void signal_free_thread( TEB *teb )
 {
     SIZE_T size;
+    struct ntdll_thread_data *thread_data = (struct ntdll_thread_data *)teb->SpareBytes1;
 
     if (teb->DeallocationStack)
     {
         size = 0;
         NtFreeVirtualMemory( GetCurrentProcess(), &teb->DeallocationStack, &size, MEM_RELEASE );
+    }
+    if ((ULONG_PTR)thread_data->pthread_stack & 1)
+    {
+        void *addr = (void *)((ULONG_PTR)thread_data->pthread_stack & ~1);
+        size = 0;
+        NtFreeVirtualMemory( GetCurrentProcess(), &addr, &size, MEM_RELEASE );
     }
     size = 0;
     NtFreeVirtualMemory( NtCurrentProcess(), (void **)&teb, &size, MEM_RELEASE );
@@ -2999,6 +3010,12 @@ void signal_init_process(void)
     exit(1);
 }
 
+/**********************************************************************
+ *    signal_init_early
+ */
+void signal_init_early(void)
+{
+}
 
 /**********************************************************************
  *              RtlAddFunctionTable   (NTDLL.@)
@@ -3931,7 +3948,7 @@ __ASM_GLOBAL_FUNC( RtlRaiseException,
  */
 USHORT WINAPI RtlCaptureStackBackTrace( ULONG skip, ULONG count, PVOID *buffer, ULONG *hash )
 {
-    FIXME( "(%d, %d, %p, %p) stub!\n", skip, count, buffer, hash );
+    TRACE( "(%d, %d, %p, %p) stub!\n", skip, count, buffer, hash );
     return 0;
 }
 

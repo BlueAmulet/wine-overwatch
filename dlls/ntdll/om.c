@@ -38,6 +38,8 @@
 #include "winternl.h"
 #include "ntdll_misc.h"
 #include "wine/server.h"
+#include "wine/exception.h"
+#include "wine/unicode.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(ntdll);
 
@@ -377,6 +379,13 @@ NTSTATUS WINAPI NtDuplicateObject( HANDLE source_process, HANDLE source,
     return ret;
 }
 
+
+static LONG WINAPI invalid_handle_exception_handler( EXCEPTION_POINTERS *eptr )
+{
+    EXCEPTION_RECORD *rec = eptr->ExceptionRecord;
+    return (rec->ExceptionCode == EXCEPTION_INVALID_HANDLE) ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH;
+}
+
 /* Everquest 2 / Pirates of the Burning Sea hooks NtClose, so we need a wrapper */
 NTSTATUS close_handle( HANDLE handle )
 {
@@ -390,6 +399,25 @@ NTSTATUS close_handle( HANDLE handle )
     }
     SERVER_END_REQ;
     if (fd != -1) close( fd );
+
+    if (ret == STATUS_INVALID_HANDLE && NtCurrentTeb()->Peb->BeingDebugged)
+    {
+        __TRY
+        {
+            EXCEPTION_RECORD record;
+            record.ExceptionCode    = EXCEPTION_INVALID_HANDLE;
+            record.ExceptionFlags   = 0;
+            record.ExceptionRecord  = NULL;
+            record.ExceptionAddress = NULL;
+            record.NumberParameters = 0;
+            RtlRaiseException( &record );
+        }
+        __EXCEPT(invalid_handle_exception_handler)
+        {
+        }
+        __ENDTRY
+    }
+
     return ret;
 }
 
@@ -579,12 +607,23 @@ NTSTATUS WINAPI NtQueryDirectoryObject(HANDLE handle, PDIRECTORY_BASIC_INFORMATI
 NTSTATUS WINAPI NtOpenSymbolicLinkObject( HANDLE *handle, ACCESS_MASK access,
                                           const OBJECT_ATTRIBUTES *attr)
 {
+    static const WCHAR SystemRootW[] = {'\\','S','y','s','t','e','m','R','o','o','t'};
     NTSTATUS ret;
 
     TRACE("(%p,0x%08x,%s)\n", handle, access, debugstr_ObjectAttributes(attr));
 
     if (!handle) return STATUS_ACCESS_VIOLATION;
     if ((ret = validate_open_object_attributes( attr ))) return ret;
+
+    /* MSYS2 tries to open \\SYSTEMROOT to check for case-insensitive systems */
+    if (!access && !attr->RootDirectory &&
+        attr->ObjectName->Length == sizeof(SystemRootW) &&
+        !memicmpW( attr->ObjectName->Buffer, SystemRootW,
+                   sizeof(SystemRootW)/sizeof(WCHAR) ))
+    {
+        TRACE( "returning STATUS_ACCESS_DENIED\n" );
+        return STATUS_ACCESS_DENIED;
+    }
 
     SERVER_START_REQ(open_symlink)
     {
@@ -691,10 +730,11 @@ NTSTATUS WINAPI NtQuerySymbolicLinkObject( HANDLE handle, PUNICODE_STRING target
 NTSTATUS WINAPI NtAllocateUuids(
         PULARGE_INTEGER Time,
         PULONG Range,
-        PULONG Sequence)
+        PULONG Sequence,
+        PUCHAR Seed)
 {
-        FIXME("(%p,%p,%p), stub.\n", Time, Range, Sequence);
-	return 0;
+    FIXME("(%p,%p,%p,%p), stub.\n", Time, Range, Sequence, Seed);
+    return STATUS_SUCCESS;
 }
 
 /**************************************************************************

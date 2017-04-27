@@ -30,6 +30,9 @@
 #ifdef HAVE_SYS_SYSCTL_H
 # include <sys/sysctl.h>
 #endif
+#ifdef HAVE_SYS_SYSINFO_H
+# include <sys/sysinfo.h>
+#endif
 #ifdef HAVE_MACHINE_CPU_H
 # include <machine/cpu.h>
 #endif
@@ -56,6 +59,7 @@
 #include "winternl.h"
 #include "ntdll_misc.h"
 #include "wine/server.h"
+#include "wine/library.h"
 #include "ddk/wdm.h"
 
 #ifdef __APPLE__
@@ -83,10 +87,14 @@ NTSTATUS WINAPI NtDuplicateToken(
         OUT PHANDLE NewToken)
 {
     NTSTATUS status;
+    data_size_t len;
+    struct object_attributes *objattr;
 
     TRACE("(%p,0x%08x,%s,0x%08x,0x%08x,%p)\n",
           ExistingToken, DesiredAccess, debugstr_ObjectAttributes(ObjectAttributes),
           ImpersonationLevel, TokenType, NewToken);
+
+    if ((status = alloc_object_attributes( ObjectAttributes, &objattr, &len ))) return status;
 
     if (ObjectAttributes && ObjectAttributes->SecurityQualityOfService)
     {
@@ -102,14 +110,15 @@ NTSTATUS WINAPI NtDuplicateToken(
     {
         req->handle              = wine_server_obj_handle( ExistingToken );
         req->access              = DesiredAccess;
-        req->attributes          = ObjectAttributes ? ObjectAttributes->Attributes : 0;
         req->primary             = (TokenType == TokenPrimary);
         req->impersonation_level = ImpersonationLevel;
+        wine_server_add_data( req, objattr, len );
         status = wine_server_call( req );
         if (!status) *NewToken = wine_server_ptr_handle( reply->new_handle );
     }
     SERVER_END_REQ;
 
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
     return status;
 }
 
@@ -597,6 +606,20 @@ NTSTATUS WINAPI NtSetInformationToken(
             ret = wine_server_call( req );
         }
         SERVER_END_REQ;
+        break;
+    case TokenSessionId:
+        if (TokenInformationLength < sizeof(DWORD))
+        {
+            ret = STATUS_INFO_LENGTH_MISMATCH;
+            break;
+        }
+        if (!TokenInformation)
+        {
+            ret = STATUS_ACCESS_VIOLATION;
+            break;
+        }
+        FIXME("handling of TokenSessionId not implemented\n");
+        ret = STATUS_SUCCESS;
         break;
     default:
         FIXME("unimplemented class %u\n", TokenInformationClass);
@@ -1867,6 +1890,9 @@ NTSTATUS WINAPI NtQuerySystemInformation(
             SYSTEM_PERFORMANCE_INFORMATION spi;
             static BOOL fixme_written = FALSE;
             FILE *fp;
+        #ifdef HAVE_SYSINFO
+            struct sysinfo sinfo;
+        #endif
 
             memset(&spi, 0 , sizeof(spi));
             len = sizeof(spi);
@@ -1887,6 +1913,35 @@ NTSTATUS WINAPI NtQuerySystemInformation(
                 /* many programs expect IdleTime to change so fake change */
                 spi.IdleTime.QuadPart = ++idle;
             }
+
+        #ifdef HAVE_SYSINFO
+            if (!sysinfo(&sinfo))
+            {
+                ULONG64 freeram   = (ULONG64)sinfo.freeram * sinfo.mem_unit;
+                ULONG64 totalram  = (ULONG64)sinfo.totalram * sinfo.mem_unit;
+                ULONG64 totalswap = (ULONG64)sinfo.totalswap * sinfo.mem_unit;
+                ULONG64 freeswap  = (ULONG64)sinfo.freeswap * sinfo.mem_unit;
+
+                if ((fp = fopen("/proc/meminfo", "r")))
+                {
+                    unsigned long long available;
+                    char line[64];
+                    while (fgets(line, sizeof(line), fp))
+                    {
+                        if (sscanf(line, "MemAvailable: %llu kB", &available) == 1)
+                        {
+                            freeram = min(available * 1024, totalram);
+                            break;
+                        }
+                    }
+                    fclose(fp);
+                }
+
+                spi.AvailablePages      = freeram / page_size;
+                spi.TotalCommittedPages = (totalram + totalswap - freeram - freeswap) / page_size;
+                spi.TotalCommitLimit    = (totalram + totalswap) / page_size;
+            }
+        #endif
 
             if (Length >= len)
             {
@@ -2219,9 +2274,20 @@ NTSTATUS WINAPI NtQuerySystemInformation(
     case SystemInterruptInformation:
         {
             SYSTEM_INTERRUPT_INFORMATION sii;
+            int dev_random;
 
             memset(&sii, 0, sizeof(sii));
             len = sizeof(sii);
+
+            /* Some applications use the returned buffer for random number
+             * generation. Its unlikely that an app depends on the exact
+             * layout, so just fill with values from /dev/urandom. */
+            dev_random = open( "/dev/urandom", O_RDONLY );
+            if (dev_random != -1)
+            {
+                read( dev_random, &sii, sizeof(sii) );
+                close( dev_random );
+            }
 
             if ( Length >= len)
             {
@@ -2777,7 +2843,32 @@ NTSTATUS WINAPI NtSystemDebugControl(SYSDBG_COMMAND command, PVOID inbuffer, ULO
 NTSTATUS WINAPI NtSetLdtEntries(ULONG selector1, ULONG entry1_low, ULONG entry1_high,
                                 ULONG selector2, ULONG entry2_low, ULONG entry2_high)
 {
-    FIXME("(%u, %u, %u, %u, %u, %u): stub\n", selector1, entry1_low, entry1_high, selector2, entry2_low, entry2_high);
+#ifdef __i386__
+    union
+    {
+        LDT_ENTRY entry;
+        ULONG dw[2];
+    } sel;
 
+    TRACE("(%x,%x,%x,%x,%x,%x)\n", selector1, entry1_low, entry1_high, selector2, entry2_low, entry2_high);
+
+    if (selector1)
+    {
+        sel.dw[0] = entry1_low;
+        sel.dw[1] = entry1_high;
+        if (wine_ldt_set_entry(selector1, &sel.entry) < 0)
+            return STATUS_ACCESS_DENIED;
+    }
+    if (selector2)
+    {
+        sel.dw[0] = entry2_low;
+        sel.dw[1] = entry2_high;
+        if (wine_ldt_set_entry(selector2, &sel.entry) < 0)
+            return STATUS_ACCESS_DENIED;
+    }
+    return STATUS_SUCCESS;
+#else
+    FIXME("(%x,%x,%x,%x,%x,%x): stub\n", selector1, entry1_low, entry1_high, selector2, entry2_low, entry2_high);
     return STATUS_NOT_IMPLEMENTED;
+#endif
 }

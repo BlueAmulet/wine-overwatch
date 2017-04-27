@@ -90,6 +90,9 @@ struct wined3d_settings wined3d_settings =
     ~0U,            /* No PS shader model limit by default. */
     ~0u,            /* No CS shader model limit by default. */
     FALSE,          /* 3D support enabled by default. */
+#if defined(STAGING_CSMT)
+    TRUE,           /* Multithreaded CS by default. */
+#endif /* STAGING_CSMT */
 };
 
 struct wined3d * CDECL wined3d_create(DWORD flags)
@@ -327,10 +330,25 @@ static BOOL wined3d_dll_init(HINSTANCE hInstDLL)
             TRACE("Disabling 3D support.\n");
             wined3d_settings.no_3d = TRUE;
         }
+#if !defined(STAGING_CSMT)
     }
+#else  /* STAGING_CSMT */
+        if (!get_config_key(hkey, appkey, "CSMT", buffer, size)
+                && !strcmp(buffer,"disabled"))
+        {
+            TRACE("Disabling multithreaded command stream.\n");
+            wined3d_settings.cs_multithreaded = FALSE;
+        }
+    }
+
+    FIXME_(winediag)("Experimental wined3d CSMT feature is currently %s.\n",
+        wined3d_settings.cs_multithreaded ? "enabled" : "disabled");
+#endif /* STAGING_CSMT */
 
     if (appkey) RegCloseKey( appkey );
     if (hkey) RegCloseKey( hkey );
+
+    wined3d_dxtn_init();
 
     return TRUE;
 }
@@ -363,6 +381,9 @@ static BOOL wined3d_dll_destroy(HINSTANCE hInstDLL)
 
     DeleteCriticalSection(&wined3d_wndproc_cs);
     DeleteCriticalSection(&wined3d_cs);
+
+    wined3d_dxtn_free();
+
     return TRUE;
 }
 
@@ -515,6 +536,11 @@ void wined3d_unregister_window(HWND window)
     if (entry != last) *entry = *last;
 
     wined3d_wndproc_mutex_unlock();
+}
+
+void CDECL wined3d_strictdrawing_set(int value)
+{
+    wined3d_settings.strict_draw_ordering = value;
 }
 
 /* At process attach */

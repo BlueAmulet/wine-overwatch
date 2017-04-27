@@ -70,6 +70,7 @@ static const struct object_ops symlink_ops =
     directory_link_name,          /* link_name */
     default_unlink_name,          /* unlink_name */
     no_open_file,                 /* open_file */
+    no_alloc_handle,              /* alloc_handle */
     no_close_handle,              /* close_handle */
     symlink_destroy               /* destroy */
 };

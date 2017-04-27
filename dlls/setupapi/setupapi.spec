@@ -243,9 +243,9 @@
 @ stub SearchForInfFile
 @ stub SetArrayToMultiSzValue
 @ stdcall SetupAddInstallSectionToDiskSpaceListA(long long long str ptr long)
-@ stub SetupAddInstallSectionToDiskSpaceListW
-@ stub SetupAddSectionToDiskSpaceListA
-@ stub SetupAddSectionToDiskSpaceListW
+@ stdcall SetupAddInstallSectionToDiskSpaceListW(long long long wstr ptr long)
+@ stdcall SetupAddSectionToDiskSpaceListA(long long long str long ptr long)
+@ stdcall SetupAddSectionToDiskSpaceListW(long long long wstr long ptr long)
 @ stdcall SetupAddToDiskSpaceListA(long str int64 long ptr long)
 @ stdcall SetupAddToDiskSpaceListW(long wstr int64 long ptr long)
 @ stdcall SetupAddToSourceListA(long str)
@@ -367,6 +367,7 @@
 @ stub SetupDiInstallClassExW
 @ stdcall SetupDiInstallClassW(long wstr long ptr)
 @ stub SetupDiInstallDevice
+@ stub SetupDiInstallDeviceInterfaces
 @ stub SetupDiInstallDriverFiles
 @ stdcall SetupDiLoadClassIcon(ptr ptr ptr)
 @ stub SetupDiMoveDuplicateDevice
@@ -379,6 +380,7 @@
 @ stdcall SetupDiOpenDeviceInterfaceA(ptr str long ptr)
 @ stub SetupDiOpenDeviceInterfaceRegKey
 @ stdcall SetupDiOpenDeviceInterfaceW(ptr wstr long ptr)
+@ stub SetupDiRegisterCoDeviceInstallers
 @ stdcall SetupDiRegisterDeviceInfo(ptr ptr long ptr ptr ptr)
 @ stdcall SetupDiRemoveDevice(ptr ptr)
 @ stdcall SetupDiRemoveDeviceInterface(ptr ptr)

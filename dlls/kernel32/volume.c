@@ -854,7 +854,8 @@ fill_fs_info:  /* now fill in the information that depends on the file system ty
     default:
         if (fsname) lstrcpynW( fsname, ntfsW, fsname_len );
         if (filename_len) *filename_len = 255;
-        if (flags) *flags = FILE_CASE_PRESERVED_NAMES | FILE_PERSISTENT_ACLS;
+        if (flags) *flags = FILE_CASE_PRESERVED_NAMES | FILE_PERSISTENT_ACLS
+                            | FILE_SUPPORTS_REPARSE_POINTS;
         break;
     }
     ret = TRUE;

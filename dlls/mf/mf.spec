@@ -39,7 +39,7 @@
 @ stub MFCreateMP3MediaSink
 @ stub MFCreateMPEG4MediaSink
 @ stub MFCreateMediaProcessor
-@ stub MFCreateMediaSession
+@ stdcall MFCreateMediaSession(ptr ptr)
 @ stub MFCreateNSCByteStreamPlugin
 @ stub MFCreateNetSchemePlugin
 @ stub MFCreatePMPHost
@@ -57,7 +57,7 @@
 @ stub MFCreateSequencerSource
 @ stub MFCreateSequencerSourceRemoteStream
 @ stub MFCreateSimpleTypeHandler
-@ stub MFCreateSourceResolver
+@ stdcall MFCreateSourceResolver(ptr) mfplat.MFCreateSourceResolver
 @ stub MFCreateStandardQualityManager
 @ stub MFCreateTopoLoader
 @ stub MFCreateTopology

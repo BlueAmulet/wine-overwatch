@@ -288,8 +288,11 @@ GLenum wined3d_gl_compare_func(enum wined3d_cmp_func f)
         case WINED3D_CMP_ALWAYS:
             return GL_ALWAYS;
         default:
-            FIXME("Unrecognized compare function %#x.\n", f);
+        {
+            static int once;
+            if (f || !once++) FIXME("Unrecognized compare function %#x.\n", f);
             return GL_NONE;
+        }
     }
 }
 
@@ -335,8 +338,11 @@ static GLenum gl_blend_op(const struct wined3d_gl_info *gl_info, enum wined3d_bl
         case WINED3D_BLEND_OP_MAX:
             return gl_info->supported[EXT_BLEND_MINMAX] ? GL_MAX : GL_FUNC_ADD;
         default:
-            FIXME("Unhandled blend op %#x.\n", op);
+        {
+            static int once;
+            if (op || !once++) FIXME("Unhandled blend op %#x.\n", op);
             return GL_FUNC_ADD;
+        }
     }
 }
 
@@ -415,8 +421,11 @@ static GLenum gl_blend_factor(enum wined3d_blend factor, const struct wined3d_fo
         case WINED3D_BLEND_INVSRC1ALPHA:
             return GL_ONE_MINUS_SRC1_ALPHA;
         default:
-            FIXME("Unhandled blend factor %#x.\n", factor);
+        {
+            static int once;
+            if (factor || !once++) FIXME("Unhandled blend factor %#x.\n", factor);
             return GL_NONE;
+        }
     }
 }
 
@@ -835,8 +844,11 @@ static GLenum gl_stencil_op(enum wined3d_stencil_op op)
         case WINED3D_STENCIL_OP_DECR:
             return GL_DECR_WRAP;
         default:
-            FIXME("Unrecognized stencil op %#x.\n", op);
+        {
+            static int once;
+            if (op || !once++) FIXME("Unrecognized stencil op %#x.\n", op);
             return GL_KEEP;
+        }
     }
 }
 
@@ -4665,10 +4677,8 @@ static void viewport_miscpart_cc(struct wined3d_context *context,
 {
     const struct wined3d_rendertarget_view *depth_stencil = state->fb->depth_stencil;
     const struct wined3d_rendertarget_view *target = state->fb->render_targets[0];
-    /* See get_projection_matrix() in utils.c for a discussion about those
-     * values. */
     float pixel_center_offset = context->d3d_info->wined3d_creation_flags
-            & WINED3D_PIXEL_CENTER_INTEGER ? 63.0f / 128.0f : -1.0f / 128.0f;
+            & WINED3D_PIXEL_CENTER_INTEGER ? 0.5f : 0.0f;
     const struct wined3d_gl_info *gl_info = context->gl_info;
     struct wined3d_viewport vp = state->viewport;
     unsigned int width, height;

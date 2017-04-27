@@ -186,7 +186,7 @@ static void d2d_brush_init(struct d2d_brush *brush, ID2D1Factory *factory,
 
 static inline struct d2d_brush *impl_from_ID2D1SolidColorBrush(ID2D1SolidColorBrush *iface)
 {
-    return CONTAINING_RECORD(iface, struct d2d_brush, ID2D1Brush_iface);
+    return CONTAINING_RECORD((ID2D1Brush *)iface, struct d2d_brush, ID2D1Brush_iface);
 }
 
 static HRESULT STDMETHODCALLTYPE d2d_solid_color_brush_QueryInterface(ID2D1SolidColorBrush *iface,
@@ -329,7 +329,7 @@ HRESULT d2d_solid_color_brush_create(ID2D1Factory *factory, const D2D1_COLOR_F *
 
 static inline struct d2d_brush *impl_from_ID2D1LinearGradientBrush(ID2D1LinearGradientBrush *iface)
 {
-    return CONTAINING_RECORD(iface, struct d2d_brush, ID2D1Brush_iface);
+    return CONTAINING_RECORD((ID2D1Brush *)iface, struct d2d_brush, ID2D1Brush_iface);
 }
 
 static HRESULT STDMETHODCALLTYPE d2d_linear_gradient_brush_QueryInterface(ID2D1LinearGradientBrush *iface,
@@ -507,7 +507,7 @@ HRESULT d2d_linear_gradient_brush_create(ID2D1Factory *factory, const D2D1_LINEA
 
 static inline struct d2d_brush *impl_from_ID2D1BitmapBrush(ID2D1BitmapBrush *iface)
 {
-    return CONTAINING_RECORD(iface, struct d2d_brush, ID2D1Brush_iface);
+    return CONTAINING_RECORD((ID2D1Brush *)iface, struct d2d_brush, ID2D1Brush_iface);
 }
 
 static HRESULT STDMETHODCALLTYPE d2d_bitmap_brush_QueryInterface(ID2D1BitmapBrush *iface,

@@ -1378,6 +1378,8 @@ BOOL codeview_dump_symbols(const void* root, unsigned long size)
             dump_data((const void*)sym, sym->generic.len + 2, "  ");
         }
     }
+
+    free(curr_func);
     return TRUE;
 }
 

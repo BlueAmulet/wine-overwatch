@@ -101,6 +101,7 @@ struct thread_input
 {
     struct object          obj;           /* object header */
     struct desktop        *desktop;       /* desktop that this thread input belongs to */
+    struct list            queues;        /* list of all queues this input belongs to */
     user_handle_t          focus;         /* focus window */
     user_handle_t          capture;       /* capture window */
     user_handle_t          active;        /* active window */
@@ -113,17 +114,21 @@ struct thread_input
     user_handle_t          cursor;        /* current cursor */
     int                    cursor_count;  /* cursor show count */
     struct list            msg_list;      /* list of hardware messages */
+    int                    lock_count;    /* lock counter for keystate */
     unsigned char          keystate[256]; /* state of each key */
+    unsigned char          shadow_keystate[256]; /* shadow copy of keystate */
 };
 
 struct msg_queue
 {
     struct object          obj;             /* object header */
+    struct thread         *thread;          /* reference to the thread owning the queue */
     struct fd             *fd;              /* optional file descriptor to poll */
     unsigned int           wake_bits;       /* wakeup bits */
     unsigned int           wake_mask;       /* wakeup mask */
     unsigned int           changed_bits;    /* changed wakeup bits */
     unsigned int           changed_mask;    /* changed wakeup mask */
+    int                    keystate_locked; /* keystate is locked */
     int                    paint_count;     /* pending paint messages count */
     int                    hotkey_count;    /* pending hotkey messages count */
     int                    quit_message;    /* is there a pending quit message? */
@@ -138,8 +143,10 @@ struct msg_queue
     lparam_t               next_timer_id;   /* id for the next timer with a 0 window */
     struct timeout_user   *timeout;         /* timeout for next timer to expire */
     struct thread_input   *input;           /* thread input descriptor */
+    struct list            input_entry;     /* entry in input->queues */
     struct hook_table     *hooks;           /* hook table */
     timeout_t              last_get_msg;    /* time of last get message call */
+    unsigned int           ignore_post_msg; /* ignore post messages newer than this unique id */
 };
 
 struct hotkey
@@ -181,6 +188,7 @@ static const struct object_ops msg_queue_ops =
     no_link_name,              /* link_name */
     NULL,                      /* unlink_name */
     no_open_file,              /* open_file */
+    no_alloc_handle,           /* alloc_handle */
     no_close_handle,           /* close_handle */
     msg_queue_destroy          /* destroy */
 };
@@ -216,6 +224,7 @@ static const struct object_ops thread_input_ops =
     no_link_name,                 /* link_name */
     NULL,                         /* unlink_name */
     no_open_file,                 /* open_file */
+    no_alloc_handle,              /* alloc_handle */
     no_close_handle,              /* close_handle */
     thread_input_destroy          /* destroy */
 };
@@ -255,9 +264,12 @@ static struct thread_input *create_thread_input( struct thread *thread )
         input->move_size    = 0;
         input->cursor       = 0;
         input->cursor_count = 0;
+        input->lock_count   = 0;
+        list_init( &input->queues );
         list_init( &input->msg_list );
         set_caret_window( input, 0 );
         memset( input->keystate, 0, sizeof(input->keystate) );
+        memset( input->shadow_keystate, 0, sizeof(input->shadow_keystate) );
 
         if (!(input->desktop = get_thread_desktop( thread, 0 /* FIXME: access rights */ )))
         {
@@ -266,6 +278,25 @@ static struct thread_input *create_thread_input( struct thread *thread )
         }
     }
     return input;
+}
+
+/* synchronize the input state with the shared memory */
+static void update_shm_thread_input( struct thread_input *input )
+{
+    struct msg_queue *queue;
+
+    /* the loop doesn't matter, usually it should only have one or a few entries */
+    LIST_FOR_EACH_ENTRY( queue, &input->queues, struct msg_queue, input_entry )
+    {
+        shmlocal_t *shm;
+        if (!queue->thread) continue;
+        if ((shm = queue->thread->shm))
+        {
+            shm->input_active  = input->active;
+            shm->input_focus   = input->focus;
+            shm->input_capture = input->capture;
+        }
+    }
 }
 
 /* create a message queue object */
@@ -284,10 +315,12 @@ static struct msg_queue *create_msg_queue( struct thread *thread, struct thread_
     if ((queue = alloc_object( &msg_queue_ops )))
     {
         queue->fd              = NULL;
+        queue->thread          = thread;
         queue->wake_bits       = 0;
         queue->wake_mask       = 0;
         queue->changed_bits    = 0;
         queue->changed_mask    = 0;
+        queue->keystate_locked = 0;
         queue->paint_count     = 0;
         queue->hotkey_count    = 0;
         queue->quit_message    = 0;
@@ -296,8 +329,10 @@ static struct msg_queue *create_msg_queue( struct thread *thread, struct thread_
         queue->next_timer_id   = 0x7fff;
         queue->timeout         = NULL;
         queue->input           = (struct thread_input *)grab_object( input );
+        list_add_tail( &input->queues, &queue->input_entry );
         queue->hooks           = NULL;
         queue->last_get_msg    = current_time;
+        queue->ignore_post_msg = 0;
         list_init( &queue->send_result );
         list_init( &queue->callback_result );
         list_init( &queue->pending_timers );
@@ -306,7 +341,11 @@ static struct msg_queue *create_msg_queue( struct thread *thread, struct thread_
 
         thread->queue = queue;
     }
-    if (new_input) release_object( new_input );
+    if (new_input)
+    {
+        update_shm_thread_input( new_input );
+        release_object( new_input );
+    }
     return queue;
 }
 
@@ -315,6 +354,7 @@ void free_msg_queue( struct thread *thread )
 {
     remove_thread_hooks( thread );
     if (!thread->queue) return;
+    thread->queue->thread = NULL;
     release_object( thread->queue );
     thread->queue = NULL;
 }
@@ -331,11 +371,16 @@ static int assign_thread_input( struct thread *thread, struct thread_input *new_
     }
     if (queue->input)
     {
+        if (queue->keystate_locked) queue->input->lock_count--;
         queue->input->cursor_count -= queue->cursor_count;
+        list_remove( &queue->input_entry );
         release_object( queue->input );
+        queue->keystate_locked = 0;
     }
     queue->input = (struct thread_input *)grab_object( new_input );
+    list_add_tail( &new_input->queues, &queue->input_entry );
     new_input->cursor_count += queue->cursor_count;
+    update_shm_thread_input( new_input );
     return 1;
 }
 
@@ -411,6 +456,7 @@ static void set_foreground_input( struct desktop *desktop, struct thread_input *
     if (desktop->foreground_input == input) return;
     set_clip_rectangle( desktop, NULL, 1 );
     desktop->foreground_input = input;
+    if (shmglobal) interlocked_xchg_add( (int *)&shmglobal->foreground_wnd_epoch, 1 );
 }
 
 /* get the hook table for a given thread */
@@ -435,11 +481,21 @@ static inline int is_signaled( struct msg_queue *queue )
     return ((queue->wake_bits & queue->wake_mask) || (queue->changed_bits & queue->changed_mask));
 }
 
+/* synchronize the queue state with the shared memory */
+static inline void update_shm_queue_bits( struct msg_queue *queue )
+{
+    shmlocal_t *shm;
+    if (!queue->thread) return;
+    if ((shm = queue->thread->shm))
+        shm->queue_bits = queue->wake_bits;
+}
+
 /* set some queue bits */
 static inline void set_queue_bits( struct msg_queue *queue, unsigned int bits )
 {
     queue->wake_bits |= bits;
     queue->changed_bits |= bits;
+    update_shm_queue_bits( queue );
     if (is_signaled( queue )) wake_up( &queue->obj, 0 );
 }
 
@@ -448,6 +504,7 @@ static inline void clear_queue_bits( struct msg_queue *queue, unsigned int bits 
 {
     queue->wake_bits &= ~bits;
     queue->changed_bits &= ~bits;
+    update_shm_queue_bits( queue );
 }
 
 /* check whether msg is a keyboard message */
@@ -495,10 +552,18 @@ static inline struct msg_queue *get_current_queue(void)
 }
 
 /* get a (pseudo-)unique id to tag hardware messages */
-static inline unsigned int get_unique_id(void)
+static inline unsigned int get_unique_hw_id(void)
 {
     static unsigned int id;
     if (!++id) id = 1;  /* avoid an id of 0 */
+    return id;
+}
+
+/* get unique increasing id to tag post messages */
+static inline unsigned int get_unique_post_id(void)
+{
+    static unsigned int id;
+    if (!++id) id = 1;
     return id;
 }
 
@@ -779,7 +844,7 @@ static int match_window( user_handle_t win, user_handle_t msg_win )
 }
 
 /* retrieve a posted message */
-static int get_posted_message( struct msg_queue *queue, user_handle_t win,
+static int get_posted_message( struct msg_queue *queue, unsigned int ignore_msg, user_handle_t win,
                                unsigned int first, unsigned int last, unsigned int flags,
                                struct get_message_reply *reply )
 {
@@ -790,6 +855,7 @@ static int get_posted_message( struct msg_queue *queue, user_handle_t win,
     {
         if (!match_window( win, msg->win )) continue;
         if (!check_msg_filter( msg->msg, first, last )) continue;
+        if (ignore_msg && (int)(msg->unique_id - ignore_msg) >= 0) continue;
         goto found; /* found one */
     }
     return 0;
@@ -991,7 +1057,9 @@ static void msg_queue_destroy( struct object *obj )
         free( timer );
     }
     if (queue->timeout) remove_timeout_user( queue->timeout );
+    if (queue->keystate_locked) queue->input->lock_count--;
     queue->input->cursor_count -= queue->cursor_count;
+    list_remove( &queue->input_entry );
     release_object( queue->input );
     if (queue->hooks) release_object( queue->hooks );
     if (queue->fd) release_object( queue->fd );
@@ -1018,6 +1086,7 @@ static void thread_input_destroy( struct object *obj )
 {
     struct thread_input *input = (struct thread_input *)obj;
 
+    assert( list_empty(&input->queues) );
     empty_msg_list( &input->msg_list );
     if (input->desktop)
     {
@@ -1033,10 +1102,16 @@ static inline void thread_input_cleanup_window( struct msg_queue *queue, user_ha
 
     if (window == input->focus) input->focus = 0;
     if (window == input->capture) input->capture = 0;
-    if (window == input->active) input->active = 0;
+    if (window == input->active)
+    {
+        input->active = 0;
+        if (shmglobal && input->desktop->foreground_input == input)
+            interlocked_xchg_add( (int *)&shmglobal->foreground_wnd_epoch, 1 );
+    }
     if (window == input->menu_owner) input->menu_owner = 0;
     if (window == input->move_size) input->move_size = 0;
     if (window == input->caret) set_caret_window( input, 0 );
+    update_shm_thread_input( input );
 }
 
 /* check if the specified window can be set in the input data of a given queue */
@@ -1087,11 +1162,20 @@ int attach_thread_input( struct thread *thread_from, struct thread *thread_to )
     if (thread_from->queue)
     {
         if (!input->focus) input->focus = thread_from->queue->input->focus;
-        if (!input->active) input->active = thread_from->queue->input->active;
+        if (!input->active)
+        {
+            input->active = thread_from->queue->input->active;
+            if (shmglobal && input->desktop->foreground_input == input)
+                interlocked_xchg_add( (int *)&shmglobal->foreground_wnd_epoch, 1 );
+        }
     }
 
     ret = assign_thread_input( thread_from, input );
-    if (ret) memset( input->keystate, 0, sizeof(input->keystate) );
+    if (ret)
+    {
+        memset( input->keystate, 0, sizeof(input->keystate) );
+        memset( input->shadow_keystate, 0, sizeof(input->shadow_keystate) );
+    }
     release_object( input );
     return ret;
 }
@@ -1119,6 +1203,9 @@ void detach_thread_input( struct thread *thread_from )
             {
                 input->active = old_input->active;
                 old_input->active = 0;
+                if (shmglobal && (input->desktop->foreground_input == input ||
+                                  old_input->desktop->foreground_input == old_input))
+                    interlocked_xchg_add( (int *)&shmglobal->foreground_wnd_epoch, 1 );
             }
             release_object( thread );
         }
@@ -1261,9 +1348,9 @@ static void set_input_key_state( unsigned char *keystate, unsigned char key, int
     else keystate[key] &= ~0x80;
 }
 
-/* update the input key state for a keyboard message */
-static void update_input_key_state( struct desktop *desktop, unsigned char *keystate,
-                                    const struct message *msg )
+/* update the key state for a keyboard message */
+static void update_key_state( struct desktop *desktop, unsigned char *keystate,
+                              const struct message *msg )
 {
     unsigned char key;
     int down = 0;
@@ -1325,6 +1412,33 @@ static void update_input_key_state( struct desktop *desktop, unsigned char *keys
     }
 }
 
+/* synchronizes the thread input key state with the desktop */
+static void synchronize_input_key_state( struct thread_input *input )
+{
+    if (!input->lock_count)
+    {
+        unsigned char *shadow_keystate = input->shadow_keystate;
+        unsigned char *keystate = input->keystate;
+        unsigned int i;
+
+        for (i = 0; i < 256; i++)
+        {
+            if (input->desktop->keystate[i] != shadow_keystate[i])
+            {
+                keystate[i] = input->desktop->keystate[i] & ~0x40;
+                shadow_keystate[i] = input->desktop->keystate[i];
+            }
+        }
+    }
+}
+
+/* update the thread input key state for a keyboard message */
+static void update_input_key_state( struct thread_input *input, const struct message *msg )
+{
+    synchronize_input_key_state( input );
+    update_key_state( input->desktop, input->keystate, msg );
+}
+
 /* release the hardware message currently being processed by the given thread */
 static void release_hardware_message( struct msg_queue *queue, unsigned int hw_id,
                                       int remove )
@@ -1355,7 +1469,7 @@ static void release_hardware_message( struct msg_queue *queue, unsigned int hw_i
         }
         if (clr_bit) clear_queue_bits( queue, clr_bit );
 
-        update_input_key_state( input->desktop, input->keystate, msg );
+        update_input_key_state( input, msg );
         list_remove( &msg->entry );
         free_message( msg );
     }
@@ -1387,6 +1501,7 @@ found:
     msg->msg       = WM_HOTKEY;
     msg->wparam    = hotkey->id;
     msg->lparam    = ((hotkey->vkey & 0xffff) << 16) | modifiers;
+    msg->unique_id = get_unique_post_id();
 
     free( msg->data );
     msg->data      = NULL;
@@ -1474,8 +1589,9 @@ static void queue_hardware_message( struct desktop *desktop, struct message *msg
     struct thread_input *input;
     unsigned int msg_code;
 
-    update_input_key_state( desktop, desktop->keystate, msg );
+    update_key_state( desktop, desktop->keystate, msg );
     last_input_time = get_tick_count();
+    if (shmglobal) shmglobal->last_input_time = last_input_time;
     if (msg->msg != WM_MOUSEMOVE) always_queue = 1;
 
     if (is_keyboard_msg( msg ))
@@ -1517,7 +1633,7 @@ static void queue_hardware_message( struct desktop *desktop, struct message *msg
     win = find_hardware_message_window( desktop, input, msg, &msg_code, &thread );
     if (!win || !thread)
     {
-        if (input) update_input_key_state( input->desktop, input->keystate, msg );
+        if (input) update_input_key_state( input, msg );
         free_message( msg );
         return;
     }
@@ -1530,6 +1646,15 @@ static void queue_hardware_message( struct desktop *desktop, struct message *msg
     else
     {
         msg->unique_id = 0;  /* will be set once we return it to the app */
+
+        /* lock the keystate on the first hardware message */
+        if (!thread->queue->keystate_locked)
+        {
+            synchronize_input_key_state( input );
+            input->lock_count++;
+            thread->queue->keystate_locked = 1;
+        }
+
         list_add_tail( &input->msg_list, &msg->entry );
         set_queue_bits( thread->queue, get_hardware_msg_bit(msg) );
     }
@@ -1959,7 +2084,7 @@ static int get_hardware_message( struct thread *thread, unsigned int hw_id, user
         if (!win || !win_thread)
         {
             /* no window at all, remove it */
-            update_input_key_state( input->desktop, input->keystate, msg );
+            update_input_key_state( input, msg );
             list_remove( &msg->entry );
             free_message( msg );
             continue;
@@ -1975,7 +2100,7 @@ static int get_hardware_message( struct thread *thread, unsigned int hw_id, user
             else
             {
                 /* for another thread input, drop it */
-                update_input_key_state( input->desktop, input->keystate, msg );
+                update_input_key_state( input, msg );
                 list_remove( &msg->entry );
                 free_message( msg );
             }
@@ -1992,7 +2117,7 @@ static int get_hardware_message( struct thread *thread, unsigned int hw_id, user
             continue;
         }
         /* now we can return it */
-        if (!msg->unique_id) msg->unique_id = get_unique_id();
+        if (!msg->unique_id) msg->unique_id = get_unique_hw_id();
         reply->type   = MSG_HARDWARE;
         reply->win    = win;
         reply->msg    = msg_code;
@@ -2098,6 +2223,7 @@ void post_message( user_handle_t win, unsigned int message, lparam_t wparam, lpa
         msg->result    = NULL;
         msg->data      = NULL;
         msg->data_size = 0;
+        msg->unique_id = get_unique_post_id();
 
         get_message_defaults( thread->queue, &msg->x, &msg->y, &msg->time );
 
@@ -2342,6 +2468,7 @@ DECL_HANDLER(send_message)
             set_queue_bits( recv_queue, QS_SENDMESSAGE );
             break;
         case MSG_POSTED:
+            msg->unique_id = get_unique_post_id();
             list_add_tail( &recv_queue->msg_list[POST_MESSAGE], &msg->entry );
             set_queue_bits( recv_queue, QS_POSTMESSAGE|QS_ALLPOSTMESSAGE );
             if (msg->msg == WM_HOTKEY)
@@ -2436,6 +2563,13 @@ DECL_HANDLER(get_message)
     queue->last_get_msg = current_time;
     if (!filter) filter = QS_ALLINPUT;
 
+    /* no longer lock the keystate if we have processed all input */
+    if (queue->keystate_locked && !(queue->wake_bits & QS_ALLINPUT))
+    {
+        queue->input->lock_count--;
+        queue->keystate_locked = 0;
+    }
+
     /* first check for sent messages */
     if ((ptr = list_head( &queue->msg_list[SEND_MESSAGE] )))
     {
@@ -2455,12 +2589,12 @@ DECL_HANDLER(get_message)
 
     /* then check for posted messages */
     if ((filter & QS_POSTMESSAGE) &&
-        get_posted_message( queue, get_win, req->get_first, req->get_last, req->flags, reply ))
+        get_posted_message( queue, queue->ignore_post_msg, get_win, req->get_first, req->get_last, req->flags, reply ))
         return;
 
     if ((filter & QS_HOTKEY) && queue->hotkey_count &&
         req->get_first <= WM_HOTKEY && req->get_last >= WM_HOTKEY &&
-        get_posted_message( queue, get_win, WM_HOTKEY, WM_HOTKEY, req->flags, reply ))
+        get_posted_message( queue, queue->ignore_post_msg, get_win, WM_HOTKEY, WM_HOTKEY, req->flags, reply ))
         return;
 
     /* only check for quit messages if not posted messages pending */
@@ -2471,7 +2605,7 @@ DECL_HANDLER(get_message)
     if ((filter & QS_INPUT) &&
         filter_contains_hw_range( req->get_first, req->get_last ) &&
         get_hardware_message( current, req->hw_id, get_win, req->get_first, req->get_last, req->flags, reply ))
-        return;
+        goto found_msg;
 
     /* now check for WM_PAINT */
     if ((filter & QS_PAINT) &&
@@ -2484,7 +2618,7 @@ DECL_HANDLER(get_message)
         reply->wparam = 0;
         reply->lparam = 0;
         get_message_defaults( queue, &reply->x, &reply->y, &reply->time );
-        return;
+        goto found_msg;
     }
 
     /* now check for timer */
@@ -2500,13 +2634,30 @@ DECL_HANDLER(get_message)
         get_message_defaults( queue, &reply->x, &reply->y, &reply->time );
         if (!(req->flags & PM_NOYIELD) && current->process->idle_event)
             set_event( current->process->idle_event );
-        return;
+        goto found_msg;
     }
+
+    /* if we previously skipped posted messages then check again */
+    if (queue->ignore_post_msg && (filter & QS_POSTMESSAGE) &&
+        get_posted_message( queue, 0, get_win, req->get_first, req->get_last, req->flags, reply ))
+        return;
+
+    if (queue->ignore_post_msg && (filter & QS_HOTKEY) && queue->hotkey_count &&
+        req->get_first <= WM_HOTKEY && req->get_last >= WM_HOTKEY &&
+        get_posted_message( queue, 0, get_win, WM_HOTKEY, WM_HOTKEY, req->flags, reply ))
+        return;
 
     if (get_win == -1 && current->process->idle_event) set_event( current->process->idle_event );
     queue->wake_mask = req->wake_mask;
     queue->changed_mask = req->changed_mask;
     set_error( STATUS_PENDING );  /* FIXME */
+    return;
+
+found_msg:
+    if (req->flags & PM_REMOVE)
+        queue->ignore_post_msg = 0;
+    else if (!queue->ignore_post_msg)
+        queue->ignore_post_msg = get_unique_post_id();
 }
 
 
@@ -2524,7 +2675,10 @@ DECL_HANDLER(reply_message)
 DECL_HANDLER(accept_hardware_message)
 {
     if (current->queue)
+    {
         release_hardware_message( current->queue, req->hw_id, req->remove );
+        if (req->remove) current->queue->ignore_post_msg = 0;
+    }
     else
         set_error( STATUS_ACCESS_DENIED );
 }
@@ -2892,7 +3046,12 @@ DECL_HANDLER(get_key_state)
         if (!(thread = get_thread_from_id( req->tid ))) return;
         if (thread->queue)
         {
-            if (req->key >= 0) reply->state = thread->queue->input->keystate[req->key & 0xff];
+            if (req->key >= 0)
+            {
+                /* synchronize with desktop keystate, but _only_ if req->key is given */
+                synchronize_input_key_state( thread->queue->input );
+                reply->state = thread->queue->input->keystate[req->key & 0xff];
+            }
             set_reply_data( thread->queue->input->keystate, size );
             release_object( thread );
             return;
@@ -2975,6 +3134,7 @@ DECL_HANDLER(set_focus_window)
     {
         reply->previous = queue->input->focus;
         queue->input->focus = get_user_full_handle( req->handle );
+        update_shm_thread_input( queue->input );
     }
 }
 
@@ -2991,6 +3151,9 @@ DECL_HANDLER(set_active_window)
         {
             reply->previous = queue->input->active;
             queue->input->active = get_user_full_handle( req->handle );
+            update_shm_thread_input( queue->input );
+            if (shmglobal && queue->input->desktop->foreground_input == queue->input)
+                interlocked_xchg_add( (int *)&shmglobal->foreground_wnd_epoch, 1 );
         }
         else set_error( STATUS_INVALID_HANDLE );
     }
@@ -3017,6 +3180,7 @@ DECL_HANDLER(set_capture_window)
         input->capture = get_user_full_handle( req->handle );
         input->menu_owner = (req->flags & CAPTURE_MENU) ? input->capture : 0;
         input->move_size = (req->flags & CAPTURE_MOVESIZE) ? input->capture : 0;
+        update_shm_thread_input( input );
         reply->full_handle = input->capture;
     }
 }
