@@ -66,6 +66,9 @@ static void swapchain_cleanup(struct wined3d_swapchain *swapchain)
     }
 
     wined3d_cs_destroy_object(swapchain->device->cs, wined3d_swapchain_destroy_object, swapchain);
+#if defined(STAGING_CSMT)
+    wined3d_cs_emit_sync(swapchain->device->cs);
+#endif /* STAGING_CSMT */
 
     /* Restore the screen resolution if we rendered in fullscreen.
      * This will restore the screen resolution to what it was before creating
@@ -113,6 +116,12 @@ ULONG CDECL wined3d_swapchain_decref(struct wined3d_swapchain *swapchain)
 
     if (!refcount)
     {
+#if defined(STAGING_CSMT)
+        struct wined3d_device *device = swapchain->device;
+
+        wined3d_cs_emit_sync(device->cs);
+
+#endif /* STAGING_CSMT */
         swapchain_cleanup(swapchain);
         swapchain->parent_ops->wined3d_object_destroyed(swapchain->parent);
         HeapFree(GetProcessHeap(), 0, swapchain);
@@ -143,14 +152,18 @@ void CDECL wined3d_swapchain_set_window(struct wined3d_swapchain *swapchain, HWN
 HRESULT CDECL wined3d_swapchain_present(struct wined3d_swapchain *swapchain,
         const RECT *src_rect, const RECT *dst_rect, HWND dst_window_override, DWORD flags)
 {
+    static DWORD notified_flags = 0;
     RECT s, d;
 
     TRACE("swapchain %p, src_rect %s, dst_rect %s, dst_window_override %p, flags %#x.\n",
             swapchain, wine_dbgstr_rect(src_rect), wine_dbgstr_rect(dst_rect),
             dst_window_override, flags);
 
-    if (flags)
-        FIXME("Ignoring flags %#x.\n", flags);
+    if (flags & ~notified_flags)
+    {
+        FIXME("Ignoring flags %#x.\n", flags & ~notified_flags);
+        notified_flags |= flags;
+    }
 
     if (!swapchain->back_buffers)
     {
@@ -483,7 +496,11 @@ static void swapchain_gl_present(struct wined3d_swapchain *swapchain,
         swapchain_blit(swapchain, context, src_rect, dst_rect);
     }
 
+#if !defined(STAGING_CSMT)
     if (swapchain->num_contexts > 1)
+#else  /* STAGING_CSMT */
+    if (swapchain->num_contexts > 1 && !wined3d_settings.cs_multithreaded)
+#endif /* STAGING_CSMT */
         gl_info->gl_ops.gl.p_glFinish();
 
     /* call wglSwapBuffers through the gl table to avoid confusing the Steam overlay */
@@ -863,6 +880,9 @@ static HRESULT swapchain_init(struct wined3d_swapchain *swapchain, struct wined3
         }
 
         wined3d_cs_init_object(device->cs, wined3d_swapchain_cs_init, swapchain);
+#if defined(STAGING_CSMT)
+        wined3d_cs_emit_sync(device->cs);
+#endif /* STAGING_CSMT */
 
         if (!swapchain->context[0])
         {
@@ -1003,6 +1023,10 @@ static struct wined3d_context *swapchain_create_context(struct wined3d_swapchain
 
     TRACE("Creating a new context for swapchain %p, thread %u.\n", swapchain, GetCurrentThreadId());
 
+#if defined(STAGING_CSMT)
+    wined3d_cs_emit_sync(swapchain->device->cs);
+
+#endif /* STAGING_CSMT */
     if (!(ctx = context_create(swapchain, swapchain->front_buffer, swapchain->ds_format)))
     {
         ERR("Failed to create a new context for the swapchain\n");
@@ -1189,6 +1213,9 @@ HRESULT CDECL wined3d_swapchain_resize_buffers(struct wined3d_swapchain *swapcha
         enum wined3d_multisample_type multisample_type, unsigned int multisample_quality)
 {
     BOOL update_desc = FALSE;
+#if defined(STAGING_CSMT)
+    struct wined3d_device *device = swapchain->device;
+#endif /* STAGING_CSMT */
 
     TRACE("swapchain %p, buffer_count %u, width %u, height %u, format %s, "
             "multisample_type %#x, multisample_quality %#x.\n",
@@ -1200,6 +1227,10 @@ HRESULT CDECL wined3d_swapchain_resize_buffers(struct wined3d_swapchain *swapcha
     if (buffer_count && buffer_count != swapchain->desc.backbuffer_count)
         FIXME("Cannot change the back buffer count yet.\n");
 
+#if defined(STAGING_CSMT)
+    wined3d_cs_emit_sync(device->cs);
+
+#endif /* STAGING_CSMT */
     if (!width || !height)
     {
         /* The application is requesting that either the swapchain width or

@@ -43,6 +43,7 @@ WINE_DEFAULT_DEBUG_CHANNEL(file);
 
 #define MAX_PATHNAME_LEN        1024
 
+static const WCHAR wildcardsW[] = {'*','?',0};
 
 /* check if a file name is for an executable file (.exe or .com) */
 static inline BOOL is_executable( const WCHAR *name )
@@ -294,6 +295,8 @@ DWORD WINAPI GetLongPathNameW( LPCWSTR shortpath, LPWSTR longpath, DWORD longlen
     HANDLE              goit;
     BOOL                is_legal_8dot3;
 
+    TRACE("%s,%p,%u\n", debugstr_w(shortpath), longpath, longlen);
+
     if (!shortpath)
     {
         SetLastError(ERROR_INVALID_PARAMETER);
@@ -304,8 +307,6 @@ DWORD WINAPI GetLongPathNameW( LPCWSTR shortpath, LPWSTR longpath, DWORD longlen
         SetLastError(ERROR_PATH_NOT_FOUND);
         return 0;
     }
-
-    TRACE("%s,%p,%d\n", debugstr_w(shortpath), longpath, longlen);
 
     if (shortpath[0] == '\\' && shortpath[1] == '\\')
     {
@@ -328,6 +329,12 @@ DWORD WINAPI GetLongPathNameW( LPCWSTR shortpath, LPWSTR longpath, DWORD longlen
         tmplongpath[0] = shortpath[0];
         tmplongpath[1] = ':';
         lp = sp = 2;
+    }
+
+    if (strpbrkW(shortpath + sp, wildcardsW))
+    {
+        SetLastError(ERROR_INVALID_NAME);
+        return 0;
     }
 
     while (shortpath[sp])
@@ -444,7 +451,7 @@ DWORD WINAPI GetShortPathNameW( LPCWSTR longpath, LPWSTR shortpath, DWORD shortl
     WIN32_FIND_DATAW    wfd;
     HANDLE              goit;
 
-    TRACE("%s\n", debugstr_w(longpath));
+    TRACE("%s,%p,%u\n", debugstr_w(longpath), shortpath, shortlen);
 
     if (!longpath)
     {
@@ -471,6 +478,13 @@ DWORD WINAPI GetShortPathNameW( LPCWSTR longpath, LPWSTR shortpath, DWORD shortl
     {
         memcpy(tmpshortpath, longpath, 4 * sizeof(WCHAR));
         sp = lp = 4;
+    }
+
+    if (strpbrkW(longpath + lp, wildcardsW))
+    {
+        HeapFree(GetProcessHeap(), 0, tmpshortpath);
+        SetLastError(ERROR_INVALID_NAME);
+        return 0;
     }
 
     /* check for drive letter */
@@ -1116,6 +1130,9 @@ BOOL WINAPI CopyFileExW(LPCWSTR source, LPCWSTR dest,
     DWORD count;
     BOOL ret = FALSE;
     char *buffer;
+    LARGE_INTEGER size;
+    LARGE_INTEGER transferred;
+    DWORD cbret;
 
     if (!source || !dest)
     {
@@ -1130,7 +1147,13 @@ BOOL WINAPI CopyFileExW(LPCWSTR source, LPCWSTR dest,
 
     TRACE("%s -> %s, %x\n", debugstr_w(source), debugstr_w(dest), flags);
 
-    if ((h1 = CreateFileW(source, GENERIC_READ,
+    if (flags & COPY_FILE_RESTARTABLE)
+        FIXME("COPY_FILE_RESTARTABLE is not supported\n");
+    if (flags & COPY_FILE_COPY_SYMLINK)
+        FIXME("COPY_FILE_COPY_SYMLINK is not supported\n");
+
+    if ((h1 = CreateFileW(source, (flags & COPY_FILE_OPEN_SOURCE_FOR_WRITE) ?
+                     GENERIC_WRITE | GENERIC_READ : GENERIC_READ,
                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                      NULL, OPEN_EXISTING, 0, 0)) == INVALID_HANDLE_VALUE)
     {
@@ -1166,14 +1189,42 @@ BOOL WINAPI CopyFileExW(LPCWSTR source, LPCWSTR dest,
         }
     }
 
-    if ((h2 = CreateFileW( dest, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
-                             (flags & COPY_FILE_FAIL_IF_EXISTS) ? CREATE_NEW : CREATE_ALWAYS,
-                             info.dwFileAttributes, h1 )) == INVALID_HANDLE_VALUE)
+    if ((h2 = CreateFileW( dest, GENERIC_WRITE | DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+                           (flags & COPY_FILE_FAIL_IF_EXISTS) ? CREATE_NEW : CREATE_ALWAYS,
+                           info.dwFileAttributes, h1 )) == INVALID_HANDLE_VALUE &&
+        /* retry without DELETE if we got a sharing violation */
+        (h2 = CreateFileW( dest, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+                           (flags & COPY_FILE_FAIL_IF_EXISTS) ? CREATE_NEW : CREATE_ALWAYS,
+                           info.dwFileAttributes, h1 )) == INVALID_HANDLE_VALUE)
     {
         WARN("Unable to open dest %s\n", debugstr_w(dest));
         HeapFree( GetProcessHeap(), 0, buffer );
         CloseHandle( h1 );
         return FALSE;
+    }
+
+    size.u.LowPart = info.nFileSizeLow;
+    size.u.HighPart = info.nFileSizeHigh;
+    transferred.QuadPart = 0;
+
+    if (progress)
+    {
+        cbret = progress( size, transferred, size, transferred, 1,
+                          CALLBACK_STREAM_SWITCH, h1, h2, param );
+        if (cbret == PROGRESS_QUIET)
+            progress = NULL;
+        else if (cbret == PROGRESS_STOP)
+        {
+            SetLastError( ERROR_REQUEST_ABORTED );
+            goto done;
+        }
+        else if (cbret == PROGRESS_CANCEL)
+        {
+            BOOLEAN disp = TRUE;
+            SetFileInformationByHandle( h2, FileDispositionInfo, &disp, sizeof(disp) );
+            SetLastError( ERROR_REQUEST_ABORTED );
+            goto done;
+        }
     }
 
     while (ReadFile( h1, buffer, buffer_size, &count, NULL ) && count)
@@ -1185,6 +1236,27 @@ BOOL WINAPI CopyFileExW(LPCWSTR source, LPCWSTR dest,
             if (!WriteFile( h2, p, count, &res, NULL ) || !res) goto done;
             p += res;
             count -= res;
+
+            if (progress)
+            {
+                transferred.QuadPart += res;
+                cbret = progress( size, transferred, size, transferred, 1,
+                                  CALLBACK_CHUNK_FINISHED, h1, h2, param );
+                if (cbret == PROGRESS_QUIET)
+                    progress = NULL;
+                else if (cbret == PROGRESS_STOP)
+                {
+                    SetLastError( ERROR_REQUEST_ABORTED );
+                    goto done;
+                }
+                else if (cbret == PROGRESS_CANCEL)
+                {
+                    BOOLEAN disp = TRUE;
+                    SetFileInformationByHandle( h2, FileDispositionInfo, &disp, sizeof(disp) );
+                    SetLastError( ERROR_REQUEST_ABORTED );
+                    goto done;
+                }
+            }
         }
     }
     ret =  TRUE;
@@ -1235,7 +1307,7 @@ BOOL WINAPI MoveFileWithProgressW( LPCWSTR source, LPCWSTR dest,
     OBJECT_ATTRIBUTES attr;
     IO_STATUS_BLOCK io;
     NTSTATUS status;
-    HANDLE source_handle = 0, dest_handle;
+    HANDLE source_handle = 0, dest_handle = 0;
     ANSI_STRING source_unix, dest_unix;
 
     TRACE("(%s,%s,%p,%p,%04x)\n",
@@ -1266,7 +1338,8 @@ BOOL WINAPI MoveFileWithProgressW( LPCWSTR source, LPCWSTR dest,
     attr.SecurityDescriptor = NULL;
     attr.SecurityQualityOfService = NULL;
 
-    status = NtOpenFile( &source_handle, SYNCHRONIZE, &attr, &io, 0, FILE_SYNCHRONOUS_IO_NONALERT );
+    status = NtOpenFile( &source_handle, DELETE | SYNCHRONIZE, &attr, &io,
+                         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_SYNCHRONOUS_IO_NONALERT );
     if (status == STATUS_SUCCESS)
         status = wine_nt_to_unix_file_name( &nt_name, &source_unix, FILE_OPEN, FALSE );
     RtlFreeUnicodeString( &nt_name );
@@ -1290,22 +1363,27 @@ BOOL WINAPI MoveFileWithProgressW( LPCWSTR source, LPCWSTR dest,
         SetLastError( ERROR_PATH_NOT_FOUND );
         goto error;
     }
-    status = NtOpenFile( &dest_handle, GENERIC_READ | GENERIC_WRITE | SYNCHRONIZE, &attr, &io, 0,
+    status = NtOpenFile( &dest_handle, GENERIC_READ | GENERIC_WRITE | SYNCHRONIZE, &attr, &io,
+                         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                          FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT );
     if (status == STATUS_SUCCESS)  /* destination exists */
     {
-        NtClose( dest_handle );
         if (!(flag & MOVEFILE_REPLACE_EXISTING))
         {
-            SetLastError( ERROR_ALREADY_EXISTS );
-            RtlFreeUnicodeString( &nt_name );
-            goto error;
+            if (!is_same_file( source_handle, dest_handle ))
+            {
+                SetLastError( ERROR_ALREADY_EXISTS );
+                RtlFreeUnicodeString( &nt_name );
+                goto error;
+            }
         }
         else if (info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) /* cannot replace directory */
         {
             SetLastError( ERROR_ACCESS_DENIED );
             goto error;
         }
+
+        NtClose( dest_handle );
     }
     else if (status != STATUS_OBJECT_NAME_NOT_FOUND)
     {
@@ -1365,6 +1443,7 @@ BOOL WINAPI MoveFileWithProgressW( LPCWSTR source, LPCWSTR dest,
 
 error:
     if (source_handle) NtClose( source_handle );
+    if (dest_handle) NtClose( dest_handle );
     RtlFreeAnsiString( &source_unix );
     RtlFreeAnsiString( &dest_unix );
     return FALSE;
@@ -1607,6 +1686,7 @@ BOOL WINAPI CreateDirectoryExW( LPCWSTR template, LPCWSTR path, LPSECURITY_ATTRI
  */
 BOOL WINAPI RemoveDirectoryW( LPCWSTR path )
 {
+    FILE_BASIC_INFORMATION info;
     OBJECT_ATTRIBUTES attr;
     UNICODE_STRING nt_name;
     ANSI_STRING unix_name;
@@ -1640,15 +1720,23 @@ BOOL WINAPI RemoveDirectoryW( LPCWSTR path )
     }
 
     status = wine_nt_to_unix_file_name( &nt_name, &unix_name, FILE_OPEN, FALSE );
-    RtlFreeUnicodeString( &nt_name );
     if (status != STATUS_SUCCESS)
     {
         SetLastError( RtlNtStatusToDosError(status) );
+        RtlFreeUnicodeString( &nt_name );
         NtClose( handle );
         return FALSE;
     }
 
-    if (!(ret = (rmdir( unix_name.Buffer ) != -1))) FILE_SetDosError();
+    status = NtQueryAttributesFile( &attr, &info );
+    if (status == STATUS_SUCCESS && (info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) &&
+                                    (info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+        ret = (unlink( unix_name.Buffer ) != -1);
+    else
+        ret = (rmdir( unix_name.Buffer ) != -1);
+    if (!ret) FILE_SetDosError();
+
+    RtlFreeUnicodeString( &nt_name );
     RtlFreeAnsiString( &unix_name );
     NtClose( handle );
     return ret;
@@ -1902,8 +1990,7 @@ BOOL WINAPI NeedCurrentDirectoryForExePathW( LPCWSTR name )
                                      'I','n','E','x','e','P','a','t','h',0};
     WCHAR env_val;
 
-    /* MSDN mentions some 'registry location'. We do not use registry. */
-    FIXME("(%s): partial stub\n", debugstr_w(name));
+    TRACE("(%s)\n", debugstr_w(name));
 
     if (strchrW(name, '\\'))
         return TRUE;

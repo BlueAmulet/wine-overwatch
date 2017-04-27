@@ -5,6 +5,7 @@
 @ cdecl wined3d_check_depth_stencil_match(ptr long long long long long)
 @ cdecl wined3d_check_device_format(ptr long long long long long long)
 @ cdecl wined3d_check_device_format_conversion(ptr long long long long)
+@ cdecl wined3d_check_device_format_support(ptr long ptr)
 @ cdecl wined3d_check_device_multisample_type(ptr long long long long long ptr)
 @ cdecl wined3d_check_device_type(ptr long long long long long)
 @ cdecl wined3d_create(long)
@@ -197,6 +198,7 @@
 @ cdecl wined3d_resource_get_parent(ptr)
 @ cdecl wined3d_resource_get_priority(ptr)
 @ cdecl wined3d_resource_map(ptr long ptr ptr long)
+@ cdecl wined3d_resource_map_info(ptr long ptr long)
 @ cdecl wined3d_resource_preload(ptr)
 @ cdecl wined3d_resource_set_parent(ptr ptr)
 @ cdecl wined3d_resource_set_priority(ptr long)
@@ -238,6 +240,8 @@
 @ cdecl wined3d_stateblock_create(ptr long ptr)
 @ cdecl wined3d_stateblock_decref(ptr)
 @ cdecl wined3d_stateblock_incref(ptr)
+
+@ cdecl wined3d_strictdrawing_set(long)
 
 @ cdecl wined3d_swapchain_create(ptr ptr ptr ptr ptr)
 @ cdecl wined3d_swapchain_decref(ptr)
@@ -294,3 +298,11 @@
 @ cdecl wined3d_vertex_declaration_decref(ptr)
 @ cdecl wined3d_vertex_declaration_get_parent(ptr)
 @ cdecl wined3d_vertex_declaration_incref(ptr)
+
+@ cdecl wined3d_dxtn_supported()
+@ cdecl wined3d_dxt1_decode(ptr ptr long long long long long)
+@ cdecl wined3d_dxt1_encode(ptr ptr long long long long long)
+@ cdecl wined3d_dxt3_decode(ptr ptr long long long long long)
+@ cdecl wined3d_dxt3_encode(ptr ptr long long long long long)
+@ cdecl wined3d_dxt5_decode(ptr ptr long long long long long)
+@ cdecl wined3d_dxt5_encode(ptr ptr long long long long long)

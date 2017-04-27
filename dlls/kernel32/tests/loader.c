@@ -28,6 +28,7 @@
 #include "windef.h"
 #include "winbase.h"
 #include "winternl.h"
+#include "winuser.h"
 #include "wine/test.h"
 #include "delayloadhandler.h"
 
@@ -184,7 +185,7 @@ static DWORD create_test_dll( const IMAGE_DOS_HEADER *dos_header, UINT dos_size,
     {
         SetLastError(0xdeadbeef);
         ret = WriteFile(hfile, &nt_header->OptionalHeader,
-                        min(nt_header->FileHeader.SizeOfOptionalHeader, sizeof(IMAGE_OPTIONAL_HEADER)),
+                        sizeof(IMAGE_OPTIONAL_HEADER),
                         &dummy, NULL);
         ok(ret, "WriteFile error %d\n", GetLastError());
         if (nt_header->FileHeader.SizeOfOptionalHeader > sizeof(IMAGE_OPTIONAL_HEADER))
@@ -200,6 +201,8 @@ static DWORD create_test_dll( const IMAGE_DOS_HEADER *dos_header, UINT dos_size,
     assert(nt_header->FileHeader.NumberOfSections <= 1);
     if (nt_header->FileHeader.NumberOfSections)
     {
+        SetFilePointer(hfile, dos_size + sizeof(DWORD) + sizeof(IMAGE_FILE_HEADER) + nt_header->FileHeader.SizeOfOptionalHeader, NULL, FILE_BEGIN);
+
         section.SizeOfRawData = 10;
 
         if (nt_header->OptionalHeader.SectionAlignment >= page_size)
@@ -224,6 +227,17 @@ static DWORD create_test_dll( const IMAGE_DOS_HEADER *dos_header, UINT dos_size,
         ret = WriteFile(hfile, section_data, sizeof(section_data), &dummy, NULL);
         ok(ret, "WriteFile error %d\n", GetLastError());
     }
+
+    /* Minimal PE image that Windows7+ is able to load: 268 bytes */
+    size = GetFileSize(hfile, NULL);
+    if (size < 268)
+    {
+        file_align = 268 - size;
+        SetLastError(0xdeadbeef);
+        ret = WriteFile(hfile, filler, file_align, &dummy, NULL);
+        ok(ret, "WriteFile error %d\n", GetLastError());
+    }
+
     size = GetFileSize(hfile, NULL);
     CloseHandle(hfile);
     return size;
@@ -294,7 +308,8 @@ static void query_image_section( int id, const char *dll_name, const IMAGE_NT_HE
         image.LoaderFlags, nt_header->OptionalHeader.LoaderFlags );
     ok( image.ImageFileSize == file_size || broken(!image.ImageFileSize), /* winxpsp1 */
         "%u: ImageFileSize wrong %08x / %08x\n", id, image.ImageFileSize, file_size );
-    ok( image.CheckSum == nt_header->OptionalHeader.CheckSum, "%u: CheckSum wrong %08x / %08x\n", id,
+    ok( image.CheckSum == nt_header->OptionalHeader.CheckSum || broken(truncated),
+        "%u: CheckSum wrong %08x / %08x\n", id,
         image.CheckSum, nt_header->OptionalHeader.CheckSum );
     /* FIXME: needs more work: */
     /* image.GpValue */
@@ -444,6 +459,7 @@ static void test_Loader(void)
         /* Mandatory are all fields up to SizeOfHeaders, everything else
          * is really optional (at least that's true for XP).
          */
+#if 0 /* 32-bit Windows 8 crashes inside of LoadLibrary */
         { sizeof(dos_header),
           1, FIELD_OFFSET(IMAGE_OPTIONAL_HEADER, CheckSum), 0x200, 0x200,
           sizeof(dos_header) + sizeof(DWORD) + sizeof(IMAGE_FILE_HEADER) + FIELD_OFFSET(IMAGE_OPTIONAL_HEADER, CheckSum) + sizeof(IMAGE_SECTION_HEADER) + 0x10,
@@ -451,6 +467,7 @@ static void test_Loader(void)
           { ERROR_SUCCESS, ERROR_BAD_EXE_FORMAT, ERROR_INVALID_ADDRESS,
             ERROR_NOACCESS }
         },
+#endif
         { sizeof(dos_header),
           0, FIELD_OFFSET(IMAGE_OPTIONAL_HEADER, CheckSum), 0x200, 0x200,
           0xd0, /* beyond of the end of file */
@@ -518,6 +535,14 @@ static void test_Loader(void)
           0x04 /* also serves as e_lfanew in the truncated MZ header */, 0x04,
           0x40, /* minimal image size that Windows7 accepts */
           0,
+          { ERROR_SUCCESS }
+        },
+        /* the following data mimics the PE image which 8k demos have */
+        { 0x04,
+          0, 0x08,
+          0x04 /* also serves as e_lfanew in the truncated MZ header */, 0x04,
+          0x200000,
+          0x40,
           { ERROR_SUCCESS }
         }
     };
@@ -709,6 +734,17 @@ static void test_Loader(void)
             ret = FreeLibrary(hlib_as_data_file);
             ok(ret, "FreeLibrary error %d\n", GetLastError());
 
+            SetLastError(0xdeadbeef);
+            ret = DeleteFileA(dll_name);
+            ok(ret, "DeleteFile error %d\n", GetLastError());
+
+            nt_header.OptionalHeader.AddressOfEntryPoint = 0x12345678;
+            file_size = create_test_dll( &dos_header, td[i].size_of_dos_header, &nt_header, dll_name );
+            if (!file_size)
+            {
+                ok(0, "could not create %s\n", dll_name);
+                break;
+            }
             query_image_section( i, dll_name, &nt_header );
         }
         else
@@ -1457,6 +1493,7 @@ static void test_import_resolution(void)
             ok( ptr->thunks[0].u1.Function == 0xdeadbeef, "thunk resolved to %p for %s.%s\n",
                 (void *)ptr->thunks[0].u1.Function, data.module, data.function.name );
             ok( ptr->tls_index == 9999, "wrong tls index %d\n", ptr->tls_index );
+            FreeLibrary( mod2 );
             FreeLibrary( mod );
             break;
         case 2:  /* load without IMAGE_FILE_DLL doesn't resolve imports */
@@ -3007,6 +3044,79 @@ static void test_InMemoryOrderModuleList(void)
     ok(entry2 == mark2, "expected entry2 == mark2, got %p and %p\n", entry2, mark2);
 }
 
+static inline WCHAR toupperW(WCHAR c)
+{
+    WCHAR tmp = c;
+    CharUpperBuffW(&tmp, 1);
+    return tmp;
+}
+
+static ULONG hash_basename(const WCHAR *basename)
+{
+    WORD version = MAKEWORD(NtCurrentTeb()->Peb->OSMinorVersion,
+                            NtCurrentTeb()->Peb->OSMajorVersion);
+    ULONG hash = 0;
+
+    if (version >= 0x0602)
+    {
+        for (; *basename; basename++)
+            hash = hash * 65599 + toupperW(*basename);
+    }
+    else if (version == 0x0601)
+    {
+        for (; *basename; basename++)
+            hash = hash + 65599 * toupperW(*basename);
+    }
+    else
+        hash = toupperW(basename[0]) - 'A';
+
+    return hash & 31;
+}
+
+static void test_HashLinks(void)
+{
+    static WCHAR ntdllW[] = {'n','t','d','l','l','.','d','l','l',0};
+    static WCHAR kernel32W[] = {'k','e','r','n','e','l','3','2','.','d','l','l',0};
+
+    LIST_ENTRY *hash_map, *entry, *mark;
+    LDR_MODULE *module;
+    BOOL found;
+
+    entry = &NtCurrentTeb()->Peb->LdrData->InLoadOrderModuleList;
+    entry = entry->Flink;
+
+    module = CONTAINING_RECORD(entry, LDR_MODULE, InLoadOrderModuleList);
+    entry = module->HashLinks.Blink;
+
+    hash_map = entry - hash_basename(module->BaseDllName.Buffer);
+
+    mark = &hash_map[hash_basename(ntdllW)];
+    found = FALSE;
+    for (entry = mark->Flink; entry != mark; entry = entry->Flink)
+    {
+        module = CONTAINING_RECORD(entry, LDR_MODULE, HashLinks);
+        if (!lstrcmpiW(module->BaseDllName.Buffer, ntdllW))
+        {
+            found = TRUE;
+            break;
+        }
+    }
+    ok(found, "Could not find ntdll\n");
+
+    mark = &hash_map[hash_basename(kernel32W)];
+    found = FALSE;
+    for (entry = mark->Flink; entry != mark; entry = entry->Flink)
+    {
+        module = CONTAINING_RECORD(entry, LDR_MODULE, HashLinks);
+        if (!lstrcmpiW(module->BaseDllName.Buffer, kernel32W))
+        {
+            found = TRUE;
+            break;
+        }
+    }
+    ok(found, "Could not find kernel32\n");
+}
+
 START_TEST(loader)
 {
     int argc;
@@ -3068,4 +3178,5 @@ START_TEST(loader)
     test_import_resolution();
     test_ExitProcess();
     test_InMemoryOrderModuleList();
+    test_HashLinks();
 }

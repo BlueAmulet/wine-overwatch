@@ -45,6 +45,7 @@ struct async
     struct timeout_user *timeout;
     unsigned int         timeout_status;  /* status to report upon timeout */
     int                  signaled;
+    int                  skip_completion; /* skip completion */
     struct event        *event;
     async_data_t         data;            /* data for async I/O call */
     struct iosb         *iosb;            /* I/O status block */
@@ -72,6 +73,7 @@ static const struct object_ops async_ops =
     no_link_name,              /* link_name */
     NULL,                      /* unlink_name */
     no_open_file,              /* open_file */
+    no_alloc_handle,           /* alloc_handle */
     no_close_handle,           /* close_handle */
     async_destroy              /* destroy */
 };
@@ -107,6 +109,7 @@ static const struct object_ops async_queue_ops =
     no_link_name,                    /* link_name */
     NULL,                            /* unlink_name */
     no_open_file,                    /* open_file */
+    no_alloc_handle,                 /* alloc_handle */
     no_close_handle,                 /* close_handle */
     async_queue_destroy              /* destroy */
 };
@@ -163,6 +166,14 @@ static void async_queue_destroy( struct object *obj )
     struct async_queue *async_queue = (struct async_queue *)obj;
     assert( obj->ops == &async_queue_ops );
     if (async_queue->completion) release_object( async_queue->completion );
+}
+
+void async_skip_completion( struct async *async, int comp_flags )
+{
+    if (!async->data.callback) return;
+    if (!(comp_flags & COMPLETION_SKIP_ON_SUCCESS)) return;
+    async->skip_completion = (async->status == STATUS_SUCCESS ||
+                              async->status == STATUS_ALERTED);
 }
 
 /* notifies client thread of new status of its async request */
@@ -263,6 +274,7 @@ struct async *create_async( struct thread *thread, const async_data_t *data, str
     async->timeout = NULL;
     async->queue   = NULL;
     async->signaled = 0;
+    async->skip_completion = 0;
 
     if (iosb) async->iosb = (struct iosb *)grab_object( iosb );
     else async->iosb = NULL;
@@ -328,7 +340,7 @@ void async_set_result( struct object *obj, unsigned int status, apc_param_t tota
         async->status = status;
         if (status == STATUS_MORE_PROCESSING_REQUIRED) return;  /* don't report the completion */
 
-        if (async->queue && async->data.cvalue)
+        if (async->queue && async->data.cvalue && !async->skip_completion)
             add_async_completion( async->queue, async->data.cvalue, status, total );
         if (apc)
         {
@@ -428,6 +440,7 @@ static const struct object_ops iosb_ops =
     no_link_name,             /* link_name */
     NULL,                     /* unlink_name */
     no_open_file,             /* open_file */
+    no_alloc_handle,          /* alloc_handle */
     no_close_handle,          /* close_handle */
     iosb_destroy              /* destroy */
 };

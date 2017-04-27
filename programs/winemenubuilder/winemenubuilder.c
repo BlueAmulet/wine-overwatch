@@ -104,6 +104,14 @@ WINE_DEFAULT_DEBUG_CHANNEL(menubuilder);
 #define in_startmenu(csidl)   ((csidl)==CSIDL_STARTMENU || \
                                (csidl)==CSIDL_COMMON_STARTMENU)
 
+/* On linux we create all menu item entries with an absolute path to wine,
+ * in order to allow using multiple wine versions at the same time. */
+#ifdef __linux__
+    static const char wine_path[] = BINDIR "/wine";
+#else
+    static const char wine_path[] = "wine";
+#endif
+
 /* link file formats */
 
 #include "pshpack1.h"
@@ -1460,8 +1468,8 @@ static BOOL write_desktop_entry(const char *unix_link, const char *location, con
 
     fprintf(file, "[Desktop Entry]\n");
     fprintf(file, "Name=%s\n", linkname);
-    fprintf(file, "Exec=env WINEPREFIX=\"%s\" wine %s %s\n",
-            wine_get_config_dir(), path, args);
+    fprintf(file, "Exec=env WINEPREFIX=\"%s\" %s %s %s\n",
+            wine_get_config_dir(), wine_path, path, args);
     fprintf(file, "Type=Application\n");
     fprintf(file, "StartupNotify=true\n");
     if (descr && lstrlenA(descr))
@@ -2499,7 +2507,8 @@ static BOOL write_freedesktop_association_entry(const char *desktopPath, const c
         fprintf(desktop, "Type=Application\n");
         fprintf(desktop, "Name=%s\n", friendlyAppName);
         fprintf(desktop, "MimeType=%s;\n", mimeType);
-        fprintf(desktop, "Exec=env WINEPREFIX=\"%s\" wine start /ProgIDOpen %s %%f\n", wine_get_config_dir(), progId);
+        fprintf(desktop, "Exec=env WINEPREFIX=\"%s\" %s start /ProgIDOpen %s %%f\n",
+                wine_get_config_dir(), wine_path, progId);
         fprintf(desktop, "NoDisplay=true\n");
         fprintf(desktop, "StartupNotify=true\n");
         if (openWithIcon)

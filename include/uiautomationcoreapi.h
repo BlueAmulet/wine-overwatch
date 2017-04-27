@@ -39,20 +39,22 @@ DECLARE_HANDLE(HUIAPATTERNOBJECT);
 DECLARE_HANDLE(HUIATEXTRANGE);
 DECLARE_HANDLE(HUIAEVENT);
 
-enum AutomationIdentifierType
+typedef enum AutomationIdentifierType
 {
     AutomationIdentifierType_Property,
     AutomationIdentifierType_Pattern,
     AutomationIdentifierType_Event,
     AutomationIdentifierType_ControlType,
-    AutomationIdentifierType_TextAttribute
-};
+    AutomationIdentifierType_TextAttribute,
+    AutomationIdentifierType_LandmarkType,
+} AutomationIdentifierType;
 
 HRESULT WINAPI UiaGetReservedMixedAttributeValue(IUnknown **value);
 HRESULT WINAPI UiaGetReservedNotSupportedValue(IUnknown **value);
-int WINAPI UiaLookupId(enum AutomationIdentifierType type, const GUID *guid);
+int WINAPI UiaLookupId(AutomationIdentifierType type, const GUID *guid);
 BOOL WINAPI UiaPatternRelease(HUIAPATTERNOBJECT hobj);
 BOOL WINAPI UiaTextRangeRelease(HUIATEXTRANGE hobj);
+LRESULT WINAPI UiaReturnRawElementProvider(HWND hwnd, WPARAM wparam, LPARAM lparam, IRawElementProviderSimple *provider);
 
 #ifdef __cplusplus
 }

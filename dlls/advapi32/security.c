@@ -135,7 +135,7 @@ static const WELLKNOWNSID WellKnownSids[] =
     { {'M','E'}, WinMediumLabelSid, { SID_REVISION, 1, { SECURITY_MANDATORY_LABEL_AUTHORITY}, { SECURITY_MANDATORY_MEDIUM_RID } } },
     { {'H','I'}, WinHighLabelSid, { SID_REVISION, 1, { SECURITY_MANDATORY_LABEL_AUTHORITY}, { SECURITY_MANDATORY_HIGH_RID } } },
     { {'S','I'}, WinSystemLabelSid, { SID_REVISION, 1, { SECURITY_MANDATORY_LABEL_AUTHORITY}, { SECURITY_MANDATORY_SYSTEM_RID } } },
-    { {0,0}, WinBuiltinAnyPackageSid, { SID_REVISION, 2, { SECURITY_APP_PACKAGE_AUTHORITY }, { SECURITY_APP_PACKAGE_BASE_RID, SECURITY_BUILTIN_PACKAGE_ANY_PACKAGE } } },
+    { {'A','C'}, WinBuiltinAnyPackageSid, { SID_REVISION, 2, { SECURITY_APP_PACKAGE_AUTHORITY }, { SECURITY_APP_PACKAGE_BASE_RID, SECURITY_BUILTIN_PACKAGE_ANY_PACKAGE } } },
 };
 
 /* these SIDs must be constructed as relative to some domain - only the RID is well-known */
@@ -196,7 +196,7 @@ static const WCHAR Domain_Admins[] = { 'D','o','m','a','i','n',' ','A','d','m','
 static const WCHAR Domain_Computers[] = { 'D','o','m','a','i','n',' ','C','o','m','p','u','t','e','r','s',0 };
 static const WCHAR Domain_Controllers[] = { 'D','o','m','a','i','n',' ','C','o','n','t','r','o','l','l','e','r','s',0 };
 static const WCHAR Domain_Guests[] = { 'D','o','m','a','i','n',' ','G','u','e','s','t','s',0 };
-static const WCHAR Domain_Users[] = { 'D','o','m','a','i','n',' ','U','s','e','r','s',0 };
+static const WCHAR None[] = { 'N','o','n','e',0 };
 static const WCHAR Enterprise_Admins[] = { 'E','n','t','e','r','p','r','i','s','e',' ','A','d','m','i','n','s',0 };
 static const WCHAR ENTERPRISE_DOMAIN_CONTROLLERS[] = { 'E','N','T','E','R','P','R','I','S','E',' ','D','O','M','A','I','N',' ','C','O','N','T','R','O','L','L','E','R','S',0 };
 static const WCHAR Everyone[] = { 'E','v','e','r','y','o','n','e',0 };
@@ -1840,7 +1840,7 @@ static const WCHAR SE_IMPERSONATE_NAME_W[] =
 static const WCHAR SE_CREATE_GLOBAL_NAME_W[] =
  { 'S','e','C','r','e','a','t','e','G','l','o','b','a','l','P','r','i','v','i','l','e','g','e',0 };
 
-static const WCHAR * const WellKnownPrivNames[SE_MAX_WELL_KNOWN_PRIVILEGE + 1] =
+const WCHAR * const WellKnownPrivNames[SE_MAX_WELL_KNOWN_PRIVILEGE + 1] =
 {
     NULL,
     NULL,
@@ -2043,33 +2043,42 @@ BOOL WINAPI
 LookupPrivilegeNameW( LPCWSTR lpSystemName, PLUID lpLuid, LPWSTR lpName,
  LPDWORD cchName)
 {
+    UNICODE_STRING system_name, *priv;
+    LSA_HANDLE lsa;
+    NTSTATUS status;
     size_t privNameLen;
 
     TRACE("%s,%p,%p,%p\n",debugstr_w(lpSystemName), lpLuid, lpName, cchName);
 
-    if (!ADVAPI_IsLocalComputer(lpSystemName))
+    RtlInitUnicodeString(&system_name, lpSystemName);
+    status = LsaOpenPolicy(&system_name, NULL, POLICY_LOOKUP_NAMES, &lsa);
+    if (status)
     {
-        SetLastError(RPC_S_SERVER_UNAVAILABLE);
+        SetLastError(LsaNtStatusToWinError(status));
         return FALSE;
     }
-    if (lpLuid->HighPart || (lpLuid->LowPart < SE_MIN_WELL_KNOWN_PRIVILEGE ||
-     lpLuid->LowPart > SE_MAX_WELL_KNOWN_PRIVILEGE))
+
+    status = LsaLookupPrivilegeName(&lsa, lpLuid, &priv);
+    LsaClose(lsa);
+    if (status)
     {
-        SetLastError(ERROR_NO_SUCH_PRIVILEGE);
+        SetLastError(LsaNtStatusToWinError(status));
         return FALSE;
     }
-    privNameLen = strlenW(WellKnownPrivNames[lpLuid->LowPart]);
-    /* Windows crashes if cchName is NULL, so will I */
+
+    privNameLen = priv->Length / sizeof(WCHAR);
     if (*cchName <= privNameLen)
     {
         *cchName = privNameLen + 1;
+        LsaFreeMemory(priv);
         SetLastError(ERROR_INSUFFICIENT_BUFFER);
         return FALSE;
     }
     else
     {
-        strcpyW(lpName, WellKnownPrivNames[lpLuid->LowPart]);
+        strcpyW(lpName, priv->Buffer);
         *cchName = privNameLen;
+        LsaFreeMemory(priv);
         return TRUE;
     }
 }
@@ -2296,7 +2305,10 @@ LookupAccountSidW(
                             ac = Domain_Admins;
                             break;
                         case DOMAIN_GROUP_RID_USERS:
-                            ac = Domain_Users;
+                            /* MSDN says the name of DOMAIN_GROUP_RID_USERS is Domain Users,
+                             * tests show that MSDN seems to be wrong. */
+                            ac = None;
+                            use = 2;
                             break;
                         case DOMAIN_GROUP_RID_GUESTS:
                             ac = Domain_Guests;
@@ -4205,8 +4217,85 @@ DWORD WINAPI GetExplicitEntriesFromAclA( PACL pacl, PULONG pcCountOfExplicitEntr
 DWORD WINAPI GetExplicitEntriesFromAclW( PACL pacl, PULONG pcCountOfExplicitEntries,
         PEXPLICIT_ACCESSW* pListOfExplicitEntries)
 {
-    FIXME("%p %p %p\n",pacl, pcCountOfExplicitEntries, pListOfExplicitEntries);
-    return ERROR_CALL_NOT_IMPLEMENTED;
+    ACL_SIZE_INFORMATION sizeinfo;
+    EXPLICIT_ACCESSW* entries;
+    MAX_SID *sid_entries;
+    ACE_HEADER *ace;
+    NTSTATUS status;
+    int i;
+
+    FIXME("%p %p %p: semi-stub\n",pacl, pcCountOfExplicitEntries, pListOfExplicitEntries);
+
+    if (!pcCountOfExplicitEntries || !pListOfExplicitEntries)
+        return ERROR_INVALID_PARAMETER;
+
+    status = RtlQueryInformationAcl(pacl, &sizeinfo, sizeof(sizeinfo), AclSizeInformation);
+    if (status) return RtlNtStatusToDosError(status);
+
+    if (!sizeinfo.AceCount)
+    {
+        *pcCountOfExplicitEntries = 0;
+        *pListOfExplicitEntries = NULL;
+        return ERROR_SUCCESS;
+    }
+
+    entries = LocalAlloc(LMEM_FIXED | LMEM_ZEROINIT, (sizeof(EXPLICIT_ACCESSW) + sizeof(MAX_SID)) * sizeinfo.AceCount);
+    if (!entries) return ERROR_OUTOFMEMORY;
+    sid_entries = (MAX_SID*)((char*)entries + sizeof(EXPLICIT_ACCESSW) * sizeinfo.AceCount);
+
+    for (i = 0; i < sizeinfo.AceCount; i++)
+    {
+        status = RtlGetAce(pacl, i, (void**)&ace);
+        if (status) goto error;
+
+        switch (ace->AceType)
+        {
+            case ACCESS_ALLOWED_ACE_TYPE:
+            {
+                ACCESS_ALLOWED_ACE *allow = (ACCESS_ALLOWED_ACE *)ace;
+                entries[i].grfAccessMode = GRANT_ACCESS;
+                entries[i].grfInheritance = ace->AceFlags;
+                entries[i].grfAccessPermissions = allow->Mask;
+
+                CopySid(sizeof(MAX_SID), (PSID)&sid_entries[i], (PSID)&allow->SidStart);
+                entries[i].Trustee.pMultipleTrustee = NULL;
+                entries[i].Trustee.MultipleTrusteeOperation = NO_MULTIPLE_TRUSTEE;
+                entries[i].Trustee.TrusteeForm = TRUSTEE_IS_SID;
+                entries[i].Trustee.TrusteeType = TRUSTEE_IS_UNKNOWN;
+                entries[i].Trustee.ptstrName = (WCHAR *)&sid_entries[i];
+                break;
+            }
+
+            case ACCESS_DENIED_ACE_TYPE:
+            {
+                ACCESS_DENIED_ACE *deny = (ACCESS_DENIED_ACE *)ace;
+                entries[i].grfAccessMode = DENY_ACCESS;
+                entries[i].grfInheritance = ace->AceFlags;
+                entries[i].grfAccessPermissions = deny->Mask;
+
+                CopySid(sizeof(MAX_SID), (PSID)&sid_entries[i], (PSID)&deny->SidStart);
+                entries[i].Trustee.pMultipleTrustee = NULL;
+                entries[i].Trustee.MultipleTrusteeOperation = NO_MULTIPLE_TRUSTEE;
+                entries[i].Trustee.TrusteeForm = TRUSTEE_IS_SID;
+                entries[i].Trustee.TrusteeType = TRUSTEE_IS_UNKNOWN;
+                entries[i].Trustee.ptstrName = (WCHAR *)&sid_entries[i];
+                break;
+            }
+
+            default:
+                FIXME("Unhandled ace type %d\n", ace->AceType);
+                entries[i].grfAccessMode = NOT_USED_ACCESS;
+                continue;
+        }
+    }
+
+    *pcCountOfExplicitEntries = sizeinfo.AceCount;
+    *pListOfExplicitEntries = entries;
+    return ERROR_SUCCESS;
+
+error:
+    LocalFree(entries);
+    return RtlNtStatusToDosError(status);
 }
 
 /******************************************************************************
@@ -5864,6 +5953,67 @@ BOOL WINAPI FileEncryptionStatusA(LPCSTR lpFileName, LPDWORD lpStatus)
     return TRUE;
 }
 
+static NTSTATUS combine_dacls(ACL *parent, ACL *child, ACL **result)
+{
+    NTSTATUS status;
+    ACL *combined;
+    int i;
+
+    /* initialize a combined DACL containing both inherited and new ACEs */
+    combined = heap_alloc_zero(child->AclSize+parent->AclSize);
+    if (!combined)
+        return STATUS_NO_MEMORY;
+
+    status = RtlCreateAcl(combined, parent->AclSize+child->AclSize, ACL_REVISION);
+    if (status != STATUS_SUCCESS)
+    {
+        heap_free(combined);
+        return status;
+    }
+
+    /* copy the new ACEs */
+    for (i=0; i<child->AceCount; i++)
+    {
+        ACE_HEADER *ace;
+
+        if (!GetAce(child, i, (void*)&ace))
+        {
+            WARN("error obtaining new ACE\n");
+            continue;
+        }
+        if (!AddAce(combined, ACL_REVISION, MAXDWORD, ace, ace->AceSize))
+            WARN("error adding new ACE\n");
+    }
+
+    /* copy the inherited ACEs */
+    for (i=0; i<parent->AceCount; i++)
+    {
+        ACE_HEADER *ace;
+
+        if (!GetAce(parent, i, (void*)&ace))
+            continue;
+        if (!(ace->AceFlags & (OBJECT_INHERIT_ACE|CONTAINER_INHERIT_ACE)))
+            continue;
+        if ((ace->AceFlags & (OBJECT_INHERIT_ACE|CONTAINER_INHERIT_ACE)) !=
+                (OBJECT_INHERIT_ACE|CONTAINER_INHERIT_ACE))
+        {
+            FIXME("unsupported flags: %x\n", ace->AceFlags);
+            continue;
+        }
+
+        if (ace->AceFlags & NO_PROPAGATE_INHERIT_ACE)
+            ace->AceFlags &= ~(OBJECT_INHERIT_ACE|CONTAINER_INHERIT_ACE|NO_PROPAGATE_INHERIT_ACE);
+        ace->AceFlags &= ~INHERIT_ONLY_ACE;
+        ace->AceFlags |= INHERITED_ACE;
+
+        if (!AddAce(combined, ACL_REVISION, MAXDWORD, ace, ace->AceSize))
+            WARN("error adding inherited ACE\n");
+    }
+
+    *result = combined;
+    return STATUS_SUCCESS;
+}
+
 /******************************************************************************
  * SetSecurityInfo [ADVAPI32.@]
  */
@@ -5963,41 +6113,10 @@ DWORD WINAPI SetSecurityInfo(HANDLE handle, SE_OBJECT_TYPE ObjectType,
 
                     if (!err)
                     {
-                        int i;
-
-                        dacl = heap_alloc_zero(pDacl->AclSize+parent_dacl->AclSize);
-                        if (!dacl)
-                        {
-                            LocalFree(parent_sd);
-                            return ERROR_NOT_ENOUGH_MEMORY;
-                        }
-                        memcpy(dacl, pDacl, pDacl->AclSize);
-                        dacl->AclSize = pDacl->AclSize+parent_dacl->AclSize;
-
-                        for (i=0; i<parent_dacl->AceCount; i++)
-                        {
-                            ACE_HEADER *ace;
-
-                            if (!GetAce(parent_dacl, i, (void*)&ace))
-                                continue;
-                            if (!(ace->AceFlags & (OBJECT_INHERIT_ACE|CONTAINER_INHERIT_ACE)))
-                                continue;
-                            if ((ace->AceFlags & (OBJECT_INHERIT_ACE|CONTAINER_INHERIT_ACE)) !=
-                                    (OBJECT_INHERIT_ACE|CONTAINER_INHERIT_ACE))
-                            {
-                                FIXME("unsupported flags: %x\n", ace->AceFlags);
-                                continue;
-                            }
-
-                            if (ace->AceFlags & NO_PROPAGATE_INHERIT_ACE)
-                                ace->AceFlags &= ~(OBJECT_INHERIT_ACE|CONTAINER_INHERIT_ACE|NO_PROPAGATE_INHERIT_ACE);
-                            ace->AceFlags &= ~INHERIT_ONLY_ACE;
-                            ace->AceFlags |= INHERITED_ACE;
-
-                            if(!AddAce(dacl, ACL_REVISION, MAXDWORD, ace, ace->AceSize))
-                                WARN("error adding inherited ACE\n");
-                        }
+                        status = combine_dacls(parent_dacl, pDacl, &dacl);
                         LocalFree(parent_sd);
+                        if (status != STATUS_SUCCESS)
+                            return RtlNtStatusToDosError(status);
                     }
                 }
                 else

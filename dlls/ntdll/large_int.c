@@ -660,4 +660,66 @@ ULONGLONG WINAPI _aullshr( ULONGLONG a, LONG b )
     return a >> b;
 }
 
+void CDECL _alldvrm_helper( LONGLONG *res, LONGLONG *arg )
+{
+    res[0] = arg[0] / arg[1];
+    res[1] = arg[0] % arg[1];
+}
+
+void CDECL _aulldvrm_helper( ULONGLONG *res, ULONGLONG *arg )
+{
+    res[0] = arg[0] / arg[1];
+    res[1] = arg[0] % arg[1];
+}
+
+/******************************************************************************
+ *        _alldvrm   (NTDLL.@)
+ */
+__ASM_GLOBAL_FUNC( _alldvrm,
+                   "pushl %ebp\n\t"
+                   __ASM_CFI(".cfi_adjust_cfa_offset 4\n\t")
+                   __ASM_CFI(".cfi_rel_offset %ebp,0\n\t")
+                   "movl %esp,%ebp\n\t"
+                   __ASM_CFI(".cfi_def_cfa_register %ebp\n\t")
+                   "subl $20,%esp\n\t"
+                   "leal 8(%ebp),%eax\n\t"
+                   "leal -16(%ebp),%ecx\n\t"
+                   "pushl %eax\n\t"
+                   "pushl %ecx\n\t"
+                   "call " __ASM_NAME("_alldvrm_helper") "\n\t"
+                   "leal -16(%ebp),%esp\n\t"
+                   "popl %eax\n\t"
+                   "popl %edx\n\t"
+                   "popl %ecx\n\t"
+                   "popl %ebx\n\t"
+                   "popl %ebp\n\t"
+                   __ASM_CFI(".cfi_def_cfa %esp,4\n\t")
+                   __ASM_CFI(".cfi_same_value %ebp\n\t")
+                   "ret $16" )
+
+/******************************************************************************
+ *        _aulldvrm   (NTDLL.@)
+ */
+__ASM_GLOBAL_FUNC( _aulldvrm,
+                   "pushl %ebp\n\t"
+                   __ASM_CFI(".cfi_adjust_cfa_offset 4\n\t")
+                   __ASM_CFI(".cfi_rel_offset %ebp,0\n\t")
+                   "movl %esp,%ebp\n\t"
+                   __ASM_CFI(".cfi_def_cfa_register %ebp\n\t")
+                   "subl $20,%esp\n\t"
+                   "leal 8(%ebp),%eax\n\t"
+                   "leal -16(%ebp),%ecx\n\t"
+                   "pushl %eax\n\t"
+                   "pushl %ecx\n\t"
+                   "call " __ASM_NAME("_aulldvrm_helper") "\n\t"
+                   "leal -16(%ebp),%esp\n\t"
+                   "popl %eax\n\t"
+                   "popl %edx\n\t"
+                   "popl %ecx\n\t"
+                   "popl %ebx\n\t"
+                   "popl %ebp\n\t"
+                   __ASM_CFI(".cfi_def_cfa %esp,4\n\t")
+                   __ASM_CFI(".cfi_same_value %ebp\n\t")
+                   "ret $16" )
+
 #endif  /* __i386__ */

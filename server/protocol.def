@@ -69,6 +69,21 @@ struct request_max_size
 #define FIRST_USER_HANDLE 0x0020  /* first possible value for low word of user handle */
 #define LAST_USER_HANDLE  0xffef  /* last possible value for low word of user handle */
 
+/* wineserver global shared memory block */
+typedef struct
+{
+    unsigned int last_input_time;       /* last input time */
+    unsigned int foreground_wnd_epoch;  /* counter to invalidate foreground window */
+} shmglobal_t;
+
+/* wineserver local shared memory block */
+typedef struct
+{
+    int             queue_bits;     /* queue wake bits */
+    user_handle_t   input_focus;    /* focus window */
+    user_handle_t   input_capture;  /* capture window */
+    user_handle_t   input_active;   /* active window */
+} shmlocal_t;
 
 /* debug event data */
 typedef union
@@ -740,8 +755,12 @@ struct rawinput_device
     unsigned int thread_attr;    /* attributes for thread object */
     cpu_type_t   cpu;            /* CPU that the new process will use */
     data_size_t  info_size;      /* size of startup info */
+    data_size_t  env_size;       /* size of the environment */
+    data_size_t  process_sd_size;/* size of the process security descriptor */
     VARARG(info,startup_info,info_size); /* startup information */
-    VARARG(env,unicode_str);     /* environment for new process */
+    VARARG(env,unicode_str,env_size);                       /* environment for new process */
+    VARARG(process_sd,security_descriptor,process_sd_size); /* security descriptor to set on the process */
+    VARARG(thread_sd,security_descriptor);                  /* security descriptor to set on the thread */
 @REPLY
     obj_handle_t info;           /* new process info handle */
     process_id_t pid;            /* process id */
@@ -881,6 +900,8 @@ struct rawinput_device
 @REPLY
     timeout_t    creation_time; /* thread creation time */
     timeout_t    exit_time;     /* thread exit time */
+    int          unix_pid;      /* thread native pid */
+    int          unix_tid;      /* thread native pid */
 @END
 
 
@@ -968,6 +989,9 @@ struct rawinput_device
     obj_handle_t handle;       /* handle to close */
 @END
 
+/* Close all sockets for the current process */
+@REQ(socket_cleanup)
+@END
 
 /* Set a handle information */
 @REQ(set_handle_info)
@@ -1243,6 +1267,12 @@ enum server_fd_type
 @END
 
 
+/* Get file descriptor for shared memory */
+@REQ(get_shared_memory)
+    thread_id_t tid;            /* thread id or 0 */
+@END
+
+
 /* Flush a file buffers */
 @REQ(flush)
     int            blocking;    /* whether it's a blocking flush */
@@ -1303,6 +1333,12 @@ enum server_fd_type
 @END
 
 
+/* Mark a socket to be reused after "closed" */
+@REQ(reuse_socket)
+    obj_handle_t handle;       /* handle to the socket */
+@END
+
+
 /* Set socket event parameters */
 @REQ(set_socket_event)
     obj_handle_t  handle;        /* handle to the socket */
@@ -1333,6 +1369,7 @@ enum server_fd_type
     int family;                 /* family, see socket manpage */
     int type;                   /* type, see socket manpage */
     int protocol;               /* protocol, see socket manpage */
+    timeout_t connect_time;     /* time the socket was connected (relative) */
 @END
 
 
@@ -1771,6 +1808,7 @@ enum char_info_mode
     int          priority;      /* process priority */
     int          handles;       /* number of handles */
     int          unix_pid;      /* Unix pid */
+    timeout_t    start_time;    /* start time */
     VARARG(filename,unicode_str); /* file name of main exe */
 @END
 
@@ -1783,8 +1821,10 @@ enum char_info_mode
     int          count;         /* thread usage count */
     process_id_t pid;           /* process id */
     thread_id_t  tid;           /* thread id */
+    timeout_t    creation_time; /* thread creation time */
     int          base_pri;      /* base priority */
     int          delta_pri;     /* delta priority */
+    int          unix_tid;      /* Unix tid */
 @END
 
 
@@ -3322,9 +3362,9 @@ enum caret_state
 @REQ(duplicate_token)
     obj_handle_t  handle;        /* handle to the token to duplicate */
     unsigned int  access;        /* access rights to the new token */
-    unsigned int  attributes;    /* object attributes */
     int           primary;       /* is the new token to be a primary one? */
     int           impersonation_level; /* impersonation level of the new token */
+    VARARG(objattr,object_attributes); /* object attributes */
 @REPLY
     obj_handle_t  new_handle; /* duplicated handle */
 @END
@@ -3391,6 +3431,7 @@ struct handle_info
     process_id_t owner;
     obj_handle_t handle;
     unsigned int access;
+    unsigned int type;
 };
 
 /* Return a list of all opened handles */
@@ -3500,6 +3541,16 @@ struct handle_info
 /* Query object type name information */
 @REQ(get_object_type)
     obj_handle_t   handle;        /* handle to the object */
+@REPLY
+    unsigned int   index;         /* type index */
+    data_size_t    total;         /* needed size for type name */
+    VARARG(type,unicode_str);     /* type name */
+@END
+
+
+/* Query object type name information */
+@REQ(get_object_type_by_index)
+    unsigned int   index;         /* index of the type */
 @REPLY
     data_size_t    total;         /* needed size for type name */
     VARARG(type,unicode_str);     /* type name */
@@ -3657,6 +3708,22 @@ struct handle_info
 @END
 
 
+/* set fd completion information */
+@REQ(set_fd_compl_info)
+    obj_handle_t handle;          /* handle to a file or directory */
+    int          flags;           /* completion flags (see below) */
+@END
+#define COMPLETION_SKIP_ON_SUCCESS 0x01
+
+
+/* get fd completion information */
+@REQ(get_fd_compl_info)
+    obj_handle_t handle;          /* handle to a file or directory */
+@REPLY
+    int          flags;           /* completion flags (see below) */
+@END
+
+
 /* set fd disposition information */
 @REQ(set_fd_disp_info)
     obj_handle_t handle;          /* handle to a file or directory */
@@ -3670,6 +3737,13 @@ struct handle_info
     obj_handle_t rootdir;         /* root directory */
     int          link;            /* link instead of renaming */
     VARARG(filename,string);      /* new file name */
+@END
+
+
+/* set fd eof information */
+@REQ(set_fd_eof_info)
+    obj_handle_t handle;        /* handle to a file or directory */
+    file_pos_t   eof;           /* offset of eof of file */
 @END
 
 
@@ -3803,4 +3877,25 @@ struct handle_info
 @REQ(terminate_job)
     obj_handle_t handle;          /* handle to the job */
     int          status;          /* process exit code */
+@END
+
+
+/* Return system information values */
+@REQ(get_system_info)
+@REPLY
+    unsigned int processes;   /* number of processes */
+    unsigned int threads;     /* number of threads */
+    unsigned int handles;     /* number of handles */
+@END
+
+
+/* Suspend a process */
+@REQ(suspend_process)
+    obj_handle_t handle;       /* process handle */
+@END
+
+
+/* Resume a process */
+@REQ(resume_process)
+    obj_handle_t handle;       /* process handle */
 @END

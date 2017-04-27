@@ -542,3 +542,11 @@ LONG CDECL MSVCRT__crtUnhandledException(EXCEPTION_POINTERS *ep)
     SetUnhandledExceptionFilter(NULL);
     return UnhandledExceptionFilter(ep);
 }
+
+/*********************************************************************
+ * _SetWinRTOutOfMemoryExceptionCallback (MSVCR120.@)
+ */
+void CDECL MSVCR120__SetWinRTOutOfMemoryExceptionCallback(void *callback)
+{
+    FIXME("(%p): stub\n", callback);
+}

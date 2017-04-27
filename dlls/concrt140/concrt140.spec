@@ -346,7 +346,7 @@
 @ stub ?_GetNumberOfVirtualProcessors@_CurrentScheduler@details@Concurrency@@SAIXZ
 @ stub -arch=i386 ?_GetScheduler@_Scheduler@details@Concurrency@@QAEPAVScheduler@3@XZ
 @ stub -arch=win64 ?_GetScheduler@_Scheduler@details@Concurrency@@QEAAPEAVScheduler@3@XZ
-@ stub ?_Id@_CurrentScheduler@details@Concurrency@@SAIXZ
+@ cdecl ?_Id@_CurrentScheduler@details@Concurrency@@SAIXZ() msvcr120.?_Id@_CurrentScheduler@details@Concurrency@@SAIXZ
 @ stub -arch=i386 ?_Internal_assign@_Concurrent_vector_base_v4@details@Concurrency@@IAEXABV123@IP6AXPAXI@ZP6AX1PBXI@Z4@Z
 @ stub -arch=win64 ?_Internal_assign@_Concurrent_vector_base_v4@details@Concurrency@@IEAAXAEBV123@_KP6AXPEAX1@ZP6AX2PEBX1@Z5@Z
 @ stub -arch=i386 ?_Internal_capacity@_Concurrent_vector_base_v4@details@Concurrency@@IBEIXZ

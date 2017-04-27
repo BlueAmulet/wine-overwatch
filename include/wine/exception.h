@@ -259,6 +259,7 @@ static inline EXCEPTION_REGISTRATION_RECORD *__wine_get_frame(void)
 
 #define EXCEPTION_WINE_STUB       0x80000100  /* stub entry point called */
 #define EXCEPTION_WINE_ASSERTION  0x80000101  /* assertion failed */
+#define EXCEPTION_WINE_SYSCALL    0x80000103
 
 /* unhandled return status from vm86 mode */
 #define EXCEPTION_VM86_INTx       0x80000110

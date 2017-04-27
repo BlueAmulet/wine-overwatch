@@ -60,8 +60,10 @@ static int shutdown_stage;  /* current stage in the shutdown process */
 /* process operations */
 
 static void process_dump( struct object *obj, int verbose );
+static struct object_type *process_get_type( struct object *obj );
 static int process_signaled( struct object *obj, struct wait_queue_entry *entry );
 static unsigned int process_map_access( struct object *obj, unsigned int access );
+static struct security_descriptor *process_get_sd( struct object *obj );
 static void process_poll_event( struct fd *fd, int event );
 static void process_destroy( struct object *obj );
 static void terminate_process( struct process *process, struct thread *skip, int exit_code );
@@ -70,7 +72,7 @@ static const struct object_ops process_ops =
 {
     sizeof(struct process),      /* size */
     process_dump,                /* dump */
-    no_get_type,                 /* get_type */
+    process_get_type,            /* get_type */
     add_queue,                   /* add_queue */
     remove_queue,                /* remove_queue */
     process_signaled,            /* signaled */
@@ -78,12 +80,13 @@ static const struct object_ops process_ops =
     no_signal,                   /* signal */
     no_get_fd,                   /* get_fd */
     process_map_access,          /* map_access */
-    default_get_sd,              /* get_sd */
+    process_get_sd,              /* get_sd */
     default_set_sd,              /* set_sd */
     no_lookup_name,              /* lookup_name */
     no_link_name,                /* link_name */
     NULL,                        /* unlink_name */
     no_open_file,                /* open_file */
+    no_alloc_handle,             /* alloc_handle */
     no_close_handle,             /* close_handle */
     process_destroy              /* destroy */
 };
@@ -134,6 +137,7 @@ static const struct object_ops startup_info_ops =
     no_link_name,                  /* link_name */
     NULL,                          /* unlink_name */
     no_open_file,                  /* open_file */
+    no_alloc_handle,               /* alloc_handle */
     no_close_handle,               /* close_handle */
     startup_info_destroy           /* destroy */
 };
@@ -177,6 +181,7 @@ static const struct object_ops job_ops =
     directory_link_name,           /* link_name */
     default_unlink_name,           /* unlink_name */
     no_open_file,                  /* open_file */
+    no_alloc_handle,               /* alloc_handle */
     job_close_handle,              /* close_handle */
     job_destroy                    /* destroy */
 };
@@ -210,8 +215,7 @@ static struct job *get_job_obj( struct process *process, obj_handle_t handle, un
 
 static struct object_type *job_get_type( struct object *obj )
 {
-    static const WCHAR name[] = {'J','o','b'};
-    static const struct unicode_str str = { name, sizeof(name) };
+    static const struct unicode_str str = { type_Job, sizeof(type_Job) };
     return get_object_type( &str );
 };
 
@@ -565,10 +569,17 @@ struct thread *create_process( int fd, struct thread *parent_thread, int inherit
                                        : alloc_handle_table( process, 0 );
         /* Note: for security reasons, starting a new process does not attempt
          * to use the current impersonation token for the new process */
-        process->token = token_duplicate( parent->token, TRUE, 0 );
+        process->token = token_duplicate( parent->token, TRUE, 0, NULL );
         process->affinity = parent->affinity;
     }
     if (!process->handles || !process->token) goto error;
+
+    /* Assign high security label to token. The default would be medium, but wine provides
+     * admin access to all applications, so high makes more sense. For further information:
+     * "Default integrity level" at https://msdn.microsoft.com/en-us/library/bb625963.aspx
+     */
+    if (!token_assign_label( process->token, security_high_label_sid ))
+        goto error;
 
     /* create the main thread */
     if (pipe( request_pipe ) == -1)
@@ -645,6 +656,12 @@ static void process_dump( struct object *obj, int verbose )
     fprintf( stderr, "Process id=%04x handles=%p\n", process->id, process->handles );
 }
 
+static struct object_type *process_get_type( struct object *obj )
+{
+    static const struct unicode_str str = { type_Process, sizeof(type_Process) };
+    return get_object_type( &str );
+}
+
 static int process_signaled( struct object *obj, struct wait_queue_entry *entry )
 {
     struct process *process = (struct process *)obj;
@@ -663,6 +680,53 @@ static unsigned int process_map_access( struct object *obj, unsigned int access 
     if (access & PROCESS_SET_INFORMATION) access |= PROCESS_SET_LIMITED_INFORMATION;
 
     return access & ~(GENERIC_READ | GENERIC_WRITE | GENERIC_EXECUTE | GENERIC_ALL);
+}
+
+static struct security_descriptor *process_get_sd( struct object *obj )
+{
+    static struct security_descriptor *key_default_sd;
+
+    if (obj->sd) return obj->sd;
+
+    if (!key_default_sd)
+    {
+        size_t users_sid_len = security_sid_len( security_domain_users_sid );
+        size_t admins_sid_len = security_sid_len( security_builtin_admins_sid );
+        size_t dacl_len = sizeof(ACL) + 2 * offsetof( ACCESS_ALLOWED_ACE, SidStart )
+                          + users_sid_len + admins_sid_len;
+        ACCESS_ALLOWED_ACE *aaa;
+        ACL *dacl;
+
+        key_default_sd = mem_alloc( sizeof(*key_default_sd) + admins_sid_len + users_sid_len
+                                    + dacl_len );
+        key_default_sd->control   = SE_DACL_PRESENT;
+        key_default_sd->owner_len = admins_sid_len;
+        key_default_sd->group_len = users_sid_len;
+        key_default_sd->sacl_len  = 0;
+        key_default_sd->dacl_len  = dacl_len;
+        memcpy( key_default_sd + 1, security_builtin_admins_sid, admins_sid_len );
+        memcpy( (char *)(key_default_sd + 1) + admins_sid_len, security_domain_users_sid, users_sid_len );
+
+        dacl = (ACL *)((char *)(key_default_sd + 1) + admins_sid_len + users_sid_len);
+        dacl->AclRevision = ACL_REVISION;
+        dacl->Sbz1 = 0;
+        dacl->AclSize = dacl_len;
+        dacl->AceCount = 2;
+        dacl->Sbz2 = 0;
+        aaa = (ACCESS_ALLOWED_ACE *)(dacl + 1);
+        aaa->Header.AceType = ACCESS_ALLOWED_ACE_TYPE;
+        aaa->Header.AceFlags = INHERIT_ONLY_ACE | CONTAINER_INHERIT_ACE;
+        aaa->Header.AceSize = offsetof( ACCESS_ALLOWED_ACE, SidStart ) + users_sid_len;
+        aaa->Mask = GENERIC_READ;
+        memcpy( &aaa->SidStart, security_domain_users_sid, users_sid_len );
+        aaa = (ACCESS_ALLOWED_ACE *)((char *)aaa + aaa->Header.AceSize);
+        aaa->Header.AceType = ACCESS_ALLOWED_ACE_TYPE;
+        aaa->Header.AceFlags = 0;
+        aaa->Header.AceSize = offsetof( ACCESS_ALLOWED_ACE, SidStart ) + admins_sid_len;
+        aaa->Mask = PROCESS_ALL_ACCESS;
+        memcpy( &aaa->SidStart, security_builtin_admins_sid, admins_sid_len );
+    }
+    return key_default_sd;
 }
 
 static void process_poll_event( struct fd *fd, int event )
@@ -836,7 +900,6 @@ static void process_killed( struct process *process )
 
     assert( list_empty( &process->thread_list ));
     process->end_time = current_time;
-    if (!process->is_system) close_process_desktop( process );
     process->winstation = 0;
     process->desktop = 0;
     close_process_handles( process );
@@ -1090,6 +1153,7 @@ DECL_HANDLER(new_process)
     struct process *process;
     struct process *parent = current->process;
     int socket_fd = thread_get_inflight_fd( current, req->socket_fd );
+    const struct security_descriptor *process_sd = NULL, *thread_sd = NULL;
 
     if (socket_fd == -1)
     {
@@ -1145,7 +1209,7 @@ DECL_HANDLER(new_process)
         goto done;
     }
 
-    info->data_size = get_req_data_size();
+    info->data_size = min( get_req_data_size(), req->info_size + req->env_size );
     info->info_size = min( req->info_size, info->data_size );
 
     if (req->info_size < sizeof(*info->data))
@@ -1184,6 +1248,34 @@ DECL_HANDLER(new_process)
         FIXUP_LEN( info->data->shellinfo_len );
         FIXUP_LEN( info->data->runtime_len );
 #undef FIXUP_LEN
+    }
+
+    if (get_req_data_size() > req->info_size + req->env_size)
+    {
+        data_size_t sd_size, pos = req->info_size + req->env_size;
+
+        /* verify process sd */
+        if ((sd_size = min( get_req_data_size() - pos, req->process_sd_size )))
+        {
+            process_sd = (const struct security_descriptor *)((const char *)get_req_data() + pos);
+            if (!sd_is_valid( process_sd, sd_size ))
+            {
+                set_error( STATUS_INVALID_SECURITY_DESCR );
+                goto done;
+            }
+            pos += sd_size;
+        }
+
+        /* verify thread sd */
+        if ((sd_size = get_req_data_size() - pos))
+        {
+            thread_sd = (const struct security_descriptor *)((const char *)get_req_data() + pos);
+            if (!sd_is_valid( thread_sd, sd_size ))
+            {
+                set_error( STATUS_INVALID_SECURITY_DESCR );
+                goto done;
+            }
+        }
     }
 
     if (!(thread = create_process( socket_fd, current, req->inherit_all ))) goto done;
@@ -1247,6 +1339,25 @@ DECL_HANDLER(new_process)
     reply->tid = get_thread_id( thread );
     reply->phandle = alloc_handle( parent, process, req->process_access, req->process_attr );
     reply->thandle = alloc_handle( parent, thread, req->thread_access, req->thread_attr );
+
+    if (process_sd)
+    {
+        default_set_sd( &process->obj, process_sd,
+                        OWNER_SECURITY_INFORMATION |
+                        GROUP_SECURITY_INFORMATION |
+                        DACL_SECURITY_INFORMATION |
+                        SACL_SECURITY_INFORMATION );
+    }
+
+    if (thread_sd)
+    {
+        set_sd_defaults_from_token( &thread->obj, thread_sd,
+                                    OWNER_SECURITY_INFORMATION |
+                                    GROUP_SECURITY_INFORMATION |
+                                    DACL_SECURITY_INFORMATION |
+                                    SACL_SECURITY_INFORMATION,
+                                    process->token );
+    }
 
  done:
     release_object( info );
@@ -1648,4 +1759,22 @@ DECL_HANDLER(set_job_completion_port)
         set_error( STATUS_INVALID_PARAMETER );
 
     release_object( job );
+}
+
+/* Retrieve process, thread and handle count */
+DECL_HANDLER(get_system_info)
+{
+    struct process *process;
+
+    reply->processes = 0;
+    reply->threads = 0;
+    reply->handles = 0;
+
+    LIST_FOR_EACH_ENTRY( process, &process_list, struct process, entry )
+    {
+        if (!process->running_threads) continue;
+        reply->processes++;
+        reply->threads += process->running_threads;
+        reply->handles += get_handle_table_count( process );
+    }
 }

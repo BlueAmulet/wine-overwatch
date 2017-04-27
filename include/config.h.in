@@ -44,6 +44,9 @@
 /* Define to 1 if you have the <asm/user.h> header file. */
 #undef HAVE_ASM_USER_H
 
+/* Define to 1 if you have the <attr/xattr.h> header file. */
+#undef HAVE_ATTR_XATTR_H
+
 /* Define to 1 if you have the <AudioToolbox/AudioConverter.h> header file. */
 #undef HAVE_AUDIOTOOLBOX_AUDIOCONVERTER_H
 
@@ -251,6 +254,12 @@
 
 /* Define to 1 if you have the <gsm.h> header file. */
 #undef HAVE_GSM_H
+
+/* Define if GTK 3 is installed */
+#undef HAVE_GTK3
+
+/* Define to 1 if you have the <gtk/gtk.h> header file. */
+#undef HAVE_GTK_GTK_H
 
 /* Define to 1 if you have the <ieeefp.h> header file. */
 #undef HAVE_IEEEFP_H
@@ -1050,6 +1059,9 @@
 /* Define to 1 if you have the <sys/exec_elf.h> header file. */
 #undef HAVE_SYS_EXEC_ELF_H
 
+/* Define to 1 if you have the <sys/extattr.h> header file. */
+#undef HAVE_SYS_EXTATTR_H
+
 /* Define to 1 if you have the <sys/filio.h> header file. */
 #undef HAVE_SYS_FILIO_H
 
@@ -1188,6 +1200,9 @@
 /* Define to 1 if you have the <sys/wait.h> header file. */
 #undef HAVE_SYS_WAIT_H
 
+/* Define to 1 if you have the <sys/xattr.h> header file. */
+#undef HAVE_SYS_XATTR_H
+
 /* Define to 1 if you have the `tcdrain' function. */
 #undef HAVE_TCDRAIN
 
@@ -1224,11 +1239,20 @@
 /* Define to 1 if you have the <utime.h> header file. */
 #undef HAVE_UTIME_H
 
+/* Define if you have the libva development files */
+#undef HAVE_VAAPI
+
 /* Define to 1 if you have the <valgrind/memcheck.h> header file. */
 #undef HAVE_VALGRIND_MEMCHECK_H
 
 /* Define to 1 if you have the <valgrind/valgrind.h> header file. */
 #undef HAVE_VALGRIND_VALGRIND_H
+
+/* Define to 1 if you have the <va/va_drm.h> header file. */
+#undef HAVE_VA_VA_DRM_H
+
+/* Define to 1 if you have the <va/va_x11.h> header file. */
+#undef HAVE_VA_VA_X11_H
 
 /* Define to 1 if you have the `vsnprintf' function. */
 #undef HAVE_VSNPRINTF
@@ -1271,6 +1295,9 @@
 
 /* Define to 1 if you have the <X11/Xlib.h> header file. */
 #undef HAVE_X11_XLIB_H
+
+/* Define to 1 if you have the <X11/Xlib-xcb.h> header file. */
+#undef HAVE_X11_XLIB_XCB_H
 
 /* Define to 1 if you have the <X11/Xutil.h> header file. */
 #undef HAVE_X11_XUTIL_H
@@ -1391,6 +1418,9 @@
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
 
+/* Define to the soname of the libcairo library. */
+#undef SONAME_LIBCAIRO
+
 /* Define to the soname of the libcapi20 library. */
 #undef SONAME_LIBCAPI20
 
@@ -1415,8 +1445,14 @@
 /* Define to the soname of the libgnutls library. */
 #undef SONAME_LIBGNUTLS
 
+/* Define to the soname of the libgobject-2.0 library. */
+#undef SONAME_LIBGOBJECT_2_0
+
 /* Define to the soname of the libgsm library. */
 #undef SONAME_LIBGSM
+
+/* Define to the soname of the libgtk-3 library. */
+#undef SONAME_LIBGTK_3
 
 /* Define to the soname of the libhal library. */
 #undef SONAME_LIBHAL
@@ -1439,6 +1475,9 @@
 /* Define to the soname of the libOSMesa library. */
 #undef SONAME_LIBOSMESA
 
+/* Define to the soname of the libpcap library. */
+#undef SONAME_LIBPCAP
+
 /* Define to the soname of the libpng library. */
 #undef SONAME_LIBPNG
 
@@ -1448,11 +1487,26 @@
 /* Define to the soname of the libtiff library. */
 #undef SONAME_LIBTIFF
 
+/* Define to the soname of the libtxc_dxtn library. */
+#undef SONAME_LIBTXC_DXTN
+
 /* Define to the soname of the libv4l1 library. */
 #undef SONAME_LIBV4L1
 
+/* Define to the soname of the libva library. */
+#undef SONAME_LIBVA
+
+/* Define to the soname of the libva-drm library. */
+#undef SONAME_LIBVA_DRM
+
+/* Define to the soname of the libva-x11 library. */
+#undef SONAME_LIBVA_X11
+
 /* Define to the soname of the libX11 library. */
 #undef SONAME_LIBX11
+
+/* Define to the soname of the libX11-xcb library. */
+#undef SONAME_LIBX11_XCB
 
 /* Define to the soname of the libXcomposite library. */
 #undef SONAME_LIBXCOMPOSITE
@@ -1486,6 +1540,9 @@
 
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
+
+/* Define if xattr functions take additional arguments (Mac OS X) */
+#undef XATTR_ADDITIONAL_OPTIONS
 
 /* Define to 1 if the X Window System is missing or not being used. */
 #undef X_DISPLAY_MISSING

@@ -3631,13 +3631,41 @@ static HRESULT WINAPI ID3DXEffectImpl_ValidateTechnique(ID3DXEffect* iface, D3DX
     return D3D_OK;
 }
 
-static HRESULT WINAPI ID3DXEffectImpl_FindNextValidTechnique(ID3DXEffect* iface, D3DXHANDLE technique, D3DXHANDLE* next_technique)
+static HRESULT WINAPI ID3DXEffectImpl_FindNextValidTechnique(ID3DXEffect *iface,
+        D3DXHANDLE technique, D3DXHANDLE *next_technique)
 {
     struct ID3DXEffectImpl *This = impl_from_ID3DXEffect(iface);
+    struct d3dx9_base_effect *base_effect = &This->base_effect;
+    UINT i = 0;
 
-    FIXME("(%p)->(%p, %p): stub\n", This, technique, next_technique);
+    TRACE("iface %p, technique %p, next_technique %p\n", iface, technique, next_technique);
 
-    return E_NOTIMPL;
+    if (!next_technique)
+        return D3DERR_INVALIDCALL;
+
+    if (technique)
+    {
+        for (; i < base_effect->technique_count; i++)
+        {
+            if (technique == get_technique_handle(&base_effect->techniques[i]))
+            {
+                i++; /* Go to next technique */
+                break;
+            }
+        }
+    }
+
+    for (; i < base_effect->technique_count; i++)
+    {
+        if (SUCCEEDED(iface->lpVtbl->ValidateTechnique(iface, get_technique_handle(&base_effect->techniques[i]))))
+        {
+            *next_technique = get_technique_handle(&base_effect->techniques[i]);
+            return D3D_OK;
+        }
+    }
+
+    *next_technique = NULL;
+    return S_FALSE;
 }
 
 static BOOL walk_parameter_dep(struct d3dx_parameter *param, walk_parameter_dep_func param_func,
@@ -3982,6 +4010,7 @@ static HRESULT WINAPI ID3DXEffectImpl_ApplyParameterBlock(ID3DXEffect* iface, D3
     return E_NOTIMPL;
 }
 
+#if _D3DX9_VER >= 26
 static HRESULT WINAPI ID3DXEffectImpl_DeleteParameterBlock(ID3DXEffect* iface, D3DXHANDLE parameter_block)
 {
     struct ID3DXEffectImpl *This = impl_from_ID3DXEffect(iface);
@@ -3990,6 +4019,7 @@ static HRESULT WINAPI ID3DXEffectImpl_DeleteParameterBlock(ID3DXEffect* iface, D
 
     return E_NOTIMPL;
 }
+#endif
 
 static HRESULT WINAPI ID3DXEffectImpl_CloneEffect(ID3DXEffect *iface,
         struct IDirect3DDevice9 *device, struct ID3DXEffect **effect)
@@ -3998,9 +4028,15 @@ static HRESULT WINAPI ID3DXEffectImpl_CloneEffect(ID3DXEffect *iface,
 
     FIXME("(%p)->(%p, %p): stub\n", This, device, effect);
 
-    return E_NOTIMPL;
+    if (!effect)
+        return D3DXERR_INVALIDDATA;
+
+    iface->lpVtbl->AddRef(iface);
+    *effect = iface;
+    return S_OK;
 }
 
+#if _D3DX9_VER >= 27
 static HRESULT WINAPI ID3DXEffectImpl_SetRawValue(ID3DXEffect *iface,
         D3DXHANDLE parameter, const void *data, UINT byte_offset, UINT bytes)
 {
@@ -4009,6 +4045,7 @@ static HRESULT WINAPI ID3DXEffectImpl_SetRawValue(ID3DXEffect *iface,
 
     return E_NOTIMPL;
 }
+#endif
 
 static const struct ID3DXEffectVtbl ID3DXEffect_Vtbl =
 {
@@ -4091,9 +4128,13 @@ static const struct ID3DXEffectVtbl ID3DXEffect_Vtbl =
     ID3DXEffectImpl_BeginParameterBlock,
     ID3DXEffectImpl_EndParameterBlock,
     ID3DXEffectImpl_ApplyParameterBlock,
+#if _D3DX9_VER >= 26
     ID3DXEffectImpl_DeleteParameterBlock,
+#endif
     ID3DXEffectImpl_CloneEffect,
+#if _D3DX9_VER >= 27
     ID3DXEffectImpl_SetRawValue
+#endif
 };
 
 static inline struct ID3DXEffectCompilerImpl *impl_from_ID3DXEffectCompiler(ID3DXEffectCompiler *iface)

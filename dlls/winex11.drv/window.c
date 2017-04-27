@@ -269,7 +269,7 @@ static unsigned long get_mwm_decorations( struct x11drv_win_data *data,
     if (data->shaped) return 0;
 
     if (ex_style & WS_EX_TOOLWINDOW) return 0;
-    if (ex_style & WS_EX_LAYERED) return 0;
+    if ((ex_style & (WS_EX_LAYERED | WS_EX_COMPOSITED)) == WS_EX_LAYERED) return 0;
 
     if ((style & WS_CAPTION) == WS_CAPTION)
     {
@@ -278,9 +278,6 @@ static unsigned long get_mwm_decorations( struct x11drv_win_data *data,
         if (style & WS_MINIMIZEBOX) ret |= MWM_DECOR_MINIMIZE;
         if (style & WS_MAXIMIZEBOX) ret |= MWM_DECOR_MAXIMIZE;
     }
-    if (ex_style & WS_EX_DLGMODALFRAME) ret |= MWM_DECOR_BORDER;
-    else if (style & WS_THICKFRAME) ret |= MWM_DECOR_BORDER | MWM_DECOR_RESIZEH;
-    else if ((style & (WS_DLGFRAME|WS_BORDER)) == WS_DLGFRAME) ret |= MWM_DECOR_BORDER;
     return ret;
 }
 
@@ -410,14 +407,11 @@ static void sync_window_region( struct x11drv_win_data *data, HRGN win_region )
 
 
 /***********************************************************************
- *              sync_window_opacity
+ *              set_window_opacity
  */
-static void sync_window_opacity( Display *display, Window win,
-                                 COLORREF key, BYTE alpha, DWORD flags )
+static void set_window_opacity( Display *display, Window win, BYTE alpha )
 {
-    unsigned long opacity = 0xffffffff;
-
-    if (flags & LWA_ALPHA) opacity = (0xffffffff / 0xff) * alpha;
+    unsigned long opacity = (0xffffffff / 0xff) * alpha;
 
     if (opacity == 0xffffffff)
         XDeleteProperty( display, win, x11drv_atom(_NET_WM_WINDOW_OPACITY) );
@@ -858,10 +852,8 @@ static void set_initial_wm_hints( Display *display, Window window )
     /* class hints */
     if ((class_hints = XAllocClassHint()))
     {
-        static char wine[] = "Wine";
-
         class_hints->res_name = process_name;
-        class_hints->res_class = wine;
+        class_hints->res_class = process_name;
         XSetClassHint( display, window, class_hints );
         XFree( class_hints );
     }
@@ -1527,7 +1519,7 @@ static void create_whole_window( struct x11drv_win_data *data )
 
     /* set the window opacity */
     if (!GetLayeredWindowAttributes( data->hwnd, &key, &alpha, &layered_flags )) layered_flags = 0;
-    sync_window_opacity( data->display, data->whole_window, key, alpha, layered_flags );
+    set_window_opacity( data->display, data->whole_window, (layered_flags & LWA_ALPHA) ? alpha : 0xff );
 
     XFlush( data->display );  /* make sure the window exists before we start painting to it */
 
@@ -1647,7 +1639,7 @@ void CDECL X11DRV_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style )
     {
         data->layered = FALSE;
         set_window_visual( data, &default_visual );
-        sync_window_opacity( data->display, data->whole_window, 0, 0, 0 );
+        set_window_opacity( data->display, data->whole_window, 0xff );
         if (data->surface) set_surface_color_key( data->surface, CLR_INVALID );
     }
 done:
@@ -2119,6 +2111,54 @@ BOOL CDECL X11DRV_ScrollDC( HDC hdc, INT dx, INT dy, HRGN update )
 
 
 /***********************************************************************
+ *		SetActiveWindow  (X11DRV.@)
+ */
+void CDECL X11DRV_SetActiveWindow( HWND hwnd )
+{
+    struct x11drv_thread_data *thread_data = x11drv_init_thread_data();
+    struct x11drv_win_data *data;
+
+    TRACE("%p\n", hwnd);
+
+    if (thread_data->active_window == hwnd)
+    {
+        TRACE("ignoring activation for already active window %p\n", hwnd);
+        return;
+    }
+
+    if (!(data = get_win_data( hwnd ))) return;
+
+    if (data->mapped && data->managed)
+    {
+        XEvent xev;
+        struct x11drv_win_data *active = get_win_data( thread_data->active_window );
+        DWORD timestamp = GetMessageTime() - EVENT_x11_time_to_win32_time( 0 );
+
+        TRACE("setting _NET_ACTIVE_WINDOW to %p/%lx, current active %p/%lx\n",
+            data->hwnd, data->whole_window, active ? active->hwnd : NULL, active ? active->whole_window : 0 );
+
+        xev.xclient.type = ClientMessage;
+        xev.xclient.window = data->whole_window;
+        xev.xclient.message_type = x11drv_atom(_NET_ACTIVE_WINDOW);
+        xev.xclient.serial = 0;
+        xev.xclient.display = data->display;
+        xev.xclient.send_event = True;
+        xev.xclient.format = 32;
+
+        xev.xclient.data.l[0] = 1; /* source: application */
+        xev.xclient.data.l[1] = timestamp;
+        xev.xclient.data.l[2] = active ? active->whole_window : 0;
+        xev.xclient.data.l[3] = 0;
+        xev.xclient.data.l[4] = 0;
+        XSendEvent( data->display, root_window, False, SubstructureRedirectMask | SubstructureNotifyMask, &xev );
+
+        if (active) release_win_data( active );
+    }
+
+    release_win_data( data );
+}
+
+/***********************************************************************
  *		SetCapture  (X11DRV.@)
  */
 void CDECL X11DRV_SetCapture( HWND hwnd, UINT flags )
@@ -2381,7 +2421,8 @@ void CDECL X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags
             BOOL needs_map = TRUE;
 
             /* layered windows are mapped only once their attributes are set */
-            if (GetWindowLongW( hwnd, GWL_EXSTYLE ) & WS_EX_LAYERED) needs_map = data->layered;
+            if ((GetWindowLongW( hwnd, GWL_EXSTYLE ) & (WS_EX_LAYERED | WS_EX_COMPOSITED)) == WS_EX_LAYERED)
+                needs_map = data->layered;
             release_win_data( data );
             if (needs_icon) fetch_icon_data( hwnd, 0, 0 );
             if (needs_map) map_window( hwnd, new_style );
@@ -2536,7 +2577,7 @@ void CDECL X11DRV_SetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alph
     if (data)
     {
         if (data->whole_window)
-            sync_window_opacity( data->display, data->whole_window, key, alpha, flags );
+            set_window_opacity( data->display, data->whole_window, (flags & LWA_ALPHA) ? alpha : 0xff );
         if (data->surface)
             set_surface_color_key( data->surface, (flags & LWA_COLORKEY) ? key : CLR_INVALID );
 
@@ -2560,7 +2601,7 @@ void CDECL X11DRV_SetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alph
         Window win = X11DRV_get_whole_window( hwnd );
         if (win)
         {
-            sync_window_opacity( gdi_display, win, key, alpha, flags );
+            set_window_opacity( gdi_display, win, (flags & LWA_ALPHA) ? alpha : 0xff );
             if (flags & LWA_COLORKEY)
                 FIXME( "LWA_COLORKEY not supported on foreign process window %p\n", hwnd );
         }
@@ -2576,7 +2617,6 @@ BOOL CDECL X11DRV_UpdateLayeredWindow( HWND hwnd, const UPDATELAYEREDWINDOWINFO 
 {
     struct window_surface *surface;
     struct x11drv_win_data *data;
-    BLENDFUNCTION blend = { AC_SRC_OVER, 0, 255, 0 };
     COLORREF color_key = (info->dwFlags & ULW_COLORKEY) ? info->crKey : CLR_INVALID;
     char buffer[FIELD_OFFSET( BITMAPINFO, bmiColors[256] )];
     BITMAPINFO *bmi = (BITMAPINFO *)buffer;
@@ -2604,6 +2644,10 @@ BOOL CDECL X11DRV_UpdateLayeredWindow( HWND hwnd, const UPDATELAYEREDWINDOWINFO 
     }
     else set_surface_color_key( surface, color_key );
 
+    if (data->whole_window)
+        set_window_opacity( data->display, data->whole_window,
+                            (info->dwFlags & ULW_ALPHA) ? info->pblend->SourceConstantAlpha : 0xff );
+
     if (surface) window_surface_add_ref( surface );
     release_win_data( data );
 
@@ -2627,14 +2671,12 @@ BOOL CDECL X11DRV_UpdateLayeredWindow( HWND hwnd, const UPDATELAYEREDWINDOWINFO 
     {
         IntersectRect( &rect, &rect, info->prcDirty );
         memcpy( src_bits, dst_bits, bmi->bmiHeader.biSizeImage );
-        PatBlt( hdc, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, BLACKNESS );
     }
-    ret = GdiAlphaBlend( hdc, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
-                         info->hdcSrc,
-                         rect.left + (info->pptSrc ? info->pptSrc->x : 0),
-                         rect.top + (info->pptSrc ? info->pptSrc->y : 0),
-                         rect.right - rect.left, rect.bottom - rect.top,
-                         (info->dwFlags & ULW_ALPHA) ? *info->pblend : blend );
+    ret = BitBlt( hdc, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
+                  info->hdcSrc,
+                  rect.left + (info->pptSrc ? info->pptSrc->x : 0),
+                  rect.top + (info->pptSrc ? info->pptSrc->y : 0),
+                  SRCCOPY );
     if (ret)
     {
         memcpy( dst_bits, src_bits, bmi->bmiHeader.biSizeImage );
@@ -2757,17 +2799,6 @@ LRESULT CDECL X11DRV_SysCommand( HWND hwnd, WPARAM wparam, LPARAM lparam )
         default:               dir = _NET_WM_MOVERESIZE_SIZE_KEYBOARD; break;
         }
         break;
-
-    case SC_KEYMENU:
-        /* prevent a simple ALT press+release from activating the system menu,
-         * as that can get confusing on managed windows */
-        if ((WCHAR)lparam) goto failed;  /* got an explicit char */
-        if (GetMenu( hwnd )) goto failed;  /* window has a real menu */
-        if (!(GetWindowLongW( hwnd, GWL_STYLE ) & WS_SYSMENU)) goto failed;  /* no system menu */
-        TRACE( "ignoring SC_KEYMENU wp %lx lp %lx\n", wparam, lparam );
-        release_win_data( data );
-        return 0;
-
     default:
         goto failed;
     }

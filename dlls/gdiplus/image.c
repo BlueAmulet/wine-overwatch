@@ -55,13 +55,19 @@ static const struct
 {
     { &GUID_WICPixelFormatBlackWhite, PixelFormat1bppIndexed, WICBitmapPaletteTypeFixedBW },
     { &GUID_WICPixelFormat1bppIndexed, PixelFormat1bppIndexed, WICBitmapPaletteTypeFixedBW },
+    { &GUID_WICPixelFormat4bppIndexed, PixelFormat4bppIndexed, WICBitmapPaletteTypeFixedHalftone8 },
     { &GUID_WICPixelFormat8bppGray, PixelFormat8bppIndexed, WICBitmapPaletteTypeFixedGray256 },
     { &GUID_WICPixelFormat8bppIndexed, PixelFormat8bppIndexed, WICBitmapPaletteTypeFixedHalftone256 },
     { &GUID_WICPixelFormat16bppBGR555, PixelFormat16bppRGB555, WICBitmapPaletteTypeFixedHalftone256 },
     { &GUID_WICPixelFormat24bppBGR, PixelFormat24bppRGB, WICBitmapPaletteTypeFixedHalftone256 },
     { &GUID_WICPixelFormat32bppBGR, PixelFormat32bppRGB, WICBitmapPaletteTypeFixedHalftone256 },
+    { &GUID_WICPixelFormat48bppRGB, PixelFormat48bppRGB, WICBitmapPaletteTypeFixedHalftone256 },
     { &GUID_WICPixelFormat32bppBGRA, PixelFormat32bppARGB, WICBitmapPaletteTypeFixedHalftone256 },
     { &GUID_WICPixelFormat32bppPBGRA, PixelFormat32bppPARGB, WICBitmapPaletteTypeFixedHalftone256 },
+    { &GUID_WICPixelFormat32bppCMYK, PixelFormat32bppCMYK, WICBitmapPaletteTypeFixedHalftone256 },
+    { &GUID_WICPixelFormat32bppGrayFloat, PixelFormat32bppARGB, WICBitmapPaletteTypeFixedGray256 },
+    { &GUID_WICPixelFormat64bppCMYK, PixelFormat48bppRGB, WICBitmapPaletteTypeFixedHalftone256 },
+    { &GUID_WICPixelFormat64bppRGBA, PixelFormat48bppRGB, WICBitmapPaletteTypeFixedHalftone256 },
     { NULL }
 };
 
@@ -3717,7 +3723,14 @@ static GpStatus decode_frame_wic(IWICBitmapDecoder *decoder, BOOL force_conversi
     if (status == Ok)
     {
         /* Native GDI+ used to be smarter, but since Win7 it just sets these flags. */
-        bitmap->image.flags |= ImageFlagsReadOnly|ImageFlagsHasRealPixelSize|ImageFlagsHasRealDPI|ImageFlagsColorSpaceRGB;
+        bitmap->image.flags |= ImageFlagsReadOnly|ImageFlagsHasRealPixelSize|ImageFlagsHasRealDPI;
+        if (IsEqualGUID(&wic_format, &GUID_WICPixelFormat2bppGray) ||
+            IsEqualGUID(&wic_format, &GUID_WICPixelFormat4bppGray) ||
+            IsEqualGUID(&wic_format, &GUID_WICPixelFormat8bppGray) ||
+            IsEqualGUID(&wic_format, &GUID_WICPixelFormat16bppGray))
+            bitmap->image.flags |= ImageFlagsColorSpaceGRAY;
+        else
+            bitmap->image.flags |= ImageFlagsColorSpaceRGB;
         bitmap->image.frame_count = frame_count;
         bitmap->image.current_frame = active_frame;
         bitmap->image.decoder = decoder;
@@ -3960,7 +3973,37 @@ static GpStatus decode_image_jpeg(IStream* stream, GpImage **image)
 
 static GpStatus decode_image_png(IStream* stream, GpImage **image)
 {
-    return decode_image_wic(stream, &GUID_ContainerFormatPng, png_metadata_reader, image);
+    IWICBitmapDecoder *decoder;
+    IWICBitmapFrameDecode *frame;
+    GpStatus status;
+    HRESULT hr;
+    GUID format;
+    BOOL force_conversion = FALSE;
+
+    status = initialize_decoder_wic(stream, &GUID_ContainerFormatPng, &decoder);
+    if (status != Ok)
+        return status;
+
+    hr = IWICBitmapDecoder_GetFrame(decoder, 0, &frame);
+    if (hr == S_OK)
+    {
+        hr = IWICBitmapFrameDecode_GetPixelFormat(frame, &format);
+        if (hr == S_OK)
+        {
+            if (IsEqualGUID(&format, &GUID_WICPixelFormat8bppGray))
+                force_conversion = TRUE;
+            status = decode_frame_wic(decoder, force_conversion, 0, png_metadata_reader, image);
+        }
+        else
+            status = hresult_to_status(hr);
+
+        IWICBitmapFrameDecode_Release(frame);
+    }
+    else
+        status = hresult_to_status(hr);
+
+    IWICBitmapDecoder_Release(decoder);
+    return status;
 }
 
 static GpStatus decode_image_gif(IStream* stream, GpImage **image)
@@ -4541,7 +4584,7 @@ static GpStatus encode_image_jpeg(GpImage *image, IStream* stream,
 static GpStatus encode_image_gif(GpImage *image, IStream* stream,
     GDIPCONST CLSID* clsid, GDIPCONST EncoderParameters* params)
 {
-    return encode_image_wic(image, stream, &CLSID_WICGifEncoder, params);
+    return encode_image_wic(image, stream, &GUID_ContainerFormatGif, params);
 }
 
 /*****************************************************************************
@@ -4554,7 +4597,7 @@ GpStatus WINGDIPAPI GdipSaveImageToStream(GpImage *image, IStream* stream,
     encode_image_func encode_image;
     int i;
 
-    TRACE("%p %p %p %p\n", image, stream, clsid, params);
+    TRACE("%p %p %s %p\n", image, stream, wine_dbgstr_guid(clsid), params);
 
     if(!image || !stream)
         return InvalidParameter;
@@ -5567,4 +5610,112 @@ GpStatus WINGDIPAPI GdipBitmapGetHistogramSize(HistogramFormat format, UINT *num
 
     *num_of_entries = 256;
     return Ok;
+}
+
+static GpStatus create_optimal_palette(ColorPalette *palette, INT desired,
+    BOOL transparent, GpBitmap *bitmap)
+{
+    GpStatus status;
+    BitmapData data;
+    HRESULT hr;
+    IWICImagingFactory *factory;
+    IWICPalette *wic_palette;
+
+    if (!bitmap) return InvalidParameter;
+    if (palette->Count < desired) return GenericError;
+
+    status = GdipBitmapLockBits(bitmap, NULL, ImageLockModeRead, PixelFormat24bppRGB, &data);
+    if (status != Ok) return status;
+
+    hr = WICCreateImagingFactory_Proxy(WINCODEC_SDK_VERSION, &factory);
+    if (hr != S_OK)
+    {
+        GdipBitmapUnlockBits(bitmap, &data);
+        return hresult_to_status(hr);
+    }
+
+    hr = IWICImagingFactory_CreatePalette(factory, &wic_palette);
+    if (hr == S_OK)
+    {
+        IWICBitmap *bitmap;
+
+        /* PixelFormat24bppRGB actually stores the bitmap bits as BGR. */
+        hr = IWICImagingFactory_CreateBitmapFromMemory(factory, data.Width, data.Height,
+                &GUID_WICPixelFormat24bppBGR, data.Stride, data.Stride * data.Width, data.Scan0, &bitmap);
+        if (hr == S_OK)
+        {
+            hr = IWICPalette_InitializeFromBitmap(wic_palette, (IWICBitmapSource *)bitmap, desired, transparent);
+            if (hr == S_OK)
+            {
+                palette->Flags = 0;
+                IWICPalette_GetColorCount(wic_palette, &palette->Count);
+                IWICPalette_GetColors(wic_palette, palette->Count, palette->Entries, &palette->Count);
+            }
+
+            IWICBitmap_Release(bitmap);
+        }
+
+        IWICPalette_Release(wic_palette);
+    }
+
+    IWICImagingFactory_Release(factory);
+    GdipBitmapUnlockBits(bitmap, &data);
+
+    return hresult_to_status(hr);
+}
+
+/*****************************************************************************
+ * GdipInitializePalette [GDIPLUS.@]
+ */
+GpStatus WINGDIPAPI GdipInitializePalette(ColorPalette *palette,
+    PaletteType type, INT desired, BOOL transparent, GpBitmap *bitmap)
+{
+    TRACE("(%p,%d,%d,%d,%p)\n", palette, type, desired, transparent, bitmap);
+
+    if (!palette) return InvalidParameter;
+
+    switch (type)
+    {
+    case PaletteTypeCustom:
+        return Ok;
+
+    case PaletteTypeOptimal:
+        return create_optimal_palette(palette, desired, transparent, bitmap);
+
+    /* WIC palette type enumeration matches these gdiplus enums */
+    case PaletteTypeFixedBW:
+    case PaletteTypeFixedHalftone8:
+    case PaletteTypeFixedHalftone27:
+    case PaletteTypeFixedHalftone64:
+    case PaletteTypeFixedHalftone125:
+    case PaletteTypeFixedHalftone216:
+    case PaletteTypeFixedHalftone252:
+    case PaletteTypeFixedHalftone256:
+    {
+        ColorPalette *wic_palette;
+        GpStatus status = Ok;
+
+        wic_palette = get_palette(NULL, type);
+        if (!wic_palette) return OutOfMemory;
+
+        if (palette->Count >= wic_palette->Count)
+        {
+            palette->Flags = wic_palette->Flags;
+            palette->Count = wic_palette->Count;
+            memcpy(palette->Entries, wic_palette->Entries, wic_palette->Count * sizeof(wic_palette->Entries[0]));
+        }
+        else
+            status = GenericError;
+
+        heap_free(wic_palette);
+
+        return status;
+    }
+
+    default:
+        FIXME("unknown palette type %d\n", type);
+        break;
+    }
+
+    return InvalidParameter;
 }

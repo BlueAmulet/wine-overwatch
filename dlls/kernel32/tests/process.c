@@ -91,6 +91,7 @@ static SIZE_T (WINAPI *pGetLargePageMinimum)(void);
 static BOOL   (WINAPI *pInitializeProcThreadAttributeList)(struct _PROC_THREAD_ATTRIBUTE_LIST*, DWORD, DWORD, SIZE_T*);
 static BOOL   (WINAPI *pUpdateProcThreadAttribute)(struct _PROC_THREAD_ATTRIBUTE_LIST*, DWORD, DWORD_PTR, void *,SIZE_T,void*,SIZE_T*);
 static void   (WINAPI *pDeleteProcThreadAttributeList)(struct _PROC_THREAD_ATTRIBUTE_LIST*);
+static DWORD  (WINAPI *pGetActiveProcessorCount)(WORD);
 
 /* ############################### */
 static char     base[MAX_PATH];
@@ -258,6 +259,7 @@ static BOOL init(void)
     pInitializeProcThreadAttributeList = (void *)GetProcAddress(hkernel32, "InitializeProcThreadAttributeList");
     pUpdateProcThreadAttribute = (void *)GetProcAddress(hkernel32, "UpdateProcThreadAttribute");
     pDeleteProcThreadAttributeList = (void *)GetProcAddress(hkernel32, "DeleteProcThreadAttributeList");
+    pGetActiveProcessorCount = (void *)GetProcAddress(hkernel32, "GetActiveProcessorCount");
 
     return TRUE;
 }
@@ -2515,7 +2517,6 @@ static void test_QueryInformationJobObject(void)
     ret = QueryInformationJobObject(job, JobObjectBasicProcessIdList, pid_list,
                                     FIELD_OFFSET(JOBOBJECT_BASIC_PROCESS_ID_LIST, ProcessIdList), &ret_len);
     ok(!ret, "QueryInformationJobObject expected failure\n");
-    todo_wine
     expect_eq_d(ERROR_BAD_LENGTH, GetLastError());
 
     SetLastError(0xdeadbeef);
@@ -2524,18 +2525,20 @@ static void test_QueryInformationJobObject(void)
     pid_list->NumberOfProcessIdsInList  = 42;
     ret = QueryInformationJobObject(job, JobObjectBasicProcessIdList, pid_list,
                                     FIELD_OFFSET(JOBOBJECT_BASIC_PROCESS_ID_LIST, ProcessIdList[1]), &ret_len);
+    todo_wine
     ok(!ret, "QueryInformationJobObject expected failure\n");
     todo_wine
     expect_eq_d(ERROR_MORE_DATA, GetLastError());
     if (ret)
     {
+        todo_wine
         expect_eq_d(42, pid_list->NumberOfAssignedProcesses);
+        todo_wine
         expect_eq_d(42, pid_list->NumberOfProcessIdsInList);
     }
 
     memset(buf, 0, sizeof(buf));
     ret = pQueryInformationJobObject(job, JobObjectBasicProcessIdList, pid_list, sizeof(buf), &ret_len);
-    todo_wine
     ok(ret, "QueryInformationJobObject error %u\n", GetLastError());
     if(ret)
     {
@@ -2545,12 +2548,17 @@ static void test_QueryInformationJobObject(void)
         {
             ULONG_PTR *list = pid_list->ProcessIdList;
 
+            todo_wine
             ok(ret_len == FIELD_OFFSET(JOBOBJECT_BASIC_PROCESS_ID_LIST, ProcessIdList[2]),
                "QueryInformationJobObject returned ret_len=%u\n", ret_len);
 
+            todo_wine
             expect_eq_d(2, pid_list->NumberOfAssignedProcesses);
+            todo_wine
             expect_eq_d(2, pid_list->NumberOfProcessIdsInList);
+            todo_wine
             expect_eq_d(pi[0].dwProcessId, list[0]);
+            todo_wine
             expect_eq_d(pi[1].dwProcessId, list[1]);
         }
     }
@@ -3351,6 +3359,26 @@ static void test_ProcThreadAttributeList(void)
     pDeleteProcThreadAttributeList(&list);
 }
 
+static void test_GetActiveProcessorCount(void)
+{
+    DWORD count;
+
+    if (!pGetActiveProcessorCount)
+    {
+        win_skip("GetActiveProcessorCount not available, skipping test\n");
+        return;
+    }
+
+    count = pGetActiveProcessorCount(0);
+    ok(count, "GetActiveProcessorCount failed, error %u\n", GetLastError());
+
+    /* Test would fail on systems with more than 6400 processors */
+    SetLastError(0xdeadbeef);
+    count = pGetActiveProcessorCount(101);
+    ok(count == 0, "Expeced GetActiveProcessorCount to fail\n");
+    ok(GetLastError() == ERROR_INVALID_PARAMETER, "Expected ERROR_INVALID_PARAMETER, got %u\n", GetLastError());
+}
+
 START_TEST(process)
 {
     HANDLE job;
@@ -3425,6 +3453,7 @@ START_TEST(process)
     test_GetNumaProcessorNode();
     test_session_info();
     test_GetLogicalProcessorInformationEx();
+    test_GetActiveProcessorCount();
     test_largepages();
     test_ProcThreadAttributeList();
 
