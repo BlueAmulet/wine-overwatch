@@ -774,6 +774,9 @@ static void wined3d_cs_exec_draw(struct wined3d_cs *cs, const void *data)
         device_invalidate_state(cs->device, STATE_BASEVERTEXINDEX);
     }
 
+    state->base_vertex_index = op->indexed ? op->base_vertex_idx : op->start_idx;
+    device_invalidate_state(cs->device, STATE_BASEVERTEXINDEX);
+
     if (state->gl_primitive_type != op->primitive_type)
     {
         if (state->gl_primitive_type == GL_POINTS || op->primitive_type == GL_POINTS)
