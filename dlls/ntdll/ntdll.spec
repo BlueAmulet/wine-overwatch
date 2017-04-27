@@ -151,6 +151,7 @@
 @ stdcall NtCreateSemaphore(ptr long ptr long long)
 @ stdcall NtCreateSymbolicLinkObject(ptr long ptr ptr)
 @ stub NtCreateThread
+@ stdcall NtCreateThreadEx(ptr long ptr ptr ptr ptr long ptr long long ptr)
 @ stdcall NtCreateTimer(ptr long ptr long)
 @ stub NtCreateToken
 # @ stub NtCreateWaitablePort

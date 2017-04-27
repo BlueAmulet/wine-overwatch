@@ -1897,7 +1897,7 @@ static GLenum wined3d_gl_type_to_enum(enum wined3d_gl_resource_type type)
         case WINED3D_GL_RES_TYPE_TEX_RECT:
             return GL_TEXTURE_RECTANGLE_ARB;
         case WINED3D_GL_RES_TYPE_BUFFER:
-            return GL_TEXTURE_2D; /* TODO: GL_TEXTURE_BUFFER. */
+            return GL_TEXTURE_BUFFER;
         case WINED3D_GL_RES_TYPE_RB:
             return GL_RENDERBUFFER;
         case WINED3D_GL_RES_TYPE_COUNT:

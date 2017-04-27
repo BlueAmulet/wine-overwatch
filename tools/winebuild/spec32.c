@@ -46,7 +46,201 @@
 #define IMAGE_NT_OPTIONAL_HDR64_MAGIC 0x20b
 #define IMAGE_ROM_OPTIONAL_HDR_MAGIC  0x107
 
+struct export_func
+{
+    const char     *name;
+    unsigned int    name_rva;
+    int             ordinal;
+    unsigned int    va;
+};
+
+struct export
+{
+    struct export_func *exports;
+    int                 nb_exports;
+    int                 max_exports;
+};
+
 int needs_get_pc_thunk = 0;
+
+static inline int needs_syscalls( DLLSPEC *spec )
+{
+    return (target_cpu == CPU_x86 || target_cpu == CPU_x86_64) &&
+           spec->dll_name && strcmp(spec->dll_name, "ntdll") == 0;
+}
+
+static void add_export_func( struct export *exp, const char *name, int ordinal, unsigned int va )
+{
+    if (exp->nb_exports == exp->max_exports)
+    {
+        exp->max_exports *= 2;
+        if (exp->max_exports < 32) exp->max_exports = 32;
+        exp->exports = xrealloc( exp->exports, exp->max_exports * sizeof(*exp->exports) );
+    }
+    exp->exports[exp->nb_exports].name = name;
+    exp->exports[exp->nb_exports].name_rva = 0;
+    exp->exports[exp->nb_exports].ordinal = ordinal;
+    exp->exports[exp->nb_exports].va = va;
+    exp->nb_exports++;
+}
+
+static struct export *parse_syscall_exports( const char *name )
+{
+    FILE *f;
+    int err, ordinal = 0;
+    const char *prefix = "__wine_spec_syscall_";
+    size_t prefix_len = strlen( prefix );
+    const char *prog = get_nm_command();
+    char *cmd, buffer[1024];
+    struct export *export;
+
+    export = xmalloc( sizeof(*export) );
+    memset( export, 0, sizeof(*export) );
+
+    cmd = strmake( "%s -P -t x %s", prog, name );
+    if (!(f = popen( cmd, "r" )))
+        fatal_error( "Cannot execute '%s'\n", cmd );
+
+    while (fgets( buffer, sizeof(buffer), f ))
+    {
+        char *name;
+        char *p = buffer + strlen(buffer) - 1;
+        unsigned long va;
+        if (p < buffer) continue;
+        if (*p == '\n') *p-- = 0;
+        p = name = buffer;
+        while (*p && *p != ' ') p++;
+        if (*p == 0) continue;
+        *p++ = 0;
+        if (p[0] != 't' || p[1] != ' ') continue;
+        p += 2;
+        va = strtoul( p, NULL, 16 );
+        if (strncmp( name, prefix, prefix_len ) == 0)
+            add_export_func( export, xstrdup(name + prefix_len), ordinal++, va );
+    }
+    if ((err = pclose( f ))) warning( "%s failed with status %d\n", cmd, err );
+    free( cmd );
+
+    return export;
+}
+
+static void output_text_section( DLLSPEC *spec, unsigned int rva, const char *native,
+    unsigned int *export_rva, unsigned int *export_size )
+{
+    static const unsigned char dll_code_section[] = { 0x31, 0xc0,          /* xor %eax,%eax */
+                                                      0xc2, 0x0c, 0x00 };  /* ret $12 */
+
+    static const unsigned char exe_code_section[] = { 0xb8, 0x01, 0x00, 0x00, 0x00,  /* movl $1,%eax */
+                                                      0xc2, 0x04, 0x00 };            /* ret $4 */
+
+    static const unsigned char prefix[] = { 0x0f, 0x1f, 0x44, 0x00, 0x00, /* nop */
+                                            0x68 };                       /* push ... */
+
+    int i;
+    unsigned int name_rva = 0, funcs_rva = 0, name_ptrs_rva = 0, exp_ordinals_rva = 0, code_end;
+    struct export *exp;
+
+    if (spec->characteristics & IMAGE_FILE_DLL)
+        put_data( dll_code_section, sizeof(dll_code_section) );
+    else
+        put_data( exe_code_section, sizeof(exe_code_section) );
+
+    if (native == NULL)
+    {
+        *export_rva = 0;
+        *export_size = 0;
+        return;
+    }
+
+    exp = parse_syscall_exports( native );
+
+    /* export directory header (placeholder) */
+
+    align_output( 32 );
+    *export_rva = rva + output_buffer_pos;
+    put_dword( 0 ); /* Characteristics */
+    put_dword( 0 ); /* TimeDateStamp */
+    put_dword( 0 ); /* MajorVersion/MinorVersion */
+    put_dword( name_rva ); /* Name */
+    put_dword( 0 ); /* Base */
+    put_dword( exp->nb_exports ); /* NumberOfFunctions */
+    put_dword( exp->nb_exports ); /* NumberOfNames */
+    put_dword( funcs_rva ); /* AddressOfFunctions */
+    put_dword( name_ptrs_rva ); /* AddressOfNames */
+    put_dword( exp_ordinals_rva ); /* AddressOfNameOrdinals */
+
+    /* function pointers */
+
+    align_output( 4 );
+    funcs_rva = rva + output_buffer_pos;
+    for (i = 0; i < exp->nb_exports; i++)
+        put_dword( exp->exports[i].va - image_base );
+
+    /* names */
+
+    name_rva = rva + output_buffer_pos;
+    put_data( spec->file_name, strlen(spec->file_name) + 1 );
+    for (i = 0; i < exp->nb_exports; i++)
+    {
+        struct export_func *e = &exp->exports[i];
+        e->name_rva = rva + output_buffer_pos;
+        put_data( e->name, strlen(e->name) + 1 );
+    }
+
+    /* name ptrs */
+
+    align_output( 4 );
+    name_ptrs_rva = rva + output_buffer_pos;
+    for (i = 0; i < exp->nb_exports; i++)
+        put_dword( exp->exports[i].name_rva );
+
+    /* ordinals */
+
+    align_output( 4 );
+    exp_ordinals_rva = rva + output_buffer_pos;
+    for (i = 0; i < exp->nb_exports; i++)
+        put_word( exp->exports[i].ordinal );
+    align_output( 4 );
+
+    *export_size = output_buffer_pos - *export_rva;
+
+    /* export directory header (actual) */
+
+    output_buffer_pos = *export_rva - rva;
+    put_dword( 0 ); /* Characteristics */
+    put_dword( 0 ); /* TimeDateStamp */
+    put_dword( 0 ); /* MajorVersion/MinorVersion */
+    put_dword( name_rva ); /* Name */
+    put_dword( 0 ); /* Base */
+    put_dword( exp->nb_exports ); /* NumberOfFunctions */
+    put_dword( exp->nb_exports ); /* NumberOfNames */
+    put_dword( funcs_rva ); /* AddressOfFunctions */
+    put_dword( name_ptrs_rva ); /* AddressOfNames */
+    put_dword( exp_ordinals_rva ); /* AddressOfNameOrdinals */
+    output_buffer_pos = *export_rva - rva + *export_size;
+
+    /* fake code */
+
+    code_end = output_buffer_pos;
+    for (i = 0; i < exp->nb_exports; i++)
+    {
+        struct export_func *e = &exp->exports[i];
+        unsigned int offset = e->va - image_base - rva;
+
+        if (offset + 16 > output_buffer_size)
+        {
+            output_buffer_size = offset + 16;
+            output_buffer = xrealloc( output_buffer, output_buffer_size );
+        }
+
+        output_buffer_pos = offset;
+        put_data( prefix, sizeof(prefix) );
+        put_dword( e->va );
+        put_byte( 0xc3 ); /* ret */
+        if (output_buffer_pos > code_end)
+            code_end = output_buffer_pos;
+    }
+}
 
 /* check if entry point needs a relay thunk */
 static inline int needs_relay( const ORDDEF *odp )
@@ -335,6 +529,11 @@ void output_exports( DLLSPEC *spec )
                 output( "\t%s %s_%s\n",
                          get_asm_ptr_keyword(), asm_name("__wine_spec_ext_link"), odp->link_name );
             }
+            else if (needs_syscalls(spec) && odp->type != TYPE_EXTERN)
+            {
+                /* system calls */
+                output( "\t%s __wine_spec_syscall_%s\n", get_asm_ptr_keyword(), odp->name );
+            }
             else
             {
                 output( "\t%s %s\n", get_asm_ptr_keyword(), asm_name(odp->link_name) );
@@ -397,6 +596,28 @@ void output_exports( DLLSPEC *spec )
     }
     output( "\t.align %d\n", get_alignment(get_ptr_size()) );
     output( ".L__wine_spec_exports_end:\n" );
+
+    /* output syscall wrappers */
+
+    if (needs_syscalls(spec))
+    {
+        output( "\t.text\n" );
+        for (i = spec->base; i <= spec->limit; i++)
+        {
+            ORDDEF *odp = spec->ordinals[i];
+            if (odp && (odp->flags & (FLAG_FORWARD|FLAG_EXT_LINK)) == 0)
+            {
+                if (odp->type != TYPE_STUB && odp->type != TYPE_EXTERN)
+                {
+                    output( "__wine_spec_syscall_%s:\n", odp->name );
+                    output( "\t.byte 0x0f, 0x1f, 0x44, 0x00, 0x00\n" );
+                    output( "\tjmp %s\n", asm_name(odp->link_name) );
+                    output( "\t.byte 0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00\n" );
+                }
+            }
+        }
+        output( "\t.data\n" );
+    }
 
     /* output relays */
 
@@ -638,14 +859,8 @@ void BuildSpec32File( DLLSPEC *spec )
  *
  * Build a fake binary module from a spec file.
  */
-void output_fake_module( DLLSPEC *spec )
+void output_fake_module( DLLSPEC *spec, const char *native )
 {
-    static const unsigned char dll_code_section[] = { 0x31, 0xc0,          /* xor %eax,%eax */
-                                                      0xc2, 0x0c, 0x00 };  /* ret $12 */
-
-    static const unsigned char exe_code_section[] = { 0xb8, 0x01, 0x00, 0x00, 0x00,  /* movl $1,%eax */
-                                                      0xc2, 0x04, 0x00 };            /* ret $4 */
-
     static const char fakedll_signature[] = "Wine placeholder DLL";
     const unsigned int page_size = get_page_size();
     const unsigned int section_align = page_size;
@@ -653,14 +868,24 @@ void output_fake_module( DLLSPEC *spec )
     const unsigned int reloc_size = 8;
     const unsigned int lfanew = (0x40 + sizeof(fakedll_signature) + 15) & ~15;
     const unsigned int nb_sections = 2 + (spec->nb_resources != 0);
-    const unsigned int text_size = (spec->characteristics & IMAGE_FILE_DLL) ?
-                                    sizeof(dll_code_section) : sizeof(exe_code_section);
+    unsigned char *text;
+    unsigned int text_size, text_size_aligned, text_size_faligned;
+    unsigned int export_rva, export_size;
     unsigned char *resources;
     unsigned int resources_size;
-    unsigned int image_size = 3 * section_align;
+    unsigned int image_size = 2 * section_align;
+
+    output_text_section( spec, section_align, native, &export_rva, &export_size );
+    text = output_buffer;
+    text_size = output_buffer_pos;
+    text_size_aligned = (text_size + section_align - 1) & ~(section_align - 1);
+    text_size_faligned = (text_size + file_align - 1) & ~(file_align - 1);
+    image_size += text_size_aligned;
+
+    init_output_buffer();
 
     resolve_imports( spec );
-    output_bin_resources( spec, 3 * section_align );
+    output_bin_resources( spec, image_size );
     resources = output_buffer;
     resources_size = output_buffer_pos;
     if (resources_size) image_size += (resources_size + section_align - 1) & ~(section_align - 1);
@@ -723,7 +948,8 @@ void output_fake_module( DLLSPEC *spec )
     put_dword( section_align );                      /* AddressOfEntryPoint */
     put_dword( section_align );                      /* BaseOfCode */
     if (get_ptr_size() == 4) put_dword( 0 );         /* BaseOfData */
-    put_pword( 0x10000000 );                         /* ImageBase */
+    if (image_base) put_pword( image_base );         /* ImageBase */
+    else put_pword( 0x10000000 );
     put_dword( section_align );                      /* SectionAlignment */
     put_dword( file_align );                         /* FileAlignment */
     put_word( 1 );                                   /* MajorOperatingSystemVersion */
@@ -745,7 +971,7 @@ void output_fake_module( DLLSPEC *spec )
     put_dword( 0 );                                  /* LoaderFlags */
     put_dword( 16 );                                 /* NumberOfRvaAndSizes */
 
-    put_dword( 0 ); put_dword( 0 );   /* DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT] */
+    put_dword( export_rva ); put_dword( export_size );   /* DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT] */
     put_dword( 0 ); put_dword( 0 );   /* DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT] */
     if (resources_size)   /* DataDirectory[IMAGE_DIRECTORY_ENTRY_RESOURCE] */
     {
@@ -760,7 +986,7 @@ void output_fake_module( DLLSPEC *spec )
 
     put_dword( 0 ); put_dword( 0 );   /* DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION] */
     put_dword( 0 ); put_dword( 0 );   /* DataDirectory[IMAGE_DIRECTORY_ENTRY_SECURITY] */
-    put_dword( 2 * section_align );   /* DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC] */
+    put_dword( section_align + text_size_aligned );   /* DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC] */
     put_dword( reloc_size );
     put_dword( 0 ); put_dword( 0 );   /* DataDirectory[IMAGE_DIRECTORY_ENTRY_DEBUG] */
     put_dword( 0 ); put_dword( 0 );   /* DataDirectory[IMAGE_DIRECTORY_ENTRY_COPYRIGHT] */
@@ -775,7 +1001,7 @@ void output_fake_module( DLLSPEC *spec )
 
     /* .text section */
     put_data( ".text\0\0", 8 );    /* Name */
-    put_dword( section_align );    /* VirtualSize */
+    put_dword( text_size_aligned ); /* VirtualSize */
     put_dword( section_align );    /* VirtualAddress */
     put_dword( text_size );        /* SizeOfRawData */
     put_dword( file_align );       /* PointerToRawData */
@@ -788,9 +1014,9 @@ void output_fake_module( DLLSPEC *spec )
     /* .reloc section */
     put_data( ".reloc\0", 8 );     /* Name */
     put_dword( section_align );    /* VirtualSize */
-    put_dword( 2 * section_align );/* VirtualAddress */
+    put_dword( section_align + text_size_aligned );/* VirtualAddress */
     put_dword( reloc_size );       /* SizeOfRawData */
-    put_dword( 2 * file_align );   /* PointerToRawData */
+    put_dword( file_align + text_size_faligned );   /* PointerToRawData */
     put_dword( 0 );                /* PointerToRelocations */
     put_dword( 0 );                /* PointerToLinenumbers */
     put_word( 0 );                 /* NumberOfRelocations */
@@ -802,9 +1028,9 @@ void output_fake_module( DLLSPEC *spec )
     {
         put_data( ".rsrc\0\0", 8 );    /* Name */
         put_dword( (resources_size + section_align - 1) & ~(section_align - 1) ); /* VirtualSize */
-        put_dword( 3 * section_align );/* VirtualAddress */
+        put_dword( 2 * section_align + text_size_aligned );/* VirtualAddress */
         put_dword( resources_size );   /* SizeOfRawData */
-        put_dword( 3 * file_align );   /* PointerToRawData */
+        put_dword( 2 * file_align + text_size_faligned );   /* PointerToRawData */
         put_dword( 0 );                /* PointerToRelocations */
         put_dword( 0 );                /* PointerToLinenumbers */
         put_word( 0 );                 /* NumberOfRelocations */
@@ -814,10 +1040,7 @@ void output_fake_module( DLLSPEC *spec )
 
     /* .text contents */
     align_output( file_align );
-    if (spec->characteristics & IMAGE_FILE_DLL)
-        put_data( dll_code_section, sizeof(dll_code_section) );
-    else
-        put_data( exe_code_section, sizeof(exe_code_section) );
+    put_data( text, text_size );
 
     /* .reloc contents */
     align_output( file_align );

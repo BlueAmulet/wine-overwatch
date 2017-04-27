@@ -15810,6 +15810,399 @@ static void test_tgsm(void)
     release_test_context(&test_context);
 }
 
+static void test_nointerpolation(void)
+{
+    HRESULT hr;
+    ID3D11Buffer *vb;
+    ID3D11Device *device;
+    ID3D11DeviceContext *context;
+    ID3D11InputLayout *layout;
+    ID3D11PixelShader *ps;
+    ID3D11VertexShader *vs;
+    UINT stride, offset;
+    struct d3d11_test_context test_context;
+
+    static const DWORD vs_code[] =
+    {
+#if 0
+    struct vertex_out
+    {
+        float4 pos : SV_POSITION;
+        nointerpolation float4 color : COLOR0;
+    };
+
+    void main(float4 pos : POSITION, out vertex_out vo)
+    {
+        if (pos.x < 0)
+            vo.color = float4(0.0f, 0.0f, 1.0f, 1.0f);
+        else
+            vo.color = float4(1.0f, 0.0f, 0.0f, 1.0f);
+        vo.pos = pos;
+    }
+#endif
+        0x43425844, 0x20DAAA2B, 0x0D32B307, 0x886028DE, 0xD63037F3, 0x00000001, 0x00000164, 0x00000003,
+        0x0000002C, 0x00000060, 0x000000B4, 0x4E475349, 0x0000002C, 0x00000001, 0x00000008, 0x00000020,
+        0x00000000, 0x00000000, 0x00000003, 0x00000000, 0x00000F0F, 0x49534F50, 0x4E4F4954, 0xABABAB00,
+        0x4E47534F, 0x0000004C, 0x00000002, 0x00000008, 0x00000038, 0x00000000, 0x00000001, 0x00000003,
+        0x00000000, 0x0000000F, 0x00000044, 0x00000000, 0x00000000, 0x00000003, 0x00000001, 0x0000000F,
+        0x505F5653, 0x5449534F, 0x004E4F49, 0x4F4C4F43, 0xABAB0052, 0x52444853, 0x000000A8, 0x00010040,
+        0x0000002A, 0x0300005F, 0x001010F2, 0x00000000, 0x04000067, 0x001020F2, 0x00000000, 0x00000001,
+        0x03000065, 0x001020F2, 0x00000001, 0x02000068, 0x00000001, 0x05000036, 0x001020F2, 0x00000000,
+        0x00101E46, 0x00000000, 0x07000031, 0x00100012, 0x00000000, 0x0010100A, 0x00000000, 0x00004001,
+        0x00000000, 0x0F000037, 0x001020F2, 0x00000001, 0x00100006, 0x00000000, 0x00004002, 0x00000000,
+        0x00000000, 0x3F800000, 0x3F800000, 0x00004002, 0x3F800000, 0x00000000, 0x00000000, 0x3F800000,
+        0x0100003E
+    };
+
+    static const DWORD ps_code[] =
+    {
+#if 0
+    struct vertex_out
+    {
+        float4 pos : SV_POSITION;
+        nointerpolation float4 color : COLOR0;
+    };
+
+    float4 main(vertex_out vo) : SV_TARGET
+    {
+        return vo.color;
+    }
+#endif
+        0x43425844, 0x33D9B6B6, 0xB32F761F, 0xA3EBDFC9, 0xE2C9CDBD, 0x00000001, 0x000000F4, 0x00000003,
+        0x0000002C, 0x00000080, 0x000000B4, 0x4E475349, 0x0000004C, 0x00000002, 0x00000008, 0x00000038,
+        0x00000000, 0x00000001, 0x00000003, 0x00000000, 0x0000000F, 0x00000044, 0x00000000, 0x00000000,
+        0x00000003, 0x00000001, 0x00000F0F, 0x505F5653, 0x5449534F, 0x004E4F49, 0x4F4C4F43, 0xABAB0052,
+        0x4E47534F, 0x0000002C, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000, 0x00000003,
+        0x00000000, 0x0000000F, 0x545F5653, 0x45475241, 0xABAB0054, 0x52444853, 0x00000038, 0x00000040,
+        0x0000000E, 0x03000862, 0x001010F2, 0x00000001, 0x03000065, 0x001020F2, 0x00000000, 0x05000036,
+        0x001020F2, 0x00000000, 0x00101E46, 0x00000001, 0x0100003E
+    };
+
+    static const D3D11_INPUT_ELEMENT_DESC layout_desc[] =
+    {
+        { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    };
+
+    static const struct vec2 quad[] =
+    {
+        { -1.0f, -1.0f },
+        { -1.0f,  1.0f },
+        {  1.0f, -1.0f },
+        {  1.0f,  1.0f },
+    };
+
+    if (!init_test_context(&test_context, NULL))
+        return;
+
+    device = test_context.device;
+    context = test_context.immediate_context;
+
+    hr = ID3D11Device_CreateInputLayout(device, layout_desc, 1, vs_code, sizeof(vs_code), &layout);
+    ok(SUCCEEDED(hr), "Failed to create input layout, hr %#x.\n", hr);
+    vb = create_buffer(device, D3D11_BIND_VERTEX_BUFFER, sizeof(quad), quad);
+    hr = ID3D11Device_CreateVertexShader(device, vs_code, sizeof(vs_code), NULL, &vs);
+    ok(SUCCEEDED(hr), "Failed to create vertex shader, hr %#x.\n", hr);
+    hr = ID3D11Device_CreatePixelShader(device, ps_code, sizeof(ps_code), NULL, &ps);
+    ok(SUCCEEDED(hr), "Failed to create pixel shader, hr %#x.\n", hr);
+
+    ID3D11DeviceContext_IASetInputLayout(context, layout);
+    ID3D11DeviceContext_IASetPrimitiveTopology(context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    stride = sizeof(quad[0]);
+    offset = 0;
+    ID3D11DeviceContext_IASetVertexBuffers(context, 0, 1, &vb, &stride, &offset);
+    ID3D11DeviceContext_VSSetShader(context, vs, NULL, 0);
+    ID3D11DeviceContext_PSSetShader(context, ps, NULL, 0);
+
+    ID3D11DeviceContext_Draw(context, 4, 0);
+    check_texture_color(test_context.backbuffer, 0xffff0000, 1);
+
+    ID3D11Buffer_Release(vb);
+    ID3D11InputLayout_Release(layout);
+    ID3D11PixelShader_Release(ps);
+    ID3D11VertexShader_Release(vs);
+    release_test_context(&test_context);
+}
+
+static void test_tbuffer(void)
+{
+    D3D11_SHADER_RESOURCE_VIEW_DESC view_desc;
+    HRESULT hr;
+    ID3D11Buffer *vb, *tb;
+    ID3D11Device *device;
+    ID3D11DeviceContext *context;
+    ID3D11InputLayout *layout;
+    ID3D11PixelShader *ps;
+    ID3D11ShaderResourceView *tb_view;
+    ID3D11VertexShader *vs;
+    UINT stride, offset;
+    struct d3d11_test_context test_context;
+
+    static const DWORD vs_code[] =
+    {
+#if 0
+    float4 main(float4 pos : POSITION) : SV_POSITION
+    {
+        return pos;
+    }
+#endif
+        0x43425844, 0x77f030d7, 0x18f13b6b, 0x47fff01f, 0x97ead6d3, 0x00000001, 0x000001b4, 0x00000005,
+        0x00000034, 0x0000008c, 0x000000c0, 0x000000f4, 0x00000138, 0x46454452, 0x00000050, 0x00000000,
+        0x00000000, 0x00000000, 0x0000001c, 0xfffe0400, 0x00000100, 0x0000001c, 0x7263694d, 0x666f736f,
+        0x52282074, 0x4c482029, 0x53204c53, 0x65646168, 0x6f432072, 0x6c69706d, 0x36207265, 0x392e332e,
+        0x2e303036, 0x38333631, 0xabab0034, 0x4e475349, 0x0000002c, 0x00000001, 0x00000008, 0x00000020,
+        0x00000000, 0x00000000, 0x00000003, 0x00000000, 0x00000f0f, 0x49534f50, 0x4e4f4954, 0xababab00,
+        0x4e47534f, 0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000001, 0x00000003,
+        0x00000000, 0x0000000f, 0x505f5653, 0x5449534f, 0x004e4f49, 0x52444853, 0x0000003c, 0x00010040,
+        0x0000000f, 0x0300005f, 0x001010f2, 0x00000000, 0x04000067, 0x001020f2, 0x00000000, 0x00000001,
+        0x05000036, 0x001020f2, 0x00000000, 0x00101e46, 0x00000000, 0x0100003e, 0x54415453, 0x00000074,
+        0x00000002, 0x00000000, 0x00000000, 0x00000002, 0x00000000, 0x00000000, 0x00000000, 0x00000001,
+        0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+        0x00000000, 0x00000000, 0x00000000, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+        0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000
+    };
+
+    static const DWORD ps_code[] =
+    {
+#if 0
+    tbuffer buf : register(t0)
+    {
+        float4 color;
+    };
+
+    float4 main() : SV_TARGET
+    {
+        return color;
+    }
+#endif
+        0x43425844, 0x921b0266, 0x0d6e2f9c, 0x7e3b529c, 0xab5ab054, 0x00000001, 0x0000022c, 0x00000005,
+        0x00000034, 0x000000f8, 0x00000108, 0x0000013c, 0x000001b0, 0x46454452, 0x000000bc, 0x00000001,
+        0x00000040, 0x00000001, 0x0000001c, 0xffff0400, 0x00000100, 0x00000088, 0x0000003c, 0x00000001,
+        0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000001, 0x00000001, 0x00667562, 0x0000003c,
+        0x00000001, 0x00000058, 0x00000010, 0x00000000, 0x00000001, 0x00000070, 0x00000000, 0x00000010,
+        0x00000002, 0x00000078, 0x00000000, 0x6f6c6f63, 0xabab0072, 0x00030001, 0x00040001, 0x00000000,
+        0x00000000, 0x7263694d, 0x666f736f, 0x52282074, 0x4c482029, 0x53204c53, 0x65646168, 0x6f432072,
+        0x6c69706d, 0x36207265, 0x392e332e, 0x2e303036, 0x38333631, 0xabab0034, 0x4e475349, 0x00000008,
+        0x00000000, 0x00000008, 0x4e47534f, 0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000,
+        0x00000000, 0x00000003, 0x00000000, 0x0000000f, 0x545f5653, 0x45475241, 0xabab0054, 0x52444853,
+        0x0000006c, 0x00000040, 0x0000001b, 0x04000858, 0x00107000, 0x00000000, 0x00006666, 0x03000065,
+        0x001020f2, 0x00000000, 0x02000068, 0x00000001, 0x0a00002d, 0x001000f2, 0x00000000, 0x00004002,
+        0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00107e46, 0x00000000, 0x05000036, 0x001020f2,
+        0x00000000, 0x00100e46, 0x00000000, 0x0100003e, 0x54415453, 0x00000074, 0x00000003, 0x00000001,
+        0x00000000, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000001, 0x00000000, 0x00000000,
+        0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000001, 0x00000000, 0x00000000,
+        0x00000000, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+        0x00000000, 0x00000000, 0x00000000
+    };
+
+    static const D3D11_INPUT_ELEMENT_DESC layout_desc[] =
+    {
+        { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    };
+
+    static const struct vec2 quad[] =
+    {
+        { -1.0f, -1.0f },
+        { -1.0f,  1.0f },
+        { 1.0f, -1.0f },
+        { 1.0f,  1.0f },
+    };
+
+    static const struct vec4 color[] =
+    {
+        { 1.0f, 1.0f, 0.0f, 1.0f },
+    };
+    static const float red[] = {1.0f, 0.0f, 0.0f, 1.0f};
+
+    if (!init_test_context(&test_context, NULL))
+        return;
+
+    device = test_context.device;
+    context = test_context.immediate_context;
+    ID3D11DeviceContext_ClearRenderTargetView(context, test_context.backbuffer_rtv, red);
+
+    hr = ID3D11Device_CreateInputLayout(device, layout_desc, 1, vs_code, sizeof(vs_code), &layout);
+    ok(SUCCEEDED(hr), "Failed to create input layout, hr %#x.\n", hr);
+    vb = create_buffer(device, D3D11_BIND_VERTEX_BUFFER, sizeof(quad), quad);
+    hr = ID3D11Device_CreateVertexShader(device, vs_code, sizeof(vs_code), NULL, &vs);
+    ok(SUCCEEDED(hr), "Failed to create vertex shader, hr %#x.\n", hr);
+    hr = ID3D11Device_CreatePixelShader(device, ps_code, sizeof(ps_code), NULL, &ps);
+    ok(SUCCEEDED(hr), "Failed to create pixel shader, hr %#x.\n", hr);
+
+    tb = create_buffer(device, D3D11_BIND_SHADER_RESOURCE, sizeof(color), color);
+    view_desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    view_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+    view_desc.Buffer.ElementOffset = 0;
+    view_desc.Buffer.ElementWidth = 1;
+    hr = ID3D11Device_CreateShaderResourceView(device, (ID3D11Resource*)tb, &view_desc, &tb_view);
+    ok(SUCCEEDED(hr), "Failed to create texture buffer view, hr %#x.\n", hr);
+
+    ID3D11DeviceContext_IASetInputLayout(context, layout);
+    ID3D11DeviceContext_IASetPrimitiveTopology(context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    stride = sizeof(quad[0]);
+    offset = 0;
+    ID3D11DeviceContext_IASetVertexBuffers(context, 0, 1, &vb, &stride, &offset);
+    ID3D11DeviceContext_VSSetShader(context, vs, NULL, 0);
+    ID3D11DeviceContext_PSSetShader(context, ps, NULL, 0);
+
+    ID3D11DeviceContext_PSSetShaderResources(context, 0, 1, &tb_view);
+
+    ID3D11DeviceContext_Draw(context, 4, 0);
+    check_texture_color(test_context.backbuffer, 0xff00ffff, 1);
+
+    ID3D11ShaderResourceView_Release(tb_view);
+    ID3D11Buffer_Release(tb);
+    ID3D11Buffer_Release(vb);
+    ID3D11InputLayout_Release(layout);
+    ID3D11PixelShader_Release(ps);
+    ID3D11VertexShader_Release(vs);
+    release_test_context(&test_context);
+}
+
+static void test_sm4_vertexid(void)
+{
+    struct d3d11_test_context test_context;
+    ID3D11PixelShader *ps;
+    ID3D11DeviceContext *context;
+    ID3D11Device *device;
+    DWORD expected_color;
+    ID3D11Buffer *ib;
+    HRESULT hr;
+    unsigned int stride, offset;
+
+    static const DWORD ps_code[] =
+    {
+#if 0
+struct VSOut
+{
+    float4 pos : SV_Position;
+    float4 color : color;
+};
+
+float4 main(VSOut input) : SV_TARGET
+{
+    return input.color;
+}
+#endif
+        0x43425844, 0x119e48d1, 0x468aecb3, 0x0a405be5, 0x4e203b82, 0x00000001, 0x000000f4, 0x00000003,
+        0x0000002c, 0x00000080, 0x000000b4, 0x4e475349, 0x0000004c, 0x00000002, 0x00000008, 0x00000038,
+        0x00000000, 0x00000001, 0x00000003, 0x00000000, 0x0000000f, 0x00000044, 0x00000000, 0x00000000,
+        0x00000003, 0x00000001, 0x00000f0f, 0x505f5653, 0x7469736f, 0x006e6f69, 0x6f6c6f63, 0xabab0072,
+        0x4e47534f, 0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000, 0x00000003,
+        0x00000000, 0x0000000f, 0x545f5653, 0x45475241, 0xabab0054, 0x52444853, 0x00000038, 0x00000040,
+        0x0000000e, 0x03001062, 0x001010f2, 0x00000001, 0x03000065, 0x001020f2, 0x00000000, 0x05000036,
+        0x001020f2, 0x00000000, 0x00101e46, 0x00000001, 0x0100003e
+    };
+    static const D3D11_INPUT_ELEMENT_DESC layout_desc[] =
+    {
+        { "SV_Position", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "SV_VertexID", 0, DXGI_FORMAT_R32_UINT, 1, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    };
+    static const DWORD vs_code[] =
+    {
+#if 0
+struct VSIn
+{
+    float4 pos : SV_Position;
+    uint vertexid : SV_VertexID;
+};
+
+struct VSOut
+{
+    float4 pos : SV_Position;
+    float4 color : color;
+};
+
+VSOut main(VSIn input)
+{
+    VSOut output;
+    if (input.vertexid < 4)
+        output.color = float4(0.0, 1.0, 1.0, 1.0);
+    else
+        output.color = float4(1.0, 0.0, 0.0, 1.0);
+    output.pos = input.pos;
+    return output;
+}
+#endif
+        0x43425844, 0xcbc9ab23, 0x3f01a208, 0x1df619da, 0xe93cc736, 0x00000001, 0x00000198, 0x00000003,
+        0x0000002c, 0x00000084, 0x000000d8, 0x4e475349, 0x00000050, 0x00000002, 0x00000008, 0x00000038,
+        0x00000000, 0x00000000, 0x00000003, 0x00000000, 0x00000f0f, 0x00000044, 0x00000000, 0x00000006,
+        0x00000001, 0x00000001, 0x00000101, 0x505f5653, 0x7469736f, 0x006e6f69, 0x565f5653, 0x65747265,
+        0x00444978, 0x4e47534f, 0x0000004c, 0x00000002, 0x00000008, 0x00000038, 0x00000000, 0x00000001,
+        0x00000003, 0x00000000, 0x0000000f, 0x00000044, 0x00000000, 0x00000000, 0x00000003, 0x00000001,
+        0x0000000f, 0x505f5653, 0x7469736f, 0x006e6f69, 0x6f6c6f63, 0xabab0072, 0x52444853, 0x000000b8,
+        0x00010040, 0x0000002e, 0x0300005f, 0x001010f2, 0x00000000, 0x04000060, 0x00101012, 0x00000001,
+        0x00000006, 0x04000067, 0x001020f2, 0x00000000, 0x00000001, 0x03000065, 0x001020f2, 0x00000001,
+        0x02000068, 0x00000001, 0x05000036, 0x001020f2, 0x00000000, 0x00101e46, 0x00000000, 0x0700004f,
+        0x00100012, 0x00000000, 0x0010100a, 0x00000001, 0x00004001, 0x00000004, 0x0f000037, 0x001020f2,
+        0x00000001, 0x00100006, 0x00000000, 0x00004002, 0x00000000, 0x3f800000, 0x3f800000, 0x3f800000,
+        0x00004002, 0x3f800000, 0x00000000, 0x00000000, 0x3f800000, 0x0100003e
+    };
+    static const struct vec2 vertices[] =
+    {
+        { 0.0f, 0.0f },
+        { 0.0f, 0.0f },
+        { 0.0f, 0.0f },
+        { 0.0f, 0.0f },
+        { -1.0f, -1.0f },
+        { -1.0f,  1.0f },
+        { 1.0f, -1.0f },
+        { 1.0f,  1.0f },
+    };
+    static const unsigned int indices[] =
+    {
+        0, 0, 0, 0, 0, 1, 2, 3
+    };
+
+    if (!init_test_context(&test_context, NULL))
+        return;
+
+    device = test_context.device;
+    context = test_context.immediate_context;
+
+    hr = ID3D11Device_CreatePixelShader(device, ps_code, sizeof(ps_code), NULL, &ps);
+    ok(SUCCEEDED(hr), "Failed to create return pixel shader, hr %#x.\n", hr);
+
+    ID3D11DeviceContext_PSSetShader(context, ps, NULL, 0);
+    expected_color = 0xffffff00;
+
+    ib = create_buffer(device, D3D11_BIND_INDEX_BUFFER, sizeof(indices), indices);
+
+    hr = ID3D11Device_CreateInputLayout(device, layout_desc,
+        sizeof(layout_desc) / sizeof(*layout_desc),
+        vs_code, sizeof(vs_code), &test_context.input_layout);
+    ok(SUCCEEDED(hr), "Failed to create input layout, hr %#x.\n", hr);
+
+    test_context.vb = create_buffer(device, D3D11_BIND_VERTEX_BUFFER, sizeof(vertices), vertices);
+
+    hr = ID3D11Device_CreateVertexShader(device, vs_code, sizeof(vs_code), NULL, &test_context.vs);
+    ok(SUCCEEDED(hr), "Failed to create vertex shader, hr %#x.\n", hr);
+
+    ID3D11DeviceContext_IASetInputLayout(test_context.immediate_context, test_context.input_layout);
+    ID3D11DeviceContext_IASetPrimitiveTopology(test_context.immediate_context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    stride = sizeof(*vertices);
+    offset = 0;
+    ID3D11DeviceContext_IASetVertexBuffers(test_context.immediate_context, 0, 1, &test_context.vb, &stride, &offset);
+    ID3D11DeviceContext_IASetIndexBuffer(test_context.immediate_context, ib, DXGI_FORMAT_R32_UINT, 0);
+    ID3D11DeviceContext_VSSetShader(test_context.immediate_context, test_context.vs, NULL, 0);
+
+    ID3D11DeviceContext_Draw(test_context.immediate_context, 4, 4);
+    check_texture_color(test_context.backbuffer, expected_color, 0);
+
+    ID3D11DeviceContext_DrawIndexed(test_context.immediate_context, 4, 4, 4);
+    check_texture_color(test_context.backbuffer, expected_color, 0);
+
+    ID3D11DeviceContext_DrawInstanced(test_context.immediate_context, 4, 1, 4, 0);
+    check_texture_color(test_context.backbuffer, expected_color, 0);
+
+    ID3D11DeviceContext_DrawIndexedInstanced(test_context.immediate_context, 4, 1, 4, 4, 0);
+    check_texture_color(test_context.backbuffer, expected_color, 0);
+
+    ID3D11Buffer_Release(ib);
+    ID3D11PixelShader_Release(ps);
+
+    release_test_context(&test_context);
+}
+
 START_TEST(d3d11)
 {
     test_create_device();
@@ -15885,6 +16278,9 @@ START_TEST(d3d11)
     test_resinfo_instruction();
     test_sm5_bufinfo_instruction();
     test_render_target_device_mismatch();
+    test_nointerpolation();
+    test_tbuffer();
+    test_sm4_vertexid();
     test_buffer_srv();
     run_for_each_feature_level_in_range(D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_11_0,
             test_unaligned_raw_buffer_access);
