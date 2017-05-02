@@ -68,4 +68,6 @@ static inline WCHAR *strdupAW( const char *src )
     return dst;
 }
 
+const WCHAR * const WellKnownPrivNames[SE_MAX_WELL_KNOWN_PRIVILEGE + 1];
+
 #endif /* __WINE_ADVAPI32MISC_H */

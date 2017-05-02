@@ -75,6 +75,10 @@ my @dll_groups =
   "msvcp120_app",
  ],
  [
+  "d3d10",
+  "d3d10_1",
+ ],
+ [
   "d3dx10_43",
   "d3dx10_42",
   "d3dx10_41",
@@ -188,6 +192,7 @@ my @dll_groups =
   "api-ms-win-core-handle-l1-1-0",
   "api-ms-win-core-heap-l1-1-0",
   "api-ms-win-core-heap-l1-2-0",
+  "api-ms-win-core-heap-l2-1-0",
   "api-ms-win-core-heap-obsolete-l1-1-0",
   "api-ms-win-core-io-l1-1-0",
   "api-ms-win-core-io-l1-1-1",
@@ -285,7 +290,19 @@ my @dll_groups =
   "api-ms-win-core-registryuserspecific-l1-1-0",
   "api-ms-win-core-shlwapi-legacy-l1-1-0",
   "api-ms-win-core-shlwapi-obsolete-l1-1-0",
+  "api-ms-win-core-shlwapi-obsolete-l1-2-0",
   "api-ms-win-core-url-l1-1-0",
+ ],
+ [
+  "shell32",
+  "shlwapi",
+  "shcore",
+ ],
+ [
+  "shcore",
+  "api-ms-win-shcore-obsolete-l1-1-0",
+  "api-ms-win-shcore-thread-l1-1-0",
+  "api-ms-win-shcore-stream-l1-1-0",
  ],
  [
   "user32",
@@ -293,14 +310,18 @@ my @dll_groups =
   "api-ms-win-core-string-l2-1-0",
   "api-ms-win-downlevel-user32-l1-1-0",
   "api-ms-win-ntuser-dc-access-l1-1-0",
+  "api-ms-win-rtcore-ntuser-draw-l1-1-0",
   "api-ms-win-rtcore-ntuser-private-l1-1-0",
+  "api-ms-win-rtcore-ntuser-window-l1-1-0",
   "ext-ms-win-ntuser-message-l1-1-1",
+  "ext-ms-win-ntuser-mouse-l1-1-0",
   "ext-ms-win-ntuser-private-l1-1-1",
   "ext-ms-win-ntuser-rectangle-ext-l1-1-0",
   "ext-ms-win-ntuser-uicontext-ext-l1-1-0",
   "ext-ms-win-ntuser-window-l1-1-1",
   "ext-ms-win-rtcore-ntuser-dc-access-l1-1-0",
   "ext-ms-win-rtcore-ntuser-dpi-l1-1-0",
+  "ext-ms-win-rtcore-ntuser-syscolors-l1-1-0",
   "ext-ms-win-rtcore-ntuser-sysparams-l1-1-0",
  ],
  [
@@ -341,6 +362,10 @@ my @dll_groups =
   "api-ms-win-core-winrt-registration-l1-1-0",
   "api-ms-win-core-winrt-roparameterizediid-l1-1-0",
   "api-ms-win-core-winrt-string-l1-1-0",
+ ],
+ [
+  "uxtheme",
+  "ext-ms-win-uxtheme-themes-l1-1-0",
  ],
  [
   "bthprops.cpl",

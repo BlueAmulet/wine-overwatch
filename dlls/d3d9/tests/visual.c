@@ -12277,7 +12277,7 @@ static void yuv_layout_test(void)
     IDirect3D9 *d3d;
     D3DCOLOR color;
     DWORD ref_color;
-    BYTE *buf, *chroma_buf, *u_buf, *v_buf;
+    BYTE *buf, *chroma_buf, *u_buf = NULL, *v_buf = NULL;
     UINT width = 20, height = 16;
     IDirect3DDevice9 *device;
     ULONG refcount;
@@ -14911,6 +14911,7 @@ static void fp_special_test(void)
         D3DCOLOR nv40;
         D3DCOLOR nv50;
         D3DCOLOR warp;
+        D3DCOLOR todo;
     }
     vs_body[] =
     {
@@ -14927,17 +14928,17 @@ static void fp_special_test(void)
          * There are considerable differences between graphics cards in how
          * these are handled, but pow and nrm never generate INF or NAN on
          * real hardware. */
-        {"log",     vs_log,     sizeof(vs_log),     0x00000000, 0x00000000, 0x00ff0000, 0x00ff7f00, 0x00ff8000},
-        {"pow",     vs_pow,     sizeof(vs_pow),     0x000000ff, 0x000000ff, 0x0000ff00, 0x000000ff, 0x00008000},
-        {"nrm",     vs_nrm,     sizeof(vs_nrm),     0x00ff0000, 0x00ff0000, 0x0000ff00, 0x00ff0000, 0x00008000},
-        {"rcp1",    vs_rcp1,    sizeof(vs_rcp1),    0x000000ff, 0x000000ff, 0x00ff00ff, 0x00ff7f00, 0x00ff8000},
-        {"rcp2",    vs_rcp2,    sizeof(vs_rcp2),    0x000000ff, 0x00000000, 0x00ff0000, 0x00ff7f00, 0x00ff8000},
-        {"rsq1",    vs_rsq1,    sizeof(vs_rsq1),    0x000000ff, 0x000000ff, 0x00ff00ff, 0x00ff7f00, 0x00ff8000},
-        {"rsq2",    vs_rsq2,    sizeof(vs_rsq2),    0x000000ff, 0x000000ff, 0x00ff00ff, 0x00ff7f00, 0x00ff8000},
-        {"lit",     vs_lit,     sizeof(vs_lit),     0x00ff0000, 0x00ff0000, 0x00ff0000, 0x00ff0000, 0x00ff0000},
-        {"def1",    vs_def1,    sizeof(vs_def1),    0x000000ff, 0x00007f00, 0x0000ff00, 0x00007f00, 0x00008000},
-        {"def2",    vs_def2,    sizeof(vs_def2),    0x00ff0000, 0x00ff7f00, 0x00ff0000, 0x00ff7f00, 0x00ff8000},
-        {"def3",    vs_def3,    sizeof(vs_def3),    0x00ff00ff, 0x00ff7f00, 0x00ff00ff, 0x00ff7f00, 0x00ff8000},
+        {"log",     vs_log,     sizeof(vs_log),     0x00000000, 0x00000000, 0x00ff0000, 0x00ff7f00, 0x00ff8000, ~0U},
+        {"pow",     vs_pow,     sizeof(vs_pow),     0x000000ff, 0x000000ff, 0x0000ff00, 0x000000ff, 0x00008000, ~0U},
+        {"nrm",     vs_nrm,     sizeof(vs_nrm),     0x00ff0000, 0x00ff0000, 0x0000ff00, 0x00ff0000, 0x00008000, ~0U},
+        {"rcp1",    vs_rcp1,    sizeof(vs_rcp1),    0x000000ff, 0x000000ff, 0x00ff00ff, 0x00ff7f00, 0x00ff8000, 0x00ff0000},
+        {"rcp2",    vs_rcp2,    sizeof(vs_rcp2),    0x000000ff, 0x00000000, 0x00ff0000, 0x00ff7f00, 0x00ff8000, ~0U},
+        {"rsq1",    vs_rsq1,    sizeof(vs_rsq1),    0x000000ff, 0x000000ff, 0x00ff00ff, 0x00ff7f00, 0x00ff8000, 0x00ff0000},
+        {"rsq2",    vs_rsq2,    sizeof(vs_rsq2),    0x000000ff, 0x000000ff, 0x00ff00ff, 0x00ff7f00, 0x00ff8000, 0x00ff0000},
+        {"lit",     vs_lit,     sizeof(vs_lit),     0x00ff0000, 0x00ff0000, 0x00ff0000, 0x00ff0000, 0x00ff0000, ~0U},
+        {"def1",    vs_def1,    sizeof(vs_def1),    0x000000ff, 0x00007f00, 0x0000ff00, 0x00007f00, 0x00008000, 0x00000000},
+        {"def2",    vs_def2,    sizeof(vs_def2),    0x00ff0000, 0x00ff7f00, 0x00ff0000, 0x00ff7f00, 0x00ff8000, ~0U},
+        {"def3",    vs_def3,    sizeof(vs_def3),    0x00ff00ff, 0x00ff7f00, 0x00ff00ff, 0x00ff7f00, 0x00ff8000, 0x00ff0000},
     };
 
     static const DWORD ps_code[] =
@@ -15055,6 +15056,7 @@ static void fp_special_test(void)
         ok(SUCCEEDED(hr), "EndScene failed, hr %#x.\n", hr);
 
         color = getPixelColor(device, 320, 240);
+        todo_wine_if(vs_body[i].todo != ~0U && color_match(color, vs_body[i].todo, 1))
         ok(color_match(color, vs_body[i].r500, 1)
                 || color_match(color, vs_body[i].r600, 1)
                 || color_match(color, vs_body[i].nv40, 1)

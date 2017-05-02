@@ -301,8 +301,11 @@ GLenum wined3d_gl_compare_func(enum wined3d_cmp_func f)
         case WINED3D_CMP_ALWAYS:
             return GL_ALWAYS;
         default:
-            FIXME("Unrecognized compare function %#x.\n", f);
+        {
+            static int once;
+            if (f || !once++) FIXME("Unrecognized compare function %#x.\n", f);
             return GL_NONE;
+        }
     }
 }
 
@@ -348,8 +351,11 @@ static GLenum gl_blend_op(const struct wined3d_gl_info *gl_info, enum wined3d_bl
         case WINED3D_BLEND_OP_MAX:
             return gl_info->supported[EXT_BLEND_MINMAX] ? GL_MAX : GL_FUNC_ADD;
         default:
-            FIXME("Unhandled blend op %#x.\n", op);
+        {
+            static int once;
+            if (op || !once++) FIXME("Unhandled blend op %#x.\n", op);
             return GL_FUNC_ADD;
+        }
     }
 }
 
@@ -428,8 +434,11 @@ static GLenum gl_blend_factor(enum wined3d_blend factor, const struct wined3d_fo
         case WINED3D_BLEND_INVSRC1ALPHA:
             return GL_ONE_MINUS_SRC1_ALPHA;
         default:
-            FIXME("Unhandled blend factor %#x.\n", factor);
+        {
+            static int once;
+            if (factor || !once++) FIXME("Unhandled blend factor %#x.\n", factor);
             return GL_NONE;
+        }
     }
 }
 
@@ -821,8 +830,11 @@ static GLenum gl_stencil_op(enum wined3d_stencil_op op)
         case WINED3D_STENCIL_OP_DECR:
             return GL_DECR_WRAP;
         default:
-            FIXME("Unrecognized stencil op %#x.\n", op);
+        {
+            static int once;
+            if (op || !once++) FIXME("Unrecognized stencil op %#x.\n", op);
             return GL_KEEP;
+        }
     }
 }
 

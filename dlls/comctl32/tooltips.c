@@ -103,6 +103,7 @@
 #include "commctrl.h"
 #include "comctl32.h"
 #include "wine/debug.h"
+#include "wine/exception.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(tooltips);
 
@@ -1082,10 +1083,19 @@ TOOLTIPS_AddToolT (TOOLTIPS_INFO *infoPtr, const TTTOOLINFOW *ti, BOOL isW)
                 toolPtr->lpszText = LPSTR_TEXTCALLBACKW;
             }
             else if (isW) {
-                INT len = lstrlenW (ti->lpszText);
-                TRACE("add text %s!\n", debugstr_w(ti->lpszText));
-                toolPtr->lpszText =	Alloc ((len + 1)*sizeof(WCHAR));
-                strcpyW (toolPtr->lpszText, ti->lpszText);
+                __TRY
+                {
+                    INT len = lstrlenW (ti->lpszText);
+                    TRACE("add text %s!\n", debugstr_w(ti->lpszText));
+                    toolPtr->lpszText =	Alloc ((len + 1)*sizeof(WCHAR));
+                    strcpyW (toolPtr->lpszText, ti->lpszText);
+                }
+                __EXCEPT_PAGE_FAULT
+                {
+                    WARN("Invalid lpszText.\n");
+                    return FALSE;
+                }
+                __ENDTRY
             }
             else {
                 INT len = MultiByteToWideChar(CP_ACP, 0, (LPSTR)ti->lpszText, -1, NULL, 0);

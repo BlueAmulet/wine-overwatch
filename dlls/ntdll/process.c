@@ -163,7 +163,7 @@ static void fill_VM_COUNTERS(VM_COUNTERS* pvmi)
 
 static void fill_VM_COUNTERS(VM_COUNTERS* pvmi)
 {
-    /* FIXME : real data */
+    read_process_memory_stats(getpid(), pvmi);
 }
 
 #endif
@@ -190,7 +190,6 @@ NTSTATUS WINAPI NtQueryInformationProcess(
 
     switch (ProcessInformationClass) 
     {
-    UNIMPLEMENTED_INFO_CLASS(ProcessQuotaLimits);
     UNIMPLEMENTED_INFO_CLASS(ProcessBasePriority);
     UNIMPLEMENTED_INFO_CLASS(ProcessRaisePriority);
     UNIMPLEMENTED_INFO_CLASS(ProcessExceptionPort);
@@ -202,7 +201,6 @@ NTSTATUS WINAPI NtQueryInformationProcess(
     UNIMPLEMENTED_INFO_CLASS(ProcessWorkingSetWatch);
     UNIMPLEMENTED_INFO_CLASS(ProcessUserModeIOPL);
     UNIMPLEMENTED_INFO_CLASS(ProcessEnableAlignmentFaultFixup);
-    UNIMPLEMENTED_INFO_CLASS(ProcessPriorityClass);
     UNIMPLEMENTED_INFO_CLASS(ProcessWx86Information);
     UNIMPLEMENTED_INFO_CLASS(ProcessPriorityBoost);
     UNIMPLEMENTED_INFO_CLASS(ProcessDeviceMap);
@@ -251,6 +249,36 @@ NTSTATUS WINAPI NtQueryInformationProcess(
             else
             {
                 len = sizeof(PROCESS_BASIC_INFORMATION);
+                ret = STATUS_INFO_LENGTH_MISMATCH;
+            }
+        }
+        break;
+    case ProcessQuotaLimits:
+        {
+            QUOTA_LIMITS pqli;
+
+            if (ProcessInformationLength >= sizeof(QUOTA_LIMITS))
+            {
+                if (!ProcessInformation)
+                    ret = STATUS_ACCESS_VIOLATION;
+                else if (!ProcessHandle)
+                    ret = STATUS_INVALID_HANDLE;
+                else
+                {
+                    /* FIXME : real data */
+                    memset(&pqli, 0, sizeof(QUOTA_LIMITS));
+
+                    memcpy(ProcessInformation, &pqli, sizeof(QUOTA_LIMITS));
+
+                    len = sizeof(QUOTA_LIMITS);
+                }
+
+                if (ProcessInformationLength > sizeof(QUOTA_LIMITS))
+                    ret = STATUS_INFO_LENGTH_MISMATCH;
+            }
+            else
+            {
+                len = sizeof(QUOTA_LIMITS);
                 ret = STATUS_INFO_LENGTH_MISMATCH;
             }
         }
@@ -501,6 +529,7 @@ NTSTATUS WINAPI NtQueryInformationProcess(
     case ProcessImageFileName:
         /* FIXME: this will return a DOS path. Windows returns an NT path. Changing this would require also changing kernel32.QueryFullProcessImageName.
          * The latter may be harder because of the lack of RtlNtPathNameToDosPathName. */
+    case ProcessImageFileNameWin32:
         SERVER_START_REQ(get_dll_info)
         {
             UNICODE_STRING *image_file_name_str = ProcessInformation;
@@ -525,6 +554,34 @@ NTSTATUS WINAPI NtQueryInformationProcess(
         len = sizeof(ULONG);
         if (ProcessInformationLength == len)
             *(ULONG *)ProcessInformation = execute_flags;
+        else
+            ret = STATUS_INFO_LENGTH_MISMATCH;
+        break;
+    case ProcessPriorityClass:
+        len = sizeof(PROCESS_PRIORITY_CLASS);
+        if (ProcessInformationLength == len)
+        {
+            if (!ProcessInformation)
+                ret = STATUS_ACCESS_VIOLATION;
+            else if (!ProcessHandle)
+                ret = STATUS_INVALID_HANDLE;
+            else
+            {
+                PROCESS_PRIORITY_CLASS *priority = ProcessInformation;
+
+                SERVER_START_REQ(get_process_info)
+                {
+                    req->handle = wine_server_obj_handle( ProcessHandle );
+                    if ((ret = wine_server_call( req )) == STATUS_SUCCESS)
+                    {
+                        priority->PriorityClass = reply->priority;
+                        /* FIXME: Not yet supported by the wineserver */
+                        priority->Foreground = FALSE;
+                    }
+                }
+                SERVER_END_REQ;
+            }
+        }
         else
             ret = STATUS_INFO_LENGTH_MISMATCH;
         break;
@@ -680,8 +737,18 @@ NTSTATUS  WINAPI NtOpenProcess(PHANDLE handle, ACCESS_MASK access,
  */
 NTSTATUS WINAPI NtResumeProcess( HANDLE handle )
 {
-    FIXME("stub: %p\n", handle);
-    return STATUS_NOT_IMPLEMENTED;
+    NTSTATUS    status;
+
+    TRACE("(%p)\n", handle);
+
+    SERVER_START_REQ( resume_process )
+    {
+        req->handle = wine_server_obj_handle( handle );
+        status = wine_server_call( req );
+    }
+    SERVER_END_REQ;
+
+    return status;
 }
 
 /******************************************************************************
@@ -690,6 +757,16 @@ NTSTATUS WINAPI NtResumeProcess( HANDLE handle )
  */
 NTSTATUS WINAPI NtSuspendProcess( HANDLE handle )
 {
-    FIXME("stub: %p\n", handle);
-    return STATUS_NOT_IMPLEMENTED;
+    NTSTATUS    status;
+
+    TRACE("(%p)\n", handle);
+
+    SERVER_START_REQ( suspend_process )
+    {
+        req->handle = wine_server_obj_handle( handle );
+        status = wine_server_call( req );
+    }
+    SERVER_END_REQ;
+
+    return status;
 }

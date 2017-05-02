@@ -342,7 +342,7 @@ static const char * _DM_fields(DWORD fields)
 LONG CDECL X11DRV_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
                                            HWND hwnd, DWORD flags, LPVOID lpvoid )
 {
-    DWORD i, dwBpp = 0;
+    DWORD i, mode, dwBpp = 0;
     DEVMODEW dm;
     BOOL def_mode = TRUE;
 
@@ -387,6 +387,7 @@ LONG CDECL X11DRV_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
         return DISP_CHANGE_BADMODE;
     }
 
+    mode = ENUM_CURRENT_SETTINGS;
     for (i = 0; i < dd_mode_count; i++)
     {
         if (devmode->dmFields & DM_BITSPERPEL)
@@ -404,27 +405,45 @@ LONG CDECL X11DRV_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
             if (devmode->dmPelsHeight != dd_modes[i].height)
                 continue;
         }
-        if ((devmode->dmFields & DM_DISPLAYFREQUENCY) && (dd_modes[i].refresh_rate != 0) &&
+        if ((devmode->dmFields & DM_DISPLAYFREQUENCY) &&
             devmode->dmDisplayFrequency != 0)
         {
-            if (devmode->dmDisplayFrequency != dd_modes[i].refresh_rate)
+            if (dd_modes[i].refresh_rate != 0 &&
+                devmode->dmDisplayFrequency != dd_modes[i].refresh_rate)
                 continue;
         }
-        /* we have a valid mode */
-        TRACE("Requested display settings match mode %d (%s)\n", i, handler_name);
+        else if (default_display_frequency != 0)
+        {
+            if (dd_modes[i].refresh_rate != 0 &&
+                default_display_frequency == dd_modes[i].refresh_rate)
+            {
+                TRACE("Found display mode %d with default frequency (%s)\n", i, handler_name);
+                mode = i;
+                break;
+            }
+        }
 
-        if (flags & CDS_UPDATEREGISTRY)
-            write_registry_settings(devmode);
-
-        if (!(flags & (CDS_TEST | CDS_NORESET)))
-            return pSetCurrentMode(i);
-
-        return DISP_CHANGE_SUCCESSFUL;
+        if (mode == ENUM_CURRENT_SETTINGS)
+            mode = i;
     }
 
-    /* no valid modes found */
-    ERR("No matching mode found %ux%ux%u @%u! (%s)\n",
-        devmode->dmPelsWidth, devmode->dmPelsHeight,
-        devmode->dmBitsPerPel, devmode->dmDisplayFrequency, handler_name);
-    return DISP_CHANGE_BADMODE;
+    if (mode == ENUM_CURRENT_SETTINGS)
+    {
+        /* no valid modes found */
+        ERR("No matching mode found %ux%ux%u @%u! (%s)\n",
+            devmode->dmPelsWidth, devmode->dmPelsHeight,
+            devmode->dmBitsPerPel, devmode->dmDisplayFrequency, handler_name);
+        return DISP_CHANGE_BADMODE;
+    }
+
+    /* we have a valid mode */
+    TRACE("Requested display settings match mode %d (%s)\n", mode, handler_name);
+
+    if (flags & CDS_UPDATEREGISTRY)
+        write_registry_settings(devmode);
+
+    if (!(flags & (CDS_TEST | CDS_NORESET)))
+        return pSetCurrentMode(mode);
+
+    return DISP_CHANGE_SUCCESSFUL;
 }

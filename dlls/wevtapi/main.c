@@ -80,6 +80,22 @@ EVT_HANDLE WINAPI EvtOpenChannelConfig(EVT_HANDLE Session, LPCWSTR ChannelPath, 
     return NULL;
 }
 
+BOOL WINAPI EvtNext(EVT_HANDLE result, DWORD size, EVT_HANDLE *array, DWORD timeout,
+                    DWORD flags, DWORD *ret_count)
+{
+    FIXME("(%p %u %p %u %u %p) stub\n", result, size, array, timeout, flags, ret_count);
+
+    if (timeout)
+    {
+        Sleep(timeout);
+        SetLastError(ERROR_TIMEOUT);
+        return FALSE;
+    }
+
+    SetLastError(ERROR_NO_MORE_ITEMS);
+    return FALSE;
+}
+
 BOOL WINAPI EvtClose(EVT_HANDLE handle)
 {
     FIXME("(%p) stub\n", handle);
