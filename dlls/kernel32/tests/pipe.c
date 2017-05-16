@@ -29,6 +29,7 @@
 #include "wine/test.h"
 
 #define PIPENAME "\\\\.\\PiPe\\tests_pipe.c"
+#define PIPENAME_SPECIAL "\\\\.\\PiPe\\tests->pipe.c"
 
 #define NB_SERVER_LOOPS 8
 
@@ -574,6 +575,15 @@ static void test_CreateNamedPipe(int pipemode)
          */
     }
 
+    ok(CloseHandle(hnp), "CloseHandle\n");
+
+    hnp = CreateNamedPipeA(PIPENAME_SPECIAL, PIPE_ACCESS_DUPLEX, pipemode | PIPE_WAIT,
+        /* nMaxInstances */ 1,
+        /* nOutBufSize */ 1024,
+        /* nInBufSize */ 1024,
+        /* nDefaultWait */ NMPWAIT_USE_DEFAULT_WAIT,
+        /* lpSecurityAttrib */ NULL);
+    ok(hnp != INVALID_HANDLE_VALUE, "CreateNamedPipe with special characters failed\n");
     ok(CloseHandle(hnp), "CloseHandle\n");
 
     trace("test_CreateNamedPipe returning\n");

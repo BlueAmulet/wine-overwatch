@@ -1223,8 +1223,12 @@ static void dump_new_process_request( const struct new_process_request *req )
     fprintf( stderr, ", thread_attr=%08x", req->thread_attr );
     dump_cpu_type( ", cpu=", &req->cpu );
     fprintf( stderr, ", info_size=%u", req->info_size );
+    fprintf( stderr, ", env_size=%u", req->env_size );
+    fprintf( stderr, ", process_sd_size=%u", req->process_sd_size );
     dump_varargs_startup_info( ", info=", min(cur_size,req->info_size) );
-    dump_varargs_unicode_str( ", env=", cur_size );
+    dump_varargs_unicode_str( ", env=", min(cur_size,req->env_size) );
+    dump_varargs_security_descriptor( ", process_sd=", min(cur_size,req->process_sd_size) );
+    dump_varargs_security_descriptor( ", thread_sd=", cur_size );
 }
 
 static void dump_new_process_reply( const struct new_process_reply *req )
@@ -1396,6 +1400,8 @@ static void dump_get_thread_times_reply( const struct get_thread_times_reply *re
 {
     dump_timeout( " creation_time=", &req->creation_time );
     dump_timeout( ", exit_time=", &req->exit_time );
+    fprintf( stderr, ", unix_pid=%d", req->unix_pid );
+    fprintf( stderr, ", unix_tid=%d", req->unix_tid );
 }
 
 static void dump_set_thread_info_request( const struct set_thread_info_request *req )
@@ -1483,6 +1489,10 @@ static void dump_get_apc_result_reply( const struct get_apc_result_reply *req )
 static void dump_close_handle_request( const struct close_handle_request *req )
 {
     fprintf( stderr, " handle=%04x", req->handle );
+}
+
+static void dump_socket_cleanup_request( const struct socket_cleanup_request *req )
+{
 }
 
 static void dump_set_handle_info_request( const struct set_handle_info_request *req )
@@ -1795,6 +1805,11 @@ static void dump_get_directory_cache_entry_reply( const struct get_directory_cac
     dump_varargs_ints( ", free=", cur_size );
 }
 
+static void dump_get_shared_memory_request( const struct get_shared_memory_request *req )
+{
+    fprintf( stderr, " tid=%04x", req->tid );
+}
+
 static void dump_flush_request( const struct flush_request *req )
 {
     dump_async_data( " async=", &req->async );
@@ -1860,6 +1875,11 @@ static void dump_accept_into_socket_request( const struct accept_into_socket_req
     fprintf( stderr, ", ahandle=%04x", req->ahandle );
 }
 
+static void dump_reuse_socket_request( const struct reuse_socket_request *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+}
+
 static void dump_set_socket_event_request( const struct set_socket_event_request *req )
 {
     fprintf( stderr, " handle=%04x", req->handle );
@@ -1894,6 +1914,7 @@ static void dump_get_socket_info_reply( const struct get_socket_info_reply *req 
     fprintf( stderr, " family=%d", req->family );
     fprintf( stderr, ", type=%d", req->type );
     fprintf( stderr, ", protocol=%d", req->protocol );
+    dump_timeout( ", connect_time=", &req->connect_time );
 }
 
 static void dump_enable_socket_event_request( const struct enable_socket_event_request *req )
@@ -2284,6 +2305,7 @@ static void dump_next_process_reply( const struct next_process_reply *req )
     fprintf( stderr, ", priority=%d", req->priority );
     fprintf( stderr, ", handles=%d", req->handles );
     fprintf( stderr, ", unix_pid=%d", req->unix_pid );
+    dump_timeout( ", start_time=", &req->start_time );
     dump_varargs_unicode_str( ", filename=", cur_size );
 }
 
@@ -2298,8 +2320,10 @@ static void dump_next_thread_reply( const struct next_thread_reply *req )
     fprintf( stderr, " count=%d", req->count );
     fprintf( stderr, ", pid=%04x", req->pid );
     fprintf( stderr, ", tid=%04x", req->tid );
+    dump_timeout( ", creation_time=", &req->creation_time );
     fprintf( stderr, ", base_pri=%d", req->base_pri );
     fprintf( stderr, ", delta_pri=%d", req->delta_pri );
+    fprintf( stderr, ", unix_tid=%d", req->unix_tid );
 }
 
 static void dump_wait_debug_event_request( const struct wait_debug_event_request *req )
@@ -3926,9 +3950,9 @@ static void dump_duplicate_token_request( const struct duplicate_token_request *
 {
     fprintf( stderr, " handle=%04x", req->handle );
     fprintf( stderr, ", access=%08x", req->access );
-    fprintf( stderr, ", attributes=%08x", req->attributes );
     fprintf( stderr, ", primary=%d", req->primary );
     fprintf( stderr, ", impersonation_level=%d", req->impersonation_level );
+    dump_varargs_object_attributes( ", objattr=", cur_size );
 }
 
 static void dump_duplicate_token_reply( const struct duplicate_token_reply *req )
@@ -4144,6 +4168,18 @@ static void dump_get_object_type_request( const struct get_object_type_request *
 
 static void dump_get_object_type_reply( const struct get_object_type_reply *req )
 {
+    fprintf( stderr, " index=%08x", req->index );
+    fprintf( stderr, ", total=%u", req->total );
+    dump_varargs_unicode_str( ", type=", cur_size );
+}
+
+static void dump_get_object_type_by_index_request( const struct get_object_type_by_index_request *req )
+{
+    fprintf( stderr, " index=%08x", req->index );
+}
+
+static void dump_get_object_type_by_index_reply( const struct get_object_type_by_index_reply *req )
+{
     fprintf( stderr, " total=%u", req->total );
     dump_varargs_unicode_str( ", type=", cur_size );
 }
@@ -4317,6 +4353,22 @@ static void dump_add_fd_completion_request( const struct add_fd_completion_reque
     fprintf( stderr, ", status=%08x", req->status );
 }
 
+static void dump_set_fd_compl_info_request( const struct set_fd_compl_info_request *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+    fprintf( stderr, ", flags=%d", req->flags );
+}
+
+static void dump_get_fd_compl_info_request( const struct get_fd_compl_info_request *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+}
+
+static void dump_get_fd_compl_info_reply( const struct get_fd_compl_info_reply *req )
+{
+    fprintf( stderr, " flags=%d", req->flags );
+}
+
 static void dump_set_fd_disp_info_request( const struct set_fd_disp_info_request *req )
 {
     fprintf( stderr, " handle=%04x", req->handle );
@@ -4329,6 +4381,12 @@ static void dump_set_fd_name_info_request( const struct set_fd_name_info_request
     fprintf( stderr, ", rootdir=%04x", req->rootdir );
     fprintf( stderr, ", link=%d", req->link );
     dump_varargs_string( ", filename=", cur_size );
+}
+
+static void dump_set_fd_eof_info_request( const struct set_fd_eof_info_request *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+    dump_uint64( ", eof=", &req->eof );
 }
 
 static void dump_get_window_layered_info_request( const struct get_window_layered_info_request *req )
@@ -4462,6 +4520,27 @@ static void dump_terminate_job_request( const struct terminate_job_request *req 
     fprintf( stderr, ", status=%d", req->status );
 }
 
+static void dump_get_system_info_request( const struct get_system_info_request *req )
+{
+}
+
+static void dump_get_system_info_reply( const struct get_system_info_reply *req )
+{
+    fprintf( stderr, " processes=%08x", req->processes );
+    fprintf( stderr, ", threads=%08x", req->threads );
+    fprintf( stderr, ", handles=%08x", req->handles );
+}
+
+static void dump_suspend_process_request( const struct suspend_process_request *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+}
+
+static void dump_resume_process_request( const struct resume_process_request *req )
+{
+    fprintf( stderr, " handle=%04x", req->handle );
+}
+
 static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_new_process_request,
     (dump_func)dump_get_new_process_info_request,
@@ -4485,6 +4564,7 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_queue_apc_request,
     (dump_func)dump_get_apc_result_request,
     (dump_func)dump_close_handle_request,
+    (dump_func)dump_socket_cleanup_request,
     (dump_func)dump_set_handle_info_request,
     (dump_func)dump_dup_handle_request,
     (dump_func)dump_open_process_request,
@@ -4510,12 +4590,14 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_get_handle_unix_name_request,
     (dump_func)dump_get_handle_fd_request,
     (dump_func)dump_get_directory_cache_entry_request,
+    (dump_func)dump_get_shared_memory_request,
     (dump_func)dump_flush_request,
     (dump_func)dump_lock_file_request,
     (dump_func)dump_unlock_file_request,
     (dump_func)dump_create_socket_request,
     (dump_func)dump_accept_socket_request,
     (dump_func)dump_accept_into_socket_request,
+    (dump_func)dump_reuse_socket_request,
     (dump_func)dump_set_socket_event_request,
     (dump_func)dump_get_socket_event_request,
     (dump_func)dump_get_socket_info_request,
@@ -4714,6 +4796,7 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_query_symlink_request,
     (dump_func)dump_get_object_info_request,
     (dump_func)dump_get_object_type_request,
+    (dump_func)dump_get_object_type_by_index_request,
     (dump_func)dump_unlink_object_request,
     (dump_func)dump_get_token_impersonation_level_request,
     (dump_func)dump_allocate_locally_unique_id_request,
@@ -4730,8 +4813,11 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_query_completion_request,
     (dump_func)dump_set_completion_info_request,
     (dump_func)dump_add_fd_completion_request,
+    (dump_func)dump_set_fd_compl_info_request,
+    (dump_func)dump_get_fd_compl_info_request,
     (dump_func)dump_set_fd_disp_info_request,
     (dump_func)dump_set_fd_name_info_request,
+    (dump_func)dump_set_fd_eof_info_request,
     (dump_func)dump_get_window_layered_info_request,
     (dump_func)dump_set_window_layered_info_request,
     (dump_func)dump_alloc_user_handle_request,
@@ -4747,6 +4833,9 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_set_job_limits_request,
     (dump_func)dump_set_job_completion_port_request,
     (dump_func)dump_terminate_job_request,
+    (dump_func)dump_get_system_info_request,
+    (dump_func)dump_suspend_process_request,
+    (dump_func)dump_resume_process_request,
 };
 
 static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
@@ -4771,6 +4860,7 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     NULL,
     (dump_func)dump_queue_apc_reply,
     (dump_func)dump_get_apc_result_reply,
+    NULL,
     NULL,
     (dump_func)dump_set_handle_info_reply,
     (dump_func)dump_dup_handle_reply,
@@ -4797,11 +4887,13 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_get_handle_unix_name_reply,
     (dump_func)dump_get_handle_fd_reply,
     (dump_func)dump_get_directory_cache_entry_reply,
+    NULL,
     (dump_func)dump_flush_reply,
     (dump_func)dump_lock_file_reply,
     NULL,
     (dump_func)dump_create_socket_reply,
     (dump_func)dump_accept_socket_reply,
+    NULL,
     NULL,
     NULL,
     (dump_func)dump_get_socket_event_reply,
@@ -5001,6 +5093,7 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_query_symlink_reply,
     (dump_func)dump_get_object_info_reply,
     (dump_func)dump_get_object_type_reply,
+    (dump_func)dump_get_object_type_by_index_reply,
     NULL,
     (dump_func)dump_get_token_impersonation_level_reply,
     (dump_func)dump_allocate_locally_unique_id_reply,
@@ -5018,6 +5111,9 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     NULL,
     NULL,
     NULL,
+    (dump_func)dump_get_fd_compl_info_reply,
+    NULL,
+    NULL,
     NULL,
     (dump_func)dump_get_window_layered_info_reply,
     NULL,
@@ -5032,6 +5128,9 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     NULL,
     NULL,
     NULL,
+    NULL,
+    NULL,
+    (dump_func)dump_get_system_info_reply,
     NULL,
     NULL,
 };
@@ -5059,6 +5158,7 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "queue_apc",
     "get_apc_result",
     "close_handle",
+    "socket_cleanup",
     "set_handle_info",
     "dup_handle",
     "open_process",
@@ -5084,12 +5184,14 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "get_handle_unix_name",
     "get_handle_fd",
     "get_directory_cache_entry",
+    "get_shared_memory",
     "flush",
     "lock_file",
     "unlock_file",
     "create_socket",
     "accept_socket",
     "accept_into_socket",
+    "reuse_socket",
     "set_socket_event",
     "get_socket_event",
     "get_socket_info",
@@ -5288,6 +5390,7 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "query_symlink",
     "get_object_info",
     "get_object_type",
+    "get_object_type_by_index",
     "unlink_object",
     "get_token_impersonation_level",
     "allocate_locally_unique_id",
@@ -5304,8 +5407,11 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "query_completion",
     "set_completion_info",
     "add_fd_completion",
+    "set_fd_compl_info",
+    "get_fd_compl_info",
     "set_fd_disp_info",
     "set_fd_name_info",
+    "set_fd_eof_info",
     "get_window_layered_info",
     "set_window_layered_info",
     "alloc_user_handle",
@@ -5321,6 +5427,9 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "set_job_limits",
     "set_job_completion_port",
     "terminate_job",
+    "get_system_info",
+    "suspend_process",
+    "resume_process",
 };
 
 static const struct
@@ -5402,6 +5511,7 @@ static const struct
     { "NOT_FOUND",                   STATUS_NOT_FOUND },
     { "NOT_IMPLEMENTED",             STATUS_NOT_IMPLEMENTED },
     { "NOT_REGISTRY_FILE",           STATUS_NOT_REGISTRY_FILE },
+    { "NOT_SAME_DEVICE",             STATUS_NOT_SAME_DEVICE },
     { "NOT_SUPPORTED",               STATUS_NOT_SUPPORTED },
     { "NO_DATA_DETECTED",            STATUS_NO_DATA_DETECTED },
     { "NO_IMPERSONATION_TOKEN",      STATUS_NO_IMPERSONATION_TOKEN },

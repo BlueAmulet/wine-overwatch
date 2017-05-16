@@ -756,8 +756,14 @@ typedef struct _MEMORY_BASIC_INFORMATION
 
 #define FIELD_OFFSET(type, field) ((LONG)offsetof(type, field))
 
-#define CONTAINING_RECORD(address, type, field) \
-  ((type *)((PCHAR)(address) - offsetof(type, field)))
+#ifdef __GNUC__
+# define CONTAINING_RECORD(address, type, field) ({     \
+   const typeof(((type *)0)->field) *__ptr = (address); \
+   (type *)((PCHAR)__ptr - offsetof(type, field)); })
+#else
+# define CONTAINING_RECORD(address, type, field) \
+   ((type *)((PCHAR)(address) - offsetof(type, field)))
+#endif
 
 /* Types */
 
@@ -5276,6 +5282,7 @@ typedef struct _TAPE_GET_MEDIA_PARAMETERS {
 #define GROUP_SECURITY_INFORMATION	0x00000002
 #define DACL_SECURITY_INFORMATION	0x00000004
 #define SACL_SECURITY_INFORMATION	0x00000008
+#define LABEL_SECURITY_INFORMATION	0x00000010
 
 #define REG_OPTION_RESERVED		0x00000000
 #define REG_OPTION_NON_VOLATILE		0x00000000
@@ -5678,11 +5685,30 @@ typedef struct _ASSEMBLY_FILE_DETAILED_INFORMATION {
 
 typedef const ASSEMBLY_FILE_DETAILED_INFORMATION *PCASSEMBLY_FILE_DETAILED_INFORMATION;
 
+typedef enum {
+    ACTCTX_RUN_LEVEL_UNSPECIFIED = 0,
+    ACTCTX_RUN_LEVEL_AS_INVOKER,
+    ACTCTX_RUN_LEVEL_HIGHEST_AVAILABLE,
+    ACTCTX_RUN_LEVEL_REQUIRE_ADMIN,
+    ACTCTX_RUN_LEVEL_NUMBERS
+} ACTCTX_REQUESTED_RUN_LEVEL;
+
+typedef struct _ACTIVATION_CONTEXT_RUN_LEVEL_INFORMATION {
+    DWORD ulFlags;
+    ACTCTX_REQUESTED_RUN_LEVEL RunLevel;
+    DWORD UiAccess;
+} ACTIVATION_CONTEXT_RUN_LEVEL_INFORMATION, *PACTIVATION_CONTEXT_RUN_LEVEL_INFORMATION;
+
+typedef const struct _ACTIVATION_CONTEXT_RUN_LEVEL_INFORMATION *PCACTIVATION_CONTEXT_RUN_LEVEL_INFORMATION;
+
 typedef enum _ACTIVATION_CONTEXT_INFO_CLASS {
     ActivationContextBasicInformation                       = 1,
     ActivationContextDetailedInformation                    = 2,
     AssemblyDetailedInformationInActivationContext          = 3,
     FileInformationInAssemblyOfAssemblyInActivationContext  = 4,
+    RunlevelInformationInActivationContext                  = 5,
+    CompatibilityInformationInActivationContext             = 6,
+    ActivationContextManifestResourceName                   = 7,
     MaxActivationContextInfoClass,
 
     AssemblyDetailedInformationInActivationContxt          = 3,
@@ -5855,6 +5881,8 @@ typedef struct _GROUP_AFFINITY
     WORD Reserved[3];
 } GROUP_AFFINITY, *PGROUP_AFFINITY;
 
+#define ALL_PROCESSOR_GROUPS 0xffff
+
 typedef struct _PROCESSOR_NUMBER
 {
     WORD Group;
@@ -6016,8 +6044,28 @@ typedef VOID (CALLBACK *PTP_TIMER_CALLBACK)(PTP_CALLBACK_INSTANCE,PVOID,PTP_TIME
 typedef VOID (CALLBACK *PTP_WAIT_CALLBACK)(PTP_CALLBACK_INSTANCE,PVOID,PTP_WAIT,TP_WAIT_RESULT);
 typedef VOID (CALLBACK *PTP_WIN32_IO_CALLBACK)(PTP_CALLBACK_INSTANCE,PVOID,PVOID,ULONG,ULONG_PTR,PTP_IO);
 
-
 NTSYSAPI BOOLEAN NTAPI RtlGetProductInfo(DWORD,DWORD,DWORD,DWORD,PDWORD);
+
+typedef enum _RTL_UMS_THREAD_INFO_CLASS
+{
+    UmsThreadInvalidInfoClass,
+    UmsThreadUserContext,
+    UmsThreadPriority,
+    UmsThreadAffinity,
+    UmsThreadTeb,
+    UmsThreadIsSuspended,
+    UmsThreadIsTerminated,
+    UmsThreadMaxInfoClass
+} RTL_UMS_THREAD_INFO_CLASS, *PRTL_UMS_THREAD_INFO_CLASS;
+
+typedef enum _RTL_UMS_SCHEDULER_REASON
+{
+    UmsSchedulerStartup,
+    UmsSchedulerThreadBlocked,
+    UmsSchedulerThreadYield,
+} RTL_UMS_SCHEDULER_REASON, *PRTL_UMS_SCHEDULER_REASON;
+
+typedef void (CALLBACK *PRTL_UMS_SCHEDULER_ENTRY_POINT)(RTL_UMS_SCHEDULER_REASON,ULONG_PTR,PVOID);
 
 #ifdef __cplusplus
 }

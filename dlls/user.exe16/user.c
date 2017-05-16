@@ -87,10 +87,7 @@ static BOOL CALLBACK gray_string_callback( HDC hdc, LPARAM param, INT len )
 /* callback for 16-bit gray string proc with string pointer */
 static BOOL CALLBACK gray_string_callback_ptr( HDC hdc, LPARAM param, INT len )
 {
-    const struct gray_string_info *info;
-    char *str = (char *)param;
-
-    info = (struct gray_string_info *)(str - offsetof( struct gray_string_info, str ));
+    const struct gray_string_info *info = CONTAINING_RECORD( (void *)param, struct gray_string_info, str );
     return gray_string_callback( hdc, (LPARAM)info, len );
 }
 
@@ -1388,7 +1385,7 @@ DWORD WINAPI GetTabbedTextExtent16( HDC16 hdc, LPCSTR lpstr, INT16 count,
  */
 DWORD WINAPI UserSeeUserDo16(WORD wReqType, WORD wParam1, WORD wParam2, WORD wParam3)
 {
-    STACK16FRAME* stack16 = MapSL((SEGPTR)NtCurrentTeb()->WOW32Reserved);
+    STACK16FRAME* stack16 = MapSL((SEGPTR)NtCurrentTeb()->SystemReserved1[0]);
     HANDLE16 oldDS = stack16->ds;
     DWORD ret = (DWORD)-1;
 
@@ -1761,7 +1758,7 @@ UINT16 WINAPI RealizePalette16( HDC16 hdc )
  */
 WORD WINAPI GetFreeSystemResources16( WORD resType )
 {
-    STACK16FRAME* stack16 = MapSL((SEGPTR)NtCurrentTeb()->WOW32Reserved);
+    STACK16FRAME* stack16 = MapSL((SEGPTR)NtCurrentTeb()->SystemReserved1[0]);
     HANDLE16 oldDS = stack16->ds;
     int userPercent, gdiPercent;
 

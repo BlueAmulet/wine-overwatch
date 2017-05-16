@@ -36,12 +36,19 @@
 #ifdef HAVE_UNISTD_H
 # include <unistd.h>
 #endif
+#ifdef HAVE_DLADDR
+# include <dlfcn.h>
+#endif
+#ifdef HAVE_LINK_H
+# include <link.h>
+#endif
 #include <pthread.h>
 
 #include "wine/library.h"
 #include "main.h"
 
 #ifdef __APPLE__
+#include <mach-o/dyld.h>
 
 #ifndef __clang__
 __asm__(".zerofill WINE_DOS, WINE_DOS, ___wine_dos, 0x40000000");
@@ -67,6 +74,26 @@ static inline void reserve_area( void *addr, size_t size )
     wine_mmap_add_reserved_area( addr, size );
 }
 
+static const char *get_macho_library_path( const char *libname )
+{
+    unsigned int path_len, libname_len = strlen( libname );
+    uint32_t i, count = _dyld_image_count();
+
+    for (i = 0; i < count; i++)
+    {
+        const char *path = _dyld_get_image_name( i );
+        if (!path) continue;
+
+        path_len = strlen( path );
+        if (path_len < libname_len + 1) continue;
+        if (path[path_len - libname_len - 1] != '/') continue;
+        if (strcmp( path + path_len - libname_len, libname )) continue;
+
+        return path;
+    }
+    return NULL;
+}
+
 #else  /* __APPLE__ */
 
 /* the preloader will set this variable */
@@ -89,7 +116,9 @@ static void check_command_line( int argc, char *argv[] )
     static const char usage[] =
         "Usage: wine PROGRAM [ARGUMENTS...]   Run the specified program\n"
         "       wine --help                   Display this help and exit\n"
-        "       wine --version                Output version information and exit";
+        "       wine --version                Output version information and exit\n"
+        "       wine --patches                Output patch information and exit\n"
+        "       wine --check-libs             Checks if shared libs are installed";
 
     if (argc <= 1)
     {
@@ -105,6 +134,90 @@ static void check_command_line( int argc, char *argv[] )
     {
         printf( "%s\n", wine_get_build_id() );
         exit(0);
+    }
+    if (!strcmp( argv[1], "--patches" ))
+    {
+        const struct
+        {
+            const char *author;
+            const char *subject;
+            int revision;
+        }
+        *next, *cur = wine_get_patches();
+
+        if (!cur)
+        {
+            fprintf( stderr, "Patchlist not available.\n" );
+            exit(1);
+        }
+
+        while (cur->author)
+        {
+            next = cur + 1;
+            while (next->author)
+            {
+                if (strcmp( cur->author, next->author )) break;
+                next++;
+            }
+
+            printf( "%s (%d):\n", cur->author, (int)(next - cur) );
+            while (cur < next)
+            {
+                printf( "      %s", cur->subject );
+                if (cur->revision != 1)
+                    printf( " [rev %d]", cur->revision );
+                printf( "\n" );
+                cur++;
+            }
+            printf( "\n" );
+        }
+
+        exit(0);
+    }
+    if (!strcmp( argv[1], "--check-libs" ))
+    {
+        void* lib_handle;
+        int ret = 0;
+        const char **wine_libs = wine_get_libs();
+
+        for(; *wine_libs; wine_libs++)
+        {
+            lib_handle = wine_dlopen( *wine_libs, RTLD_NOW, NULL, 0 );
+            if (lib_handle)
+            {
+            #ifdef HAVE_DLADDR
+                Dl_info libinfo;
+                void* symbol;
+
+            #ifdef HAVE_LINK_H
+                struct link_map *lm = (struct link_map *)lib_handle;
+                symbol = (void *)lm->l_addr;
+            #else
+                symbol = wine_dlsym( lib_handle, "_init", NULL, 0 );
+            #endif
+                if (symbol && wine_dladdr( symbol, &libinfo, NULL, 0 ))
+                {
+                    printf( "%s: %s\n", *wine_libs, libinfo.dli_fname );
+                }
+                else
+            #endif
+                {
+                    const char *path = NULL;
+                #ifdef __APPLE__
+                    path = get_macho_library_path( *wine_libs );
+                #endif
+                    printf( "%s: %s\n", *wine_libs, path ? path : "found");
+                }
+                wine_dlclose( lib_handle, NULL, 0 );
+            }
+            else
+            {
+                printf( "%s: missing\n", *wine_libs );
+                ret = 1;
+            }
+        }
+
+        exit(ret);
     }
 }
 

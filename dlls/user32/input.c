@@ -342,8 +342,10 @@ BOOL WINAPI DECLSPEC_HOTPATCH ReleaseCapture(void)
  */
 HWND WINAPI GetCapture(void)
 {
+    shmlocal_t *shm = wine_get_shmlocal();
     HWND ret = 0;
 
+    if (shm) return wine_server_ptr_handle( shm->input_capture );
     SERVER_START_REQ( get_thread_input )
     {
         req->tid = GetCurrentThreadId();
@@ -371,6 +373,7 @@ SHORT WINAPI DECLSPEC_HOTPATCH GetAsyncKeyState( INT key )
 {
     struct user_key_state_info *key_state_info = get_user_thread_info()->key_state;
     INT counter = global_key_state_counter;
+    BYTE prev_key_state;
     SHORT ret;
 
     if (key < 0 || key >= 256) return 0;
@@ -398,14 +401,23 @@ SHORT WINAPI DECLSPEC_HOTPATCH GetAsyncKeyState( INT key )
         {
             req->tid = 0;
             req->key = key;
-            if (key_state_info) wine_server_set_reply( req, key_state_info->state,
-                                                       sizeof(key_state_info->state) );
+            if (key_state_info)
+            {
+                prev_key_state = key_state_info->state[key];
+                wine_server_set_reply( req, key_state_info->state, sizeof(key_state_info->state) );
+            }
             if (!wine_server_call( req ))
             {
                 if (reply->state & 0x40) ret |= 0x0001;
                 if (reply->state & 0x80) ret |= 0x8000;
                 if (key_state_info)
                 {
+                    /* force refreshing the key state cache - some multithreaded programs
+                     * (like Adobe Photoshop CS5) expect that changes to the async key state
+                     * are also immediately available in other threads. */
+                    if (prev_key_state != key_state_info->state[key])
+                        counter = interlocked_xchg_add( &global_key_state_counter, 1 ) + 1;
+
                     key_state_info->time    = GetTickCount();
                     key_state_info->counter = counter;
                 }
@@ -448,17 +460,29 @@ DWORD WINAPI GetQueueStatus( UINT flags )
  */
 BOOL WINAPI GetInputState(void)
 {
+    shmlocal_t *shm = wine_get_shmlocal();
     DWORD ret;
 
     check_for_events( QS_INPUT );
+
+    /* req->clear is not set, so we can safely get the
+     * wineserver status without an additional call. */
+    if (shm)
+    {
+        ret = shm->queue_bits;
+        goto done;
+    }
 
     SERVER_START_REQ( get_queue_status )
     {
         req->clear_bits = 0;
         wine_server_call( req );
-        ret = reply->wake_bits & (QS_KEY | QS_MOUSEBUTTON);
+        ret = reply->wake_bits;
     }
     SERVER_END_REQ;
+
+done:
+    ret &= (QS_KEY | QS_MOUSEBUTTON);
     return ret;
 }
 
@@ -469,6 +493,7 @@ BOOL WINAPI GetInputState(void)
 BOOL WINAPI GetLastInputInfo(PLASTINPUTINFO plii)
 {
     BOOL ret;
+    shmglobal_t *shm = wine_get_shmglobal();
 
     TRACE("%p\n", plii);
 
@@ -476,6 +501,12 @@ BOOL WINAPI GetLastInputInfo(PLASTINPUTINFO plii)
     {
         SetLastError(ERROR_INVALID_PARAMETER);
         return FALSE;
+    }
+
+    if (shm)
+    {
+        plii->dwTime = shm->last_input_time;
+        return TRUE;
     }
 
     SERVER_START_REQ( get_last_input_time )

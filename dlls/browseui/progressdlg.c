@@ -73,6 +73,9 @@ typedef struct tagProgressDialog {
     ULONGLONG ullCompleted;
     ULONGLONG ullTotal;
     HWND hwndDisabledParent;    /* For modal dialog: the parent that need to be re-enabled when the dialog ends */
+    ULONGLONG startTime;
+    LPWSTR remainingMsg[2];
+    LPWSTR timeMsg[3];
 } ProgressDialog;
 
 static inline ProgressDialog *impl_from_IProgressDialog(IProgressDialog *iface)
@@ -175,6 +178,7 @@ static INT_PTR CALLBACK dialog_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         case WM_INITDIALOG:
         {
             struct create_params *params = (struct create_params *)lParam;
+            LONG_PTR style;
 
             /* Note: until we set the hEvent, the object is protected by
              * the critical section held by StartProgress */
@@ -190,6 +194,10 @@ static INT_PTR CALLBACK dialog_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 set_progress_marquee(This);
             if (This->dwFlags & PROGDLG_NOMINIMIZE)
                 SetWindowLongW(hwnd, GWL_STYLE, GetWindowLongW(hwnd, GWL_STYLE) & (~WS_MINIMIZEBOX));
+
+            style = GetWindowLongPtrW(GetDlgItem(hwnd, IDC_ANIMATION), GWL_STYLE);
+            style |= ACS_AUTOPLAY | ACS_TRANSPARENT;
+            SetWindowLongPtrW(GetDlgItem(hwnd, IDC_ANIMATION), GWL_STYLE, style);
 
             update_dialog(This, 0xffffffff);
             This->dwUpdate = 0;
@@ -259,14 +267,18 @@ static DWORD WINAPI dialog_thread(LPVOID lpParameter)
 
 static void ProgressDialog_Destructor(ProgressDialog *This)
 {
+    int i;
     TRACE("destroying %p\n", This);
     if (This->hwnd)
         end_dialog(This);
-    heap_free(This->lines[0]);
-    heap_free(This->lines[1]);
-    heap_free(This->lines[2]);
+    for (i = 0; i < 3; i++)
+        heap_free(This->lines[i]);
     heap_free(This->cancelMsg);
     heap_free(This->title);
+    for (i = 0; i < 2; i++)
+        heap_free(This->remainingMsg[i]);
+    for (i = 0; i < 3; i++)
+        heap_free(This->timeMsg[i]);
     This->cs.DebugInfo->Spare[0] = 0;
     DeleteCriticalSection(&This->cs);
     heap_free(This);
@@ -328,8 +340,6 @@ static HRESULT WINAPI ProgressDialog_StartProgressDialog(IProgressDialog *iface,
     TRACE("(%p, %p, %x, %p)\n", iface, punkEnableModeless, dwFlags, reserved);
     if (punkEnableModeless || reserved)
         FIXME("Reserved parameters not null (%p, %p)\n", punkEnableModeless, reserved);
-    if (dwFlags & PROGDLG_AUTOTIME)
-        FIXME("Flags PROGDLG_AUTOTIME not supported\n");
     if (dwFlags & PROGDLG_NOTIME)
         FIXME("Flags PROGDLG_NOTIME not supported\n");
 
@@ -364,6 +374,7 @@ static HRESULT WINAPI ProgressDialog_StartProgressDialog(IProgressDialog *iface,
             This->hwndDisabledParent = hwndDisable;
     }
 
+    This->startTime = GetTickCount64();
     LeaveCriticalSection(&This->cs);
 
     return S_OK;
@@ -402,7 +413,16 @@ static HRESULT WINAPI ProgressDialog_SetTitle(IProgressDialog *iface, LPCWSTR pw
 
 static HRESULT WINAPI ProgressDialog_SetAnimation(IProgressDialog *iface, HINSTANCE hInstance, UINT uiResourceId)
 {
-    FIXME("(%p, %p, %d) - stub\n", iface, hInstance, uiResourceId);
+    ProgressDialog *This = impl_from_IProgressDialog(iface);
+
+    TRACE("(%p, %p, %d)\n", iface, hInstance, uiResourceId);
+
+    if (uiResourceId & ~0xFFFF)
+        return S_OK;
+
+    if (!SendDlgItemMessageW(This->hwnd, IDC_ANIMATION, ACM_OPENW, (WPARAM)hInstance, uiResourceId))
+        WARN("Failed to load animation\n");
+
     return S_OK;
 }
 
@@ -410,6 +430,52 @@ static BOOL WINAPI ProgressDialog_HasUserCancelled(IProgressDialog *iface)
 {
     ProgressDialog *This = impl_from_IProgressDialog(iface);
     return This->isCancelled;
+}
+
+static void load_time_strings(ProgressDialog *This)
+{
+    int i;
+
+    for (i = 0; i < 2; i++)
+    {
+        if (!This->remainingMsg[i])
+            This->remainingMsg[i] = load_string(BROWSEUI_hinstance, IDS_REMAINING1 + i);
+    }
+    for (i = 0; i < 3; i++)
+    {
+        if (!This->timeMsg[i])
+            This->timeMsg[i] = load_string(BROWSEUI_hinstance, IDS_SECONDS + i);
+    }
+}
+
+static void update_time_remaining(ProgressDialog *This, ULONGLONG ullCompleted, ULONGLONG ullTotal)
+{
+    unsigned int remaining, remainder = 0;
+    ULONGLONG elapsed;
+    WCHAR line[128];
+    int i;
+
+    if (!This->startTime || !ullCompleted || !ullTotal)
+        return;
+
+    load_time_strings(This);
+
+    elapsed = GetTickCount64() - This->startTime;
+    remaining = (elapsed * ullTotal / ullCompleted - elapsed) / 1000;
+
+    for (i = 0; remaining >= 60 && i < 2; i++)
+    {
+        remainder = remaining % 60;
+        remaining /= 60;
+    }
+
+    if (i > 0 && remaining < 2 && remainder != 0)
+        wsprintfW(line, This->remainingMsg[1], remaining, This->timeMsg[i], remainder, This->timeMsg[i-1]);
+    else
+        wsprintfW(line, This->remainingMsg[0], remaining, This->timeMsg[i]);
+
+    set_buffer(&This->lines[2], line);
+    This->dwUpdate |= UPDATE_LINE3;
 }
 
 static HRESULT WINAPI ProgressDialog_SetProgress64(IProgressDialog *iface, ULONGLONG ullCompleted, ULONGLONG ullTotal)
@@ -424,6 +490,8 @@ static HRESULT WINAPI ProgressDialog_SetProgress64(IProgressDialog *iface, ULONG
     This->ullCompleted = ullCompleted;
     This->dwUpdate |= UPDATE_PROGRESS;
     hwnd = This->hwnd;
+    if (This->dwFlags & PROGDLG_AUTOTIME)
+        update_time_remaining(This, ullCompleted, ullTotal);
     LeaveCriticalSection(&This->cs);
 
     if (hwnd)

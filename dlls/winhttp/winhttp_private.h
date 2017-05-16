@@ -207,8 +207,6 @@ typedef struct
     char  read_buf[8192]; /* buffer for already read but not returned data */
     header_t *headers;
     DWORD num_headers;
-    WCHAR **accept_types;
-    DWORD num_accept_types;
     struct authinfo *authinfo;
     struct authinfo *proxy_authinfo;
     HANDLE task_wait;
@@ -302,6 +300,8 @@ BOOL add_request_headers( request_t *, LPCWSTR, DWORD, DWORD ) DECLSPEC_HIDDEN;
 void delete_domain( domain_t * ) DECLSPEC_HIDDEN;
 BOOL set_server_for_hostname( connect_t *, LPCWSTR, INTERNET_PORT ) DECLSPEC_HIDDEN;
 void destroy_authinfo( struct authinfo * ) DECLSPEC_HIDDEN;
+
+BOOL process_header( request_t *request, LPCWSTR field, LPCWSTR value, DWORD flags, BOOL request_only ) DECLSPEC_HIDDEN;
 
 extern HRESULT WinHttpRequest_create( void ** ) DECLSPEC_HIDDEN;
 void release_typelib( void ) DECLSPEC_HIDDEN;

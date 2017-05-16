@@ -38,4 +38,8 @@ extern BOOL WINAPI wglQueryRendererIntegerWINE( HDC dc, GLint renderer,
         GLenum attribute, GLuint *value ) DECLSPEC_HIDDEN;
 extern const GLchar * WINAPI wglQueryRendererStringWINE( HDC dc, GLint renderer, GLenum attribute ) DECLSPEC_HIDDEN;
 
+extern void WINAPI glDebugMessageCallback( void *callback, const void *userParam ) DECLSPEC_HIDDEN;
+extern void WINAPI glDebugMessageCallbackAMD( void *callback, void *userParam ) DECLSPEC_HIDDEN;
+extern void WINAPI glDebugMessageCallbackARB( void *callback, const void *userParam ) DECLSPEC_HIDDEN;
+
 #endif /* __DLLS_OPENGL32_OPENGL_EXT_H */

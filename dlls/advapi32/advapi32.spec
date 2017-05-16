@@ -468,8 +468,8 @@
 # @ stub LsaICLookupSidsWithCreds
 @ stdcall LsaLookupNames(long long ptr ptr ptr)
 @ stdcall LsaLookupNames2(ptr long long ptr ptr ptr)
-@ stub LsaLookupPrivilegeDisplayName
-# @ stub LsaLookupPrivilegeName
+@ stdcall LsaLookupPrivilegeDisplayName(long ptr ptr ptr)
+@ stdcall LsaLookupPrivilegeName(long ptr ptr)
 # @ stub LsaLookupPrivilegeValue
 @ stdcall LsaLookupSids(ptr long ptr ptr ptr)
 # @ stub LsaLookupSids2

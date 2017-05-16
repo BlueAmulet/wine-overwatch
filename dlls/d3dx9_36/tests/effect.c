@@ -6336,6 +6336,65 @@ static void test_effect_get_pass_desc(IDirect3DDevice9 *device)
     effect->lpVtbl->Release(effect);
 }
 
+/*
+ * fxc.exe /Tfx_2_0
+ */
+#if 0
+technique t1 { pass p { ZEnable = TRUE; } }
+technique t2 { pass p { ZEnable = FALSE; } }
+#endif
+static const DWORD test_effect_technique_validation_blob[] =
+{
+0xfeff0901, 0x00000064, 0x00000000, 0x00000001, 0x00000002, 0x00000002, 0x00000000, 0x00000000,
+0x00000000, 0x00000001, 0x00000001, 0x00000002, 0x00000070, 0x00000003, 0x00003174, 0x00000000,
+0x00000002, 0x00000002, 0x00000000, 0x00000000, 0x00000000, 0x00000001, 0x00000001, 0x00000002,
+0x00000070, 0x00000003, 0x00003274, 0x00000000, 0x00000002, 0x00000002, 0x00000001, 0x0000002c,
+0x00000000, 0x00000001, 0x00000024, 0x00000000, 0x00000001, 0x00000000, 0x00000000, 0x00000008,
+0x00000004, 0x0000005c, 0x00000000, 0x00000001, 0x00000054, 0x00000000, 0x00000001, 0x00000000,
+0x00000000, 0x00000038, 0x00000034, 0x00000000, 0x00000000
+};
+
+static void test_effect_technique_validation(IDirect3DDevice9 *device)
+{
+    ID3DXEffect *effect;
+    ULONG count;
+    D3DXHANDLE technique1, technique2, technique;
+    HRESULT hr;
+
+    hr = D3DXCreateEffect(device, test_effect_technique_validation_blob,
+            sizeof(test_effect_technique_validation_blob), NULL, NULL, 0, NULL, &effect, NULL);
+    ok(hr == D3D_OK, "D3DXCreateEffect failed, got %#x, expected %#x\n", hr, D3D_OK);
+
+    technique1 = effect->lpVtbl->GetTechniqueByName(effect, "t1");
+    ok(technique1 != NULL, "Failed to get technique\n");
+    technique2 = effect->lpVtbl->GetTechniqueByName(effect, "t2");
+    ok(technique2 != NULL, "Failed to get technique\n");
+
+#if 0 /* This crashes on Windows */
+    hr = effect->lpVtbl->FindNextValidTechnique(effect, (D3DXHANDLE)0xdeadbeef, &technique);
+#endif
+    hr = effect->lpVtbl->FindNextValidTechnique(effect, NULL, NULL);
+    ok(hr == D3DERR_INVALIDCALL, "FindNextValidTechnique, got %#x, expected %#x\n", hr, D3DERR_INVALIDCALL);
+
+    technique = (D3DXHANDLE)0xdeadbeef;
+    hr = effect->lpVtbl->FindNextValidTechnique(effect, NULL, &technique);
+    ok(hr == D3D_OK, "FindNextValidTechnique failed, got %#x, expected %#x\n", hr, D3D_OK);
+    ok(technique == technique1, "Technique returned %p, expected %p\n", technique, technique1);
+
+    technique = (D3DXHANDLE)0xdeadbeef;
+    hr = effect->lpVtbl->FindNextValidTechnique(effect, technique1, &technique);
+    ok(hr == D3D_OK, "FindNextValidTechnique failed, got %#x, expected %#x\n", hr, D3D_OK);
+    ok(technique == technique2, "Technique returned %p, expected %p\n", technique, technique2);
+
+    technique = (D3DXHANDLE)0xdeadbeef;
+    hr = effect->lpVtbl->FindNextValidTechnique(effect, technique2, &technique);
+    ok(hr == S_FALSE, "FindNextValidTechnique, got %#x, expected %#x\n", hr, S_FALSE);
+    ok(technique == NULL, "Technique returned %p, expected %p\n", technique, NULL);
+
+    count = effect->lpVtbl->Release(effect);
+    ok(!count, "Release failed %u\n", count);
+}
+
 START_TEST(effect)
 {
     HWND wnd;
@@ -6387,6 +6446,7 @@ START_TEST(effect)
     test_effect_shared_parameters(device);
     test_effect_large_address_aware_flag(device);
     test_effect_get_pass_desc(device);
+    test_effect_technique_validation(device);
 
     count = IDirect3DDevice9_Release(device);
     ok(count == 0, "The device was not properly freed: refcount %u\n", count);

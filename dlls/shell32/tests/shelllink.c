@@ -1363,10 +1363,9 @@ static void test_SHGetImageList(void)
     for (i = 0; i <= SHIL_LAST; i++)
     {
         hr = SHGetImageList( i, &IID_IImageList, (void **)&list );
-        todo_wine_if(i == SHIL_EXTRALARGE || i == SHIL_JUMBO)
-            ok( hr == S_OK ||
-                broken( i == SHIL_JUMBO && hr == E_INVALIDARG ), /* XP and 2003 */
-                "%d: got %08x\n", i, hr );
+        ok( hr == S_OK ||
+            broken( i == SHIL_JUMBO && hr == E_INVALIDARG ), /* XP and 2003 */
+            "%d: got %08x\n", i, hr );
         if (FAILED(hr)) continue;
         IImageList_GetIconSize( list, &width, &height );
         switch (i)

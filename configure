@@ -664,6 +664,7 @@ GETTEXTPO_LIBS
 Z_LIBS
 FREETYPE_LIBS
 FREETYPE_CFLAGS
+GTK3_CFLAGS
 LCMS2_LIBS
 LCMS2_CFLAGS
 RESOLV_LIBS
@@ -683,7 +684,6 @@ XSLT_LIBS
 XSLT_CFLAGS
 XML2_LIBS
 XML2_CFLAGS
-PCAP_LIBS
 X_EXTRA_LIBS
 X_LIBS
 X_PRE_LIBS
@@ -833,6 +833,7 @@ with_glu
 with_gnutls
 with_gsm
 with_gstreamer
+with_gtk3
 with_hal
 with_jpeg
 with_ldap
@@ -851,8 +852,10 @@ with_sane
 with_tiff
 with_udev
 with_v4l
+with_xattr
 with_xcomposite
 with_xcursor
+with_xcb
 with_xinerama
 with_xinput
 with_xinput2
@@ -864,6 +867,7 @@ with_xshm
 with_xslt
 with_xxf86vm
 with_zlib
+with_va
 with_wine_tools
 with_wine64
 enable_largefile
@@ -906,6 +910,7 @@ enable_api_ms_win_core_file_l2_1_1
 enable_api_ms_win_core_handle_l1_1_0
 enable_api_ms_win_core_heap_l1_1_0
 enable_api_ms_win_core_heap_l1_2_0
+enable_api_ms_win_core_heap_l2_1_0
 enable_api_ms_win_core_heap_obsolete_l1_1_0
 enable_api_ms_win_core_interlocked_l1_1_0
 enable_api_ms_win_core_interlocked_l1_2_0
@@ -955,6 +960,7 @@ enable_api_ms_win_core_rtlsupport_l1_1_0
 enable_api_ms_win_core_rtlsupport_l1_2_0
 enable_api_ms_win_core_shlwapi_legacy_l1_1_0
 enable_api_ms_win_core_shlwapi_obsolete_l1_1_0
+enable_api_ms_win_core_shlwapi_obsolete_l1_2_0
 enable_api_ms_win_core_sidebyside_l1_1_0
 enable_api_ms_win_core_string_l1_1_0
 enable_api_ms_win_core_string_l2_1_0
@@ -1024,7 +1030,9 @@ enable_api_ms_win_mm_mme_l1_1_0
 enable_api_ms_win_ntuser_dc_access_l1_1_0
 enable_api_ms_win_power_base_l1_1_0
 enable_api_ms_win_power_setting_l1_1_0
+enable_api_ms_win_rtcore_ntuser_draw_l1_1_0
 enable_api_ms_win_rtcore_ntuser_private_l1_1_0
+enable_api_ms_win_rtcore_ntuser_window_l1_1_0
 enable_api_ms_win_security_audit_l1_1_1
 enable_api_ms_win_security_base_l1_1_0
 enable_api_ms_win_security_base_l1_2_0
@@ -1043,6 +1051,9 @@ enable_api_ms_win_service_management_l2_1_0
 enable_api_ms_win_service_private_l1_1_1
 enable_api_ms_win_service_winsvc_l1_1_0
 enable_api_ms_win_service_winsvc_l1_2_0
+enable_api_ms_win_shcore_obsolete_l1_1_0
+enable_api_ms_win_shcore_stream_l1_1_0
+enable_api_ms_win_shcore_thread_l1_1_0
 enable_api_ms_win_shell_shellcom_l1_1_0
 enable_api_ms_win_shell_shellfolders_l1_1_0
 enable_apphelp
@@ -1181,6 +1192,7 @@ enable_dxva2
 enable_esent
 enable_evr
 enable_explorerframe
+enable_ext_ms_win_appmodel_usercontext_l1_1_0
 enable_ext_ms_win_authz_context_l1_1_0
 enable_ext_ms_win_domainjoin_netjoin_l1_1_0
 enable_ext_ms_win_gdi_dc_create_l1_1_1
@@ -1190,6 +1202,7 @@ enable_ext_ms_win_gdi_draw_l1_1_1
 enable_ext_ms_win_gdi_render_l1_1_0
 enable_ext_ms_win_kernel32_package_current_l1_1_0
 enable_ext_ms_win_ntuser_message_l1_1_1
+enable_ext_ms_win_ntuser_mouse_l1_1_0
 enable_ext_ms_win_ntuser_private_l1_1_1
 enable_ext_ms_win_ntuser_rectangle_ext_l1_1_0
 enable_ext_ms_win_ntuser_uicontext_ext_l1_1_0
@@ -1198,8 +1211,12 @@ enable_ext_ms_win_rtcore_gdi_object_l1_1_0
 enable_ext_ms_win_rtcore_gdi_rgn_l1_1_0
 enable_ext_ms_win_rtcore_ntuser_dc_access_l1_1_0
 enable_ext_ms_win_rtcore_ntuser_dpi_l1_1_0
+enable_ext_ms_win_rtcore_ntuser_syscolors_l1_1_0
 enable_ext_ms_win_rtcore_ntuser_sysparams_l1_1_0
+enable_ext_ms_win_uxtheme_themes_l1_1_0
+enable_ext_ms_win_xaml_pal_l1_1_0
 enable_faultrep
+enable_feclient
 enable_fltlib
 enable_fltmgr_sys
 enable_fntcache
@@ -1222,6 +1239,7 @@ enable_httpapi
 enable_iccvid
 enable_icmp
 enable_ieframe
+enable_iertutil
 enable_imaadp32_acm
 enable_imagehlp
 enable_imm32
@@ -1349,6 +1367,9 @@ enable_ntdll
 enable_ntdsapi
 enable_ntoskrnl_exe
 enable_ntprint
+enable_win32
+enable_nvcuda
+enable_nvcuvid
 enable_objsel
 enable_odbc32
 enable_odbccp32
@@ -1408,6 +1429,7 @@ enable_serialui
 enable_setupapi
 enable_sfc
 enable_sfc_os
+enable_shcore
 enable_shdoclc
 enable_shdocvw
 enable_shell32
@@ -1440,6 +1462,7 @@ enable_usbd_sys
 enable_user32
 enable_userenv
 enable_usp10
+enable_uxtheme_gtk
 enable_uxtheme
 enable_vbscript
 enable_vcomp
@@ -1453,6 +1476,8 @@ enable_vdmdbg
 enable_version
 enable_virtdisk
 enable_vssapi
+enable_vulkan_1
+enable_vulkan
 enable_wbemdisp
 enable_wbemprox
 enable_webservices
@@ -1465,6 +1490,7 @@ enable_windowscodecsext
 enable_winealsa_drv
 enable_winebus_sys
 enable_winecoreaudio_drv
+enable_wined3d_csmt
 enable_wined3d
 enable_winegstreamer
 enable_winehid_sys
@@ -1572,6 +1598,7 @@ enable_ipconfig
 enable_lodctr
 enable_mofcomp
 enable_mshta
+enable_msidb
 enable_msiexec
 enable_msinfo32
 enable_net
@@ -1630,6 +1657,7 @@ enable_wmplayer
 enable_wordpad
 enable_write
 enable_wscript
+enable_wuauserv
 enable_wusa
 enable_xcopy
 enable_server
@@ -1666,6 +1694,7 @@ GPHOTO2_PORT_CFLAGS
 GPHOTO2_PORT_LIBS
 LCMS2_CFLAGS
 LCMS2_LIBS
+GTK3_CFLAGS
 FREETYPE_CFLAGS
 FREETYPE_LIBS
 PULSE_CFLAGS
@@ -2343,6 +2372,7 @@ Optional Packages:
   --without-gnutls        do not use GnuTLS (schannel support)
   --without-gsm           do not use libgsm (GSM 06.10 codec support)
   --without-gstreamer     do not use GStreamer (codecs support)
+  --without-gtk3          do not use gtk3 (gtk3 theming support)
   --without-hal           do not use HAL (dynamic device support)
   --without-jpeg          do not use JPEG
   --without-ldap          do not use LDAP
@@ -2361,8 +2391,10 @@ Optional Packages:
   --without-tiff          do not use TIFF
   --without-udev          do not use udev (plug and play support)
   --without-v4l           do not use v4l1 (v4l support)
+  --without-xattr         do not use xattr (security attributes support)
   --without-xcomposite    do not use the Xcomposite extension
   --without-xcursor       do not use the Xcursor extension
+  --without-xcb           do not use X11 XCB extension
   --without-xinerama      do not use Xinerama (multi-monitor support)
   --without-xinput        do not use the Xinput extension
   --without-xinput2       do not use the Xinput 2 extension
@@ -2374,6 +2406,7 @@ Optional Packages:
   --without-xslt          do not use XSLT
   --without-xxf86vm       do not use XFree video mode extension
   --without-zlib          do not use Zlib (data compression)
+  --without-va            do not use VA (GPU video acceleration)
   --with-wine-tools=DIR   use Wine tools from directory DIR
   --with-wine64=DIR       use the 64-bit Wine in DIR for a Wow64 build
   --with-x                use the X Window System
@@ -2414,6 +2447,7 @@ Some influential environment variables:
   LCMS2_CFLAGS
               C compiler flags for lcms2, overriding pkg-config
   LCMS2_LIBS  Linker flags for lcms2, overriding pkg-config
+  GTK3_CFLAGS C compiler flags for gtk+-3.0, overriding pkg-config
   FREETYPE_CFLAGS
               C compiler flags for freetype2, overriding pkg-config
   FREETYPE_LIBS
@@ -3537,6 +3571,12 @@ if test "${with_gstreamer+set}" = set; then :
 fi
 
 
+# Check whether --with-gtk3 was given.
+if test "${with_gtk3+set}" = set; then :
+  withval=$with_gtk3;
+fi
+
+
 # Check whether --with-hal was given.
 if test "${with_hal+set}" = set; then :
   withval=$with_hal;
@@ -3645,6 +3685,12 @@ if test "${with_v4l+set}" = set; then :
 fi
 
 
+# Check whether --with-xattr was given.
+if test "${with_xattr+set}" = set; then :
+  withval=$with_xattr;
+fi
+
+
 # Check whether --with-xcomposite was given.
 if test "${with_xcomposite+set}" = set; then :
   withval=$with_xcomposite; if test "x$withval" = "xno"; then ac_cv_header_X11_extensions_Xcomposite_h=no; fi
@@ -3654,6 +3700,12 @@ fi
 # Check whether --with-xcursor was given.
 if test "${with_xcursor+set}" = set; then :
   withval=$with_xcursor; if test "x$withval" = "xno"; then ac_cv_header_X11_Xcursor_Xcursor_h=no; fi
+fi
+
+
+# Check whether --with-xcb was given.
+if test "${with_xcb+set}" = set; then :
+  withval=$with_xcb; if test "x$withval" = "xno"; then ac_cv_header_X11_Xlib_xcb_h=no; fi
 fi
 
 
@@ -3720,6 +3772,12 @@ fi
 # Check whether --with-zlib was given.
 if test "${with_zlib+set}" = set; then :
   withval=$with_zlib; if test "x$withval" = "xno"; then ac_cv_header_zlib_h=no; fi
+fi
+
+
+# Check whether --with-va was given.
+if test "${with_va+set}" = set; then :
+  withval=$with_va; if test "x$withval" = "xno"; then ac_cv_header_va_va_x11_h=no; fi
 fi
 
 
@@ -5198,6 +5256,12 @@ esac
 
 enable_win16=${enable_win16:-no}
 enable_win64=${enable_win64:-no}
+if test "x$enable_win64" != "xyes"
+then
+  enable_win32="yes"
+else
+  enable_win32="no"
+fi
 
 enable_winetest=${enable_winetest:-$enable_tests}
 
@@ -7337,6 +7401,65 @@ fi
 done
 
 
+if test "x$with_xattr" != "xno"
+then
+    for ac_header in attr/xattr.h sys/extattr.h
+do :
+  as_ac_Header=`$as_echo "ac_cv_header_$ac_header" | $as_tr_sh`
+ac_fn_c_check_header_mongrel "$LINENO" "$ac_header" "$as_ac_Header" "$ac_includes_default"
+if eval test \"x\$"$as_ac_Header"\" = x"yes"; then :
+  cat >>confdefs.h <<_ACEOF
+#define `$as_echo "HAVE_$ac_header" | $as_tr_cpp` 1
+_ACEOF
+ HAVE_XATTR=1
+fi
+
+done
+
+    for ac_header in sys/xattr.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "sys/xattr.h" "ac_cv_header_sys_xattr_h" "$ac_includes_default"
+if test "x$ac_cv_header_sys_xattr_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_SYS_XATTR_H 1
+_ACEOF
+ HAVE_XATTR=1
+        cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+#include <sys/xattr.h>
+int
+main ()
+{
+getxattr("", "", "", 0, 0, 0);
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+
+$as_echo "#define XATTR_ADDITIONAL_OPTIONS 1" >>confdefs.h
+
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+fi
+
+done
+
+fi
+if test "x$with_xattr" = "xyes"
+then
+    if test "x$HAVE_XATTR" = "x"; then :
+  case "x$with_xattr" in
+  xno) ;;
+  *)   as_fn_error $? "xattr ${notice_platform}development files \
+not found. Wine will be built without extended attribute support, which probably isn't what you \
+want. You will need to install ${notice_platform}development packages of libattr at the very least.
+Use the --without-xattr option if you really want this." "$LINENO" 5 ;;
+esac
+
+fi
+fi
+
 
 dlldir="\${libdir}/wine"
 
@@ -7937,6 +8060,30 @@ testclean::
 $ac_dir/crosstest: __builddeps__ dummy
 	@cd $ac_dir && \$(MAKE) crosstest"
         fi
+}
+
+wine_fn_config_resource ()
+{
+    ac_dir=$1
+    ac_name=$2
+    ac_flags=$3
+    ac_dll=$ac_name
+
+    case $ac_name in
+      *.*) ;;
+      *)   ac_dll=$ac_dll.dll ;;
+    esac
+
+    ac_clean=
+    test -n "$CROSSTARGET" && ac_clean=`expr $ac_dir/$ac_dll : "\\(.*\\)\\."`_crossres.`expr $ac_dll : ".*\\.\\(.*\\)"`
+    test -n "$DLLEXT" || ac_clean="$ac_dir/$ac_dll"
+
+    if test "x$enable_tests" = xno; then :
+  wine_fn_disabled_rules $ac_clean; return
+fi
+
+    wine_fn_append_file SUBDIRS $ac_dir
+    wine_fn_clean_rules $ac_clean
 }
 
 wine_fn_config_tool ()
@@ -8632,7 +8779,7 @@ eval ac_res=\$$as_ac_var
 	       { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
 $as_echo "$ac_res" >&6; }
 if eval test \"x\$"$as_ac_var"\" = x"yes"; then :
-  LDRPATH_INSTALL="-Wl,--rpath,\\\$\$ORIGIN/\`\$(MAKEDEP) -R \${bindir} \${libdir}\`"
+  LDRPATH_INSTALL="-Wl,--rpath,\\\$\$ORIGIN/\`\$(MAKEDEP) -R \${bindir} \${libdir}\`:\$(DESTDIR)\${libdir}"
                        LDRPATH_LOCAL="-Wl,--rpath,\\\$\$ORIGIN/\$(top_builddir)/libs/wine"
 else
   as_ac_var=`$as_echo "ac_cv_cflags_-fPIC -Wl,-R,\\$ORIGIN/../lib" | $as_tr_sh`
@@ -8660,7 +8807,7 @@ eval ac_res=\$$as_ac_var
 	       { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
 $as_echo "$ac_res" >&6; }
 if eval test \"x\$"$as_ac_var"\" = x"yes"; then :
-  LDRPATH_INSTALL="-Wl,-R,\\\$\$ORIGIN/\`\$(MAKEDEP) -R \${bindir} \${libdir}\`"
+  LDRPATH_INSTALL="-Wl,-R,\\\$\$ORIGIN/\`\$(MAKEDEP) -R \${bindir} \${libdir}\`:\$(DESTDIR)\${libdir}"
                             LDRPATH_LOCAL="-Wl,-R,\\\$\$ORIGIN/\$(top_builddir)/libs/wine"
 fi
 fi
@@ -9826,6 +9973,7 @@ fi
     X_LIBS="$X_LIBS -lX11"
 
         for ac_header in X11/Xlib.h \
+                      X11/Xlib-xcb.h \
                       X11/XKBlib.h \
                       X11/Xutil.h \
                       X11/Xcursor/Xcursor.h \
@@ -10620,6 +10768,72 @@ esac
 
 fi
 
+                if test "$ac_cv_header_X11_Xlib_xcb_h" = "yes"
+        then
+            { $as_echo "$as_me:${as_lineno-$LINENO}: checking for -lX11-xcb" >&5
+$as_echo_n "checking for -lX11-xcb... " >&6; }
+if ${ac_cv_lib_soname_X11_xcb+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_soname_save_LIBS=$LIBS
+LIBS="-lX11-xcb $X_LIBS $X_EXTRA_LIBS $LIBS"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char XGetXCBConnection ();
+int
+main ()
+{
+return XGetXCBConnection ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  case "$LIBEXT" in
+    dll) ac_cv_lib_soname_X11_xcb=`$ac_cv_path_LDD conftest.exe | grep "X11-xcb" | sed -e "s/dll.*/dll/"';2,$d'` ;;
+    dylib) ac_cv_lib_soname_X11_xcb=`$OTOOL -L conftest$ac_exeext | grep "libX11-xcb\\.[0-9A-Za-z.]*dylib" | sed -e "s/^.*\/\(libX11-xcb\.[0-9A-Za-z.]*dylib\).*$/\1/"';2,$d'` ;;
+    *) ac_cv_lib_soname_X11_xcb=`$READELF -d conftest$ac_exeext | grep "NEEDED.*libX11-xcb\\.$LIBEXT" | sed -e "s/^.*\\[\\(libX11-xcb\\.$LIBEXT[^	 ]*\\)\\].*$/\1/"';2,$d'`
+       if ${ac_cv_lib_soname_X11_xcb:+false} :; then :
+  ac_cv_lib_soname_X11_xcb=`$LDD conftest$ac_exeext | grep "libX11-xcb\\.$LIBEXT" | sed -e "s/^.*\(libX11-xcb\.$LIBEXT[^	 ]*\).*$/\1/"';2,$d'`
+fi ;;
+  esac
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+  LIBS=$ac_check_soname_save_LIBS
+fi
+if ${ac_cv_lib_soname_X11_xcb:+false} :; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+$as_echo "not found" >&6; }
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_soname_X11_xcb" >&5
+$as_echo "$ac_cv_lib_soname_X11_xcb" >&6; }
+
+cat >>confdefs.h <<_ACEOF
+#define SONAME_LIBX11_XCB "$ac_cv_lib_soname_X11_xcb"
+_ACEOF
+
+
+fi
+        fi
+        if test "x$ac_cv_lib_soname_X11_xcb" = "x"; then :
+  case "x$with_xcb" in
+  x)   as_fn_append wine_notices "|X11-xcb ${notice_platform}development files not found, the XCB extension won't be supported." ;;
+  xno) ;;
+  *)   as_fn_error $? "X11-xcb ${notice_platform}development files not found, the XCB extension won't be supported.
+This is an error since --with-xcb was requested." "$LINENO" 5 ;;
+esac
+
+fi
+
                 ac_fn_c_check_member "$LINENO" "XICCallback" "callback" "ac_cv_member_XICCallback_callback" "#ifdef HAVE_X11_XLIB_H
 #include <X11/Xlib.h>
 #endif
@@ -10905,6 +11119,197 @@ esac
 
 fi
 
+        for ac_header in va/va_x11.h va/va_drm.h
+do :
+  as_ac_Header=`$as_echo "ac_cv_header_$ac_header" | $as_tr_sh`
+ac_fn_c_check_header_mongrel "$LINENO" "$ac_header" "$as_ac_Header" "$ac_includes_default"
+if eval test \"x\$"$as_ac_Header"\" = x"yes"; then :
+  cat >>confdefs.h <<_ACEOF
+#define `$as_echo "HAVE_$ac_header" | $as_tr_cpp` 1
+_ACEOF
+
+fi
+
+done
+
+    if test "$ac_cv_header_va_va_x11_h" = "yes" -a "$ac_cv_header_va_va_drm_h" = "yes"
+    then
+        { $as_echo "$as_me:${as_lineno-$LINENO}: checking for -lva" >&5
+$as_echo_n "checking for -lva... " >&6; }
+if ${ac_cv_lib_soname_va+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_soname_save_LIBS=$LIBS
+LIBS="-lva $X_LIBS $LIBS"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char vaQuerySurfaceAttributes ();
+int
+main ()
+{
+return vaQuerySurfaceAttributes ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  case "$LIBEXT" in
+    dll) ac_cv_lib_soname_va=`$ac_cv_path_LDD conftest.exe | grep "va" | sed -e "s/dll.*/dll/"';2,$d'` ;;
+    dylib) ac_cv_lib_soname_va=`$OTOOL -L conftest$ac_exeext | grep "libva\\.[0-9A-Za-z.]*dylib" | sed -e "s/^.*\/\(libva\.[0-9A-Za-z.]*dylib\).*$/\1/"';2,$d'` ;;
+    *) ac_cv_lib_soname_va=`$READELF -d conftest$ac_exeext | grep "NEEDED.*libva\\.$LIBEXT" | sed -e "s/^.*\\[\\(libva\\.$LIBEXT[^	 ]*\\)\\].*$/\1/"';2,$d'`
+       if ${ac_cv_lib_soname_va:+false} :; then :
+  ac_cv_lib_soname_va=`$LDD conftest$ac_exeext | grep "libva\\.$LIBEXT" | sed -e "s/^.*\(libva\.$LIBEXT[^	 ]*\).*$/\1/"';2,$d'`
+fi ;;
+  esac
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+  LIBS=$ac_check_soname_save_LIBS
+fi
+if ${ac_cv_lib_soname_va:+false} :; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+$as_echo "not found" >&6; }
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_soname_va" >&5
+$as_echo "$ac_cv_lib_soname_va" >&6; }
+
+cat >>confdefs.h <<_ACEOF
+#define SONAME_LIBVA "$ac_cv_lib_soname_va"
+_ACEOF
+
+
+fi
+        { $as_echo "$as_me:${as_lineno-$LINENO}: checking for -lva-x11" >&5
+$as_echo_n "checking for -lva-x11... " >&6; }
+if ${ac_cv_lib_soname_va_x11+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_soname_save_LIBS=$LIBS
+LIBS="-lva-x11 $X_LIBS -lva $LIBS"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char vaGetDisplay ();
+int
+main ()
+{
+return vaGetDisplay ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  case "$LIBEXT" in
+    dll) ac_cv_lib_soname_va_x11=`$ac_cv_path_LDD conftest.exe | grep "va-x11" | sed -e "s/dll.*/dll/"';2,$d'` ;;
+    dylib) ac_cv_lib_soname_va_x11=`$OTOOL -L conftest$ac_exeext | grep "libva-x11\\.[0-9A-Za-z.]*dylib" | sed -e "s/^.*\/\(libva-x11\.[0-9A-Za-z.]*dylib\).*$/\1/"';2,$d'` ;;
+    *) ac_cv_lib_soname_va_x11=`$READELF -d conftest$ac_exeext | grep "NEEDED.*libva-x11\\.$LIBEXT" | sed -e "s/^.*\\[\\(libva-x11\\.$LIBEXT[^	 ]*\\)\\].*$/\1/"';2,$d'`
+       if ${ac_cv_lib_soname_va_x11:+false} :; then :
+  ac_cv_lib_soname_va_x11=`$LDD conftest$ac_exeext | grep "libva-x11\\.$LIBEXT" | sed -e "s/^.*\(libva-x11\.$LIBEXT[^	 ]*\).*$/\1/"';2,$d'`
+fi ;;
+  esac
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+  LIBS=$ac_check_soname_save_LIBS
+fi
+if ${ac_cv_lib_soname_va_x11:+false} :; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+$as_echo "not found" >&6; }
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_soname_va_x11" >&5
+$as_echo "$ac_cv_lib_soname_va_x11" >&6; }
+
+cat >>confdefs.h <<_ACEOF
+#define SONAME_LIBVA_X11 "$ac_cv_lib_soname_va_x11"
+_ACEOF
+
+
+fi
+        { $as_echo "$as_me:${as_lineno-$LINENO}: checking for -lva-drm" >&5
+$as_echo_n "checking for -lva-drm... " >&6; }
+if ${ac_cv_lib_soname_va_drm+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_soname_save_LIBS=$LIBS
+LIBS="-lva-drm $X_LIBS -lva $LIBS"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char vaGetDisplayDRM ();
+int
+main ()
+{
+return vaGetDisplayDRM ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  case "$LIBEXT" in
+    dll) ac_cv_lib_soname_va_drm=`$ac_cv_path_LDD conftest.exe | grep "va-drm" | sed -e "s/dll.*/dll/"';2,$d'` ;;
+    dylib) ac_cv_lib_soname_va_drm=`$OTOOL -L conftest$ac_exeext | grep "libva-drm\\.[0-9A-Za-z.]*dylib" | sed -e "s/^.*\/\(libva-drm\.[0-9A-Za-z.]*dylib\).*$/\1/"';2,$d'` ;;
+    *) ac_cv_lib_soname_va_drm=`$READELF -d conftest$ac_exeext | grep "NEEDED.*libva-drm\\.$LIBEXT" | sed -e "s/^.*\\[\\(libva-drm\\.$LIBEXT[^	 ]*\\)\\].*$/\1/"';2,$d'`
+       if ${ac_cv_lib_soname_va_drm:+false} :; then :
+  ac_cv_lib_soname_va_drm=`$LDD conftest$ac_exeext | grep "libva-drm\\.$LIBEXT" | sed -e "s/^.*\(libva-drm\.$LIBEXT[^	 ]*\).*$/\1/"';2,$d'`
+fi ;;
+  esac
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+  LIBS=$ac_check_soname_save_LIBS
+fi
+if ${ac_cv_lib_soname_va_drm:+false} :; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+$as_echo "not found" >&6; }
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_soname_va_drm" >&5
+$as_echo "$ac_cv_lib_soname_va_drm" >&6; }
+
+cat >>confdefs.h <<_ACEOF
+#define SONAME_LIBVA_DRM "$ac_cv_lib_soname_va_drm"
+_ACEOF
+
+
+fi
+        if test "x$ac_cv_lib_soname_va" != "x" -a "x$ac_cv_lib_soname_va_x11" != "x" -a "x$ac_cv_lib_soname_va_drm" != "x"
+        then
+
+$as_echo "#define HAVE_VAAPI 1" >>confdefs.h
+
+        fi
+    fi
+    if test "x$ac_cv_lib_soname_va" = "x" -o "x$ac_cv_lib_soname_va_x11" = "x" -o "x$ac_cv_lib_soname_va_drm" = "x"; then :
+  case "x$with_va" in
+  x)   as_fn_append wine_notices "|libva ${notice_platform}development files not found, GPU video acceleration won't be supported." ;;
+  xno) ;;
+  *)   as_fn_error $? "libva ${notice_platform}development files not found, GPU video acceleration won't be supported.
+This is an error since --with-va was requested." "$LINENO" 5 ;;
+esac
+
+fi
+
     CPPFLAGS="$ac_save_CPPFLAGS"
 else
     X_CFLAGS=""
@@ -10920,6 +11325,9 @@ Use the --without-x option if you really want this." "$LINENO" 5 ;;
 esac
 enable_winex11_drv=${enable_winex11_drv:-no}
 fi
+
+test "x$X_LIBS" = "x" && enable_vulkan=${enable_vulkan:-no}
+test "x$X_LIBS" = "x" && enable_vulkan_1=${enable_vulkan_1:-no}
 
 if test "$ac_cv_header_CL_cl_h" = "yes"
 then
@@ -10977,14 +11385,14 @@ fi
 
 if test "$ac_cv_header_pcap_pcap_h" = "yes"
 then
-    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for pcap_create in -lpcap" >&5
-$as_echo_n "checking for pcap_create in -lpcap... " >&6; }
-if ${ac_cv_lib_pcap_pcap_create+:} false; then :
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for -lpcap" >&5
+$as_echo_n "checking for -lpcap... " >&6; }
+if ${ac_cv_lib_soname_pcap+:} false; then :
   $as_echo_n "(cached) " >&6
 else
-  ac_check_lib_save_LIBS=$LIBS
+  ac_check_soname_save_LIBS=$LIBS
 LIBS="-lpcap  $LIBS"
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
 /* Override any GCC internal prototype to avoid an error.
@@ -11003,23 +11411,35 @@ return pcap_create ();
 }
 _ACEOF
 if ac_fn_c_try_link "$LINENO"; then :
-  ac_cv_lib_pcap_pcap_create=yes
-else
-  ac_cv_lib_pcap_pcap_create=no
+  case "$LIBEXT" in
+    dll) ac_cv_lib_soname_pcap=`$ac_cv_path_LDD conftest.exe | grep "pcap" | sed -e "s/dll.*/dll/"';2,$d'` ;;
+    dylib) ac_cv_lib_soname_pcap=`$OTOOL -L conftest$ac_exeext | grep "libpcap\\.[0-9A-Za-z.]*dylib" | sed -e "s/^.*\/\(libpcap\.[0-9A-Za-z.]*dylib\).*$/\1/"';2,$d'` ;;
+    *) ac_cv_lib_soname_pcap=`$READELF -d conftest$ac_exeext | grep "NEEDED.*libpcap\\.$LIBEXT" | sed -e "s/^.*\\[\\(libpcap\\.$LIBEXT[^	 ]*\\)\\].*$/\1/"';2,$d'`
+       if ${ac_cv_lib_soname_pcap:+false} :; then :
+  ac_cv_lib_soname_pcap=`$LDD conftest$ac_exeext | grep "libpcap\\.$LIBEXT" | sed -e "s/^.*\(libpcap\.$LIBEXT[^	 ]*\).*$/\1/"';2,$d'`
+fi ;;
+  esac
 fi
 rm -f core conftest.err conftest.$ac_objext \
     conftest$ac_exeext conftest.$ac_ext
-LIBS=$ac_check_lib_save_LIBS
+  LIBS=$ac_check_soname_save_LIBS
 fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_pcap_pcap_create" >&5
-$as_echo "$ac_cv_lib_pcap_pcap_create" >&6; }
-if test "x$ac_cv_lib_pcap_pcap_create" = xyes; then :
-  PCAP_LIBS="-lpcap"
+if ${ac_cv_lib_soname_pcap:+false} :; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+$as_echo "not found" >&6; }
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_soname_pcap" >&5
+$as_echo "$ac_cv_lib_soname_pcap" >&6; }
+
+cat >>confdefs.h <<_ACEOF
+#define SONAME_LIBPCAP "$ac_cv_lib_soname_pcap"
+_ACEOF
+
 
 fi
-
 fi
-if test "x$ac_cv_lib_pcap_pcap_create" != xyes; then :
+if test "x$ac_cv_lib_soname_pcap" = "x"; then :
   case "x$with_pcap" in
   x)   as_fn_append wine_notices "|pcap ${notice_platform}development files not found, wpcap won't be supported." ;;
   xno) ;;
@@ -12379,6 +12799,209 @@ This is an error since --with-cms was requested." "$LINENO" 5 ;;
 esac
 
 fi
+
+if test "x$with_gtk3" != "xno";
+then
+    if ${GTK3_CFLAGS:+false} :; then :
+  if ${PKG_CONFIG+:} false; then :
+  GTK3_CFLAGS=`$PKG_CONFIG --cflags-only-I gtk+-3.0 2>/dev/null`
+fi
+fi
+
+$as_echo "$as_me:${as_lineno-$LINENO}: gtk+-3.0 cflags: $GTK3_CFLAGS" >&5
+ac_save_CPPFLAGS=$CPPFLAGS
+CPPFLAGS="$CPPFLAGS $GTK3_CFLAGS"
+for ac_header in gtk/gtk.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "gtk/gtk.h" "ac_cv_header_gtk_gtk_h" "$ac_includes_default"
+if test "x$ac_cv_header_gtk_gtk_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_GTK_GTK_H 1
+_ACEOF
+
+fi
+
+done
+
+        if test "$ac_cv_header_gtk_gtk_h" = "yes"
+        then
+            { $as_echo "$as_me:${as_lineno-$LINENO}: checking for -lgobject-2.0" >&5
+$as_echo_n "checking for -lgobject-2.0... " >&6; }
+if ${ac_cv_lib_soname_gobject_2_0+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_soname_save_LIBS=$LIBS
+LIBS="-lgobject-2.0  $LIBS"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char g_object_unref ();
+int
+main ()
+{
+return g_object_unref ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  case "$LIBEXT" in
+    dll) ac_cv_lib_soname_gobject_2_0=`$ac_cv_path_LDD conftest.exe | grep "gobject-2.0" | sed -e "s/dll.*/dll/"';2,$d'` ;;
+    dylib) ac_cv_lib_soname_gobject_2_0=`$OTOOL -L conftest$ac_exeext | grep "libgobject-2.0\\.[0-9A-Za-z.]*dylib" | sed -e "s/^.*\/\(libgobject-2.0\.[0-9A-Za-z.]*dylib\).*$/\1/"';2,$d'` ;;
+    *) ac_cv_lib_soname_gobject_2_0=`$READELF -d conftest$ac_exeext | grep "NEEDED.*libgobject-2.0\\.$LIBEXT" | sed -e "s/^.*\\[\\(libgobject-2.0\\.$LIBEXT[^	 ]*\\)\\].*$/\1/"';2,$d'`
+       if ${ac_cv_lib_soname_gobject_2_0:+false} :; then :
+  ac_cv_lib_soname_gobject_2_0=`$LDD conftest$ac_exeext | grep "libgobject-2.0\\.$LIBEXT" | sed -e "s/^.*\(libgobject-2.0\.$LIBEXT[^	 ]*\).*$/\1/"';2,$d'`
+fi ;;
+  esac
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+  LIBS=$ac_check_soname_save_LIBS
+fi
+if ${ac_cv_lib_soname_gobject_2_0:+false} :; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+$as_echo "not found" >&6; }
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_soname_gobject_2_0" >&5
+$as_echo "$ac_cv_lib_soname_gobject_2_0" >&6; }
+
+cat >>confdefs.h <<_ACEOF
+#define SONAME_LIBGOBJECT_2_0 "$ac_cv_lib_soname_gobject_2_0"
+_ACEOF
+
+       { $as_echo "$as_me:${as_lineno-$LINENO}: checking for -lcairo" >&5
+$as_echo_n "checking for -lcairo... " >&6; }
+if ${ac_cv_lib_soname_cairo+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_soname_save_LIBS=$LIBS
+LIBS="-lcairo  $LIBS"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char cairo_destroy ();
+int
+main ()
+{
+return cairo_destroy ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  case "$LIBEXT" in
+    dll) ac_cv_lib_soname_cairo=`$ac_cv_path_LDD conftest.exe | grep "cairo" | sed -e "s/dll.*/dll/"';2,$d'` ;;
+    dylib) ac_cv_lib_soname_cairo=`$OTOOL -L conftest$ac_exeext | grep "libcairo\\.[0-9A-Za-z.]*dylib" | sed -e "s/^.*\/\(libcairo\.[0-9A-Za-z.]*dylib\).*$/\1/"';2,$d'` ;;
+    *) ac_cv_lib_soname_cairo=`$READELF -d conftest$ac_exeext | grep "NEEDED.*libcairo\\.$LIBEXT" | sed -e "s/^.*\\[\\(libcairo\\.$LIBEXT[^	 ]*\\)\\].*$/\1/"';2,$d'`
+       if ${ac_cv_lib_soname_cairo:+false} :; then :
+  ac_cv_lib_soname_cairo=`$LDD conftest$ac_exeext | grep "libcairo\\.$LIBEXT" | sed -e "s/^.*\(libcairo\.$LIBEXT[^	 ]*\).*$/\1/"';2,$d'`
+fi ;;
+  esac
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+  LIBS=$ac_check_soname_save_LIBS
+fi
+if ${ac_cv_lib_soname_cairo:+false} :; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+$as_echo "not found" >&6; }
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_soname_cairo" >&5
+$as_echo "$ac_cv_lib_soname_cairo" >&6; }
+
+cat >>confdefs.h <<_ACEOF
+#define SONAME_LIBCAIRO "$ac_cv_lib_soname_cairo"
+_ACEOF
+
+       { $as_echo "$as_me:${as_lineno-$LINENO}: checking for -lgtk-3" >&5
+$as_echo_n "checking for -lgtk-3... " >&6; }
+if ${ac_cv_lib_soname_gtk_3+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_soname_save_LIBS=$LIBS
+LIBS="-lgtk-3  $LIBS"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char gtk_style_context_save ();
+int
+main ()
+{
+return gtk_style_context_save ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  case "$LIBEXT" in
+    dll) ac_cv_lib_soname_gtk_3=`$ac_cv_path_LDD conftest.exe | grep "gtk-3" | sed -e "s/dll.*/dll/"';2,$d'` ;;
+    dylib) ac_cv_lib_soname_gtk_3=`$OTOOL -L conftest$ac_exeext | grep "libgtk-3\\.[0-9A-Za-z.]*dylib" | sed -e "s/^.*\/\(libgtk-3\.[0-9A-Za-z.]*dylib\).*$/\1/"';2,$d'` ;;
+    *) ac_cv_lib_soname_gtk_3=`$READELF -d conftest$ac_exeext | grep "NEEDED.*libgtk-3\\.$LIBEXT" | sed -e "s/^.*\\[\\(libgtk-3\\.$LIBEXT[^	 ]*\\)\\].*$/\1/"';2,$d'`
+       if ${ac_cv_lib_soname_gtk_3:+false} :; then :
+  ac_cv_lib_soname_gtk_3=`$LDD conftest$ac_exeext | grep "libgtk-3\\.$LIBEXT" | sed -e "s/^.*\(libgtk-3\.$LIBEXT[^	 ]*\).*$/\1/"';2,$d'`
+fi ;;
+  esac
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+  LIBS=$ac_check_soname_save_LIBS
+fi
+if ${ac_cv_lib_soname_gtk_3:+false} :; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+$as_echo "not found" >&6; }
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_soname_gtk_3" >&5
+$as_echo "$ac_cv_lib_soname_gtk_3" >&6; }
+
+cat >>confdefs.h <<_ACEOF
+#define SONAME_LIBGTK_3 "$ac_cv_lib_soname_gtk_3"
+_ACEOF
+
+
+$as_echo "#define HAVE_GTK3 1" >>confdefs.h
+
+fi
+fi
+fi
+            test "x$ac_cv_lib_soname_gtk_3" != "x" || GTK3_CFLAGS=""
+        else
+            GTK3_CFLAGS=""
+        fi
+CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$GTK3_CFLAGS" || GTK3_CFLAGS=`echo " $GTK3_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+
+fi
+if test "x$ac_cv_lib_soname_gtk_3" = x; then :
+  case "x$with_gtk3" in
+  x)   as_fn_append wine_notices "|GTK3 ${notice_platform}development files not found, GTK themes won't be supported." ;;
+  xno) ;;
+  *)   as_fn_error $? "GTK3 ${notice_platform}development files not found, GTK themes won't be supported.
+This is an error since --with-gtk3 was requested." "$LINENO" 5 ;;
+esac
+
+fi
+test "x$ac_cv_lib_soname_gtk_3" != "x" || enable_uxtheme_gtk=${enable_uxtheme_gtk:-no}
 
 if test "x$with_freetype" != "xno"
 then
@@ -13768,6 +14391,60 @@ if test "x$ac_cv_lib_soname_tiff" = "x"; then :
   *)   as_fn_error $? "libtiff ${notice_platform}development files not found, TIFF won't be supported.
 This is an error since --with-tiff was requested." "$LINENO" 5 ;;
 esac
+
+fi
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for -ltxc_dxtn" >&5
+$as_echo_n "checking for -ltxc_dxtn... " >&6; }
+if ${ac_cv_lib_soname_txc_dxtn+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_soname_save_LIBS=$LIBS
+LIBS="-ltxc_dxtn  $LIBS"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char tx_compress_dxtn ();
+int
+main ()
+{
+return tx_compress_dxtn ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  case "$LIBEXT" in
+    dll) ac_cv_lib_soname_txc_dxtn=`$ac_cv_path_LDD conftest.exe | grep "txc_dxtn" | sed -e "s/dll.*/dll/"';2,$d'` ;;
+    dylib) ac_cv_lib_soname_txc_dxtn=`$OTOOL -L conftest$ac_exeext | grep "libtxc_dxtn\\(_s2tc\\)\\{0,1\\}\\.[0-9A-Za-z.]*dylib" | sed -e "s/^.*\/\(libtxc_dxtn\\(_s2tc\\)\\{0,1\\}\.[0-9A-Za-z.]*dylib\).*$/\1/"';2,$d'` ;;
+    *) ac_cv_lib_soname_txc_dxtn=`$READELF -d conftest$ac_exeext | grep "NEEDED.*libtxc_dxtn\\(_s2tc\\)\\{0,1\\}\\.$LIBEXT" | sed -e "s/^.*\\[\\(libtxc_dxtn\\(_s2tc\\)\\{0,1\\}\\.$LIBEXT[^	 ]*\\)\\].*$/\1/"';2,$d'`
+       if ${ac_cv_lib_soname_txc_dxtn:+false} :; then :
+  ac_cv_lib_soname_txc_dxtn=`$LDD conftest$ac_exeext | grep "libtxc_dxtn\\(_s2tc\\)\\{0,1\\}\\.$LIBEXT" | sed -e "s/^.*\(libtxc_dxtn\\(_s2tc\\)\\{0,1\\}\.$LIBEXT[^	 ]*\).*$/\1/"';2,$d'`
+fi ;;
+  esac
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+  LIBS=$ac_check_soname_save_LIBS
+fi
+if ${ac_cv_lib_soname_txc_dxtn:+false} :; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+$as_echo "not found" >&6; }
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_soname_txc_dxtn" >&5
+$as_echo "$ac_cv_lib_soname_txc_dxtn" >&6; }
+
+cat >>confdefs.h <<_ACEOF
+#define SONAME_LIBTXC_DXTN "$ac_cv_lib_soname_txc_dxtn"
+_ACEOF
+
 
 fi
 
@@ -17541,7 +18218,6 @@ X_CFLAGS = $X_CFLAGS
 X_PRE_LIBS = $X_PRE_LIBS
 X_LIBS = $X_LIBS
 X_EXTRA_LIBS = $X_EXTRA_LIBS
-PCAP_LIBS = $PCAP_LIBS
 XML2_CFLAGS = $XML2_CFLAGS
 XML2_LIBS = $XML2_LIBS
 XSLT_CFLAGS = $XSLT_CFLAGS
@@ -17561,6 +18237,7 @@ GPHOTO2_PORT_LIBS = $GPHOTO2_PORT_LIBS
 RESOLV_LIBS = $RESOLV_LIBS
 LCMS2_CFLAGS = $LCMS2_CFLAGS
 LCMS2_LIBS = $LCMS2_LIBS
+GTK3_CFLAGS = $GTK3_CFLAGS
 FREETYPE_CFLAGS = $FREETYPE_CFLAGS
 FREETYPE_LIBS = $FREETYPE_LIBS
 Z_LIBS = $Z_LIBS
@@ -17674,6 +18351,7 @@ wine_fn_config_dll api-ms-win-core-file-l2-1-1 enable_api_ms_win_core_file_l2_1_
 wine_fn_config_dll api-ms-win-core-handle-l1-1-0 enable_api_ms_win_core_handle_l1_1_0
 wine_fn_config_dll api-ms-win-core-heap-l1-1-0 enable_api_ms_win_core_heap_l1_1_0
 wine_fn_config_dll api-ms-win-core-heap-l1-2-0 enable_api_ms_win_core_heap_l1_2_0
+wine_fn_config_dll api-ms-win-core-heap-l2-1-0 enable_api_ms_win_core_heap_l2_1_0
 wine_fn_config_dll api-ms-win-core-heap-obsolete-l1-1-0 enable_api_ms_win_core_heap_obsolete_l1_1_0
 wine_fn_config_dll api-ms-win-core-interlocked-l1-1-0 enable_api_ms_win_core_interlocked_l1_1_0
 wine_fn_config_dll api-ms-win-core-interlocked-l1-2-0 enable_api_ms_win_core_interlocked_l1_2_0
@@ -17723,6 +18401,7 @@ wine_fn_config_dll api-ms-win-core-rtlsupport-l1-1-0 enable_api_ms_win_core_rtls
 wine_fn_config_dll api-ms-win-core-rtlsupport-l1-2-0 enable_api_ms_win_core_rtlsupport_l1_2_0
 wine_fn_config_dll api-ms-win-core-shlwapi-legacy-l1-1-0 enable_api_ms_win_core_shlwapi_legacy_l1_1_0
 wine_fn_config_dll api-ms-win-core-shlwapi-obsolete-l1-1-0 enable_api_ms_win_core_shlwapi_obsolete_l1_1_0
+wine_fn_config_dll api-ms-win-core-shlwapi-obsolete-l1-2-0 enable_api_ms_win_core_shlwapi_obsolete_l1_2_0
 wine_fn_config_dll api-ms-win-core-sidebyside-l1-1-0 enable_api_ms_win_core_sidebyside_l1_1_0
 wine_fn_config_dll api-ms-win-core-string-l1-1-0 enable_api_ms_win_core_string_l1_1_0
 wine_fn_config_dll api-ms-win-core-string-l2-1-0 enable_api_ms_win_core_string_l2_1_0
@@ -17792,7 +18471,9 @@ wine_fn_config_dll api-ms-win-mm-mme-l1-1-0 enable_api_ms_win_mm_mme_l1_1_0
 wine_fn_config_dll api-ms-win-ntuser-dc-access-l1-1-0 enable_api_ms_win_ntuser_dc_access_l1_1_0
 wine_fn_config_dll api-ms-win-power-base-l1-1-0 enable_api_ms_win_power_base_l1_1_0
 wine_fn_config_dll api-ms-win-power-setting-l1-1-0 enable_api_ms_win_power_setting_l1_1_0
+wine_fn_config_dll api-ms-win-rtcore-ntuser-draw-l1-1-0 enable_api_ms_win_rtcore_ntuser_draw_l1_1_0
 wine_fn_config_dll api-ms-win-rtcore-ntuser-private-l1-1-0 enable_api_ms_win_rtcore_ntuser_private_l1_1_0
+wine_fn_config_dll api-ms-win-rtcore-ntuser-window-l1-1-0 enable_api_ms_win_rtcore_ntuser_window_l1_1_0
 wine_fn_config_dll api-ms-win-security-audit-l1-1-1 enable_api_ms_win_security_audit_l1_1_1
 wine_fn_config_dll api-ms-win-security-base-l1-1-0 enable_api_ms_win_security_base_l1_1_0
 wine_fn_config_dll api-ms-win-security-base-l1-2-0 enable_api_ms_win_security_base_l1_2_0
@@ -17811,6 +18492,9 @@ wine_fn_config_dll api-ms-win-service-management-l2-1-0 enable_api_ms_win_servic
 wine_fn_config_dll api-ms-win-service-private-l1-1-1 enable_api_ms_win_service_private_l1_1_1
 wine_fn_config_dll api-ms-win-service-winsvc-l1-1-0 enable_api_ms_win_service_winsvc_l1_1_0
 wine_fn_config_dll api-ms-win-service-winsvc-l1-2-0 enable_api_ms_win_service_winsvc_l1_2_0
+wine_fn_config_dll api-ms-win-shcore-obsolete-l1-1-0 enable_api_ms_win_shcore_obsolete_l1_1_0
+wine_fn_config_dll api-ms-win-shcore-stream-l1-1-0 enable_api_ms_win_shcore_stream_l1_1_0
+wine_fn_config_dll api-ms-win-shcore-thread-l1-1-0 enable_api_ms_win_shcore_thread_l1_1_0
 wine_fn_config_dll api-ms-win-shell-shellcom-l1-1-0 enable_api_ms_win_shell_shellcom_l1_1_0
 wine_fn_config_dll api-ms-win-shell-shellfolders-l1-1-0 enable_api_ms_win_shell_shellfolders_l1_1_0
 wine_fn_config_dll apphelp enable_apphelp
@@ -18010,11 +18694,13 @@ wine_fn_config_lib dxerr9
 wine_fn_config_dll dxgi enable_dxgi implib
 wine_fn_config_test dlls/dxgi/tests dxgi_test
 wine_fn_config_lib dxguid
-wine_fn_config_dll dxva2 enable_dxva2
+wine_fn_config_dll dxva2 enable_dxva2 clean
+wine_fn_config_test dlls/dxva2/tests dxva2_test
 wine_fn_config_dll esent enable_esent
 wine_fn_config_dll evr enable_evr
 wine_fn_config_dll explorerframe enable_explorerframe clean
 wine_fn_config_test dlls/explorerframe/tests explorerframe_test
+wine_fn_config_dll ext-ms-win-appmodel-usercontext-l1-1-0 enable_ext_ms_win_appmodel_usercontext_l1_1_0
 wine_fn_config_dll ext-ms-win-authz-context-l1-1-0 enable_ext_ms_win_authz_context_l1_1_0
 wine_fn_config_dll ext-ms-win-domainjoin-netjoin-l1-1-0 enable_ext_ms_win_domainjoin_netjoin_l1_1_0
 wine_fn_config_dll ext-ms-win-gdi-dc-create-l1-1-1 enable_ext_ms_win_gdi_dc_create_l1_1_1
@@ -18024,6 +18710,7 @@ wine_fn_config_dll ext-ms-win-gdi-draw-l1-1-1 enable_ext_ms_win_gdi_draw_l1_1_1
 wine_fn_config_dll ext-ms-win-gdi-render-l1-1-0 enable_ext_ms_win_gdi_render_l1_1_0
 wine_fn_config_dll ext-ms-win-kernel32-package-current-l1-1-0 enable_ext_ms_win_kernel32_package_current_l1_1_0
 wine_fn_config_dll ext-ms-win-ntuser-message-l1-1-1 enable_ext_ms_win_ntuser_message_l1_1_1
+wine_fn_config_dll ext-ms-win-ntuser-mouse-l1-1-0 enable_ext_ms_win_ntuser_mouse_l1_1_0
 wine_fn_config_dll ext-ms-win-ntuser-private-l1-1-1 enable_ext_ms_win_ntuser_private_l1_1_1
 wine_fn_config_dll ext-ms-win-ntuser-rectangle-ext-l1-1-0 enable_ext_ms_win_ntuser_rectangle_ext_l1_1_0
 wine_fn_config_dll ext-ms-win-ntuser-uicontext-ext-l1-1-0 enable_ext_ms_win_ntuser_uicontext_ext_l1_1_0
@@ -18032,9 +18719,13 @@ wine_fn_config_dll ext-ms-win-rtcore-gdi-object-l1-1-0 enable_ext_ms_win_rtcore_
 wine_fn_config_dll ext-ms-win-rtcore-gdi-rgn-l1-1-0 enable_ext_ms_win_rtcore_gdi_rgn_l1_1_0
 wine_fn_config_dll ext-ms-win-rtcore-ntuser-dc-access-l1-1-0 enable_ext_ms_win_rtcore_ntuser_dc_access_l1_1_0
 wine_fn_config_dll ext-ms-win-rtcore-ntuser-dpi-l1-1-0 enable_ext_ms_win_rtcore_ntuser_dpi_l1_1_0
+wine_fn_config_dll ext-ms-win-rtcore-ntuser-syscolors-l1-1-0 enable_ext_ms_win_rtcore_ntuser_syscolors_l1_1_0
 wine_fn_config_dll ext-ms-win-rtcore-ntuser-sysparams-l1-1-0 enable_ext_ms_win_rtcore_ntuser_sysparams_l1_1_0
+wine_fn_config_dll ext-ms-win-uxtheme-themes-l1-1-0 enable_ext_ms_win_uxtheme_themes_l1_1_0
+wine_fn_config_dll ext-ms-win-xaml-pal-l1-1-0 enable_ext_ms_win_xaml_pal_l1_1_0
 wine_fn_config_dll faultrep enable_faultrep implib
 wine_fn_config_test dlls/faultrep/tests faultrep_test
+wine_fn_config_dll feclient enable_feclient
 wine_fn_config_dll fltlib enable_fltlib
 wine_fn_config_dll fltmgr.sys enable_fltmgr_sys
 wine_fn_config_dll fntcache enable_fntcache
@@ -18066,6 +18757,7 @@ wine_fn_config_dll iccvid enable_iccvid clean
 wine_fn_config_dll icmp enable_icmp
 wine_fn_config_dll ieframe enable_ieframe clean,implib
 wine_fn_config_test dlls/ieframe/tests ieframe_test
+wine_fn_config_dll iertutil enable_iertutil
 wine_fn_config_dll ifsmgr.vxd enable_win16
 wine_fn_config_dll imaadp32.acm enable_imaadp32_acm
 wine_fn_config_dll imagehlp enable_imagehlp implib
@@ -18251,8 +18943,18 @@ wine_fn_config_test dlls/ntdll/tests ntdll_test
 wine_fn_config_dll ntdsapi enable_ntdsapi implib
 wine_fn_config_test dlls/ntdsapi/tests ntdsapi_test
 wine_fn_config_dll ntoskrnl.exe enable_ntoskrnl_exe implib ntoskrnl
+wine_fn_config_test dlls/ntoskrnl.exe/tests ntoskrnl.exe_test
+wine_fn_config_resource dlls/ntoskrnl.exe/tests/driver.sys driver.sys
 wine_fn_config_dll ntprint enable_ntprint
 wine_fn_config_test dlls/ntprint/tests ntprint_test
+wine_fn_config_dll nvapi enable_win32
+wine_fn_config_test dlls/nvapi/tests nvapi_test
+wine_fn_config_dll nvapi64 enable_win64
+wine_fn_config_dll nvcuda enable_nvcuda
+wine_fn_config_test dlls/nvcuda/tests nvcuda_test
+wine_fn_config_dll nvcuvid enable_nvcuvid
+wine_fn_config_dll nvencodeapi enable_win32
+wine_fn_config_dll nvencodeapi64 enable_win64
 wine_fn_config_dll objsel enable_objsel clean
 wine_fn_config_dll odbc32 enable_odbc32 implib
 wine_fn_config_dll odbccp32 enable_odbccp32 implib
@@ -18349,6 +19051,7 @@ wine_fn_config_test dlls/setupapi/tests setupapi_test
 wine_fn_config_dll setupx.dll16 enable_win16
 wine_fn_config_dll sfc enable_sfc implib
 wine_fn_config_dll sfc_os enable_sfc_os implib
+wine_fn_config_dll shcore enable_shcore
 wine_fn_config_dll shdoclc enable_shdoclc clean
 wine_fn_config_dll shdocvw enable_shdocvw clean,implib
 wine_fn_config_test dlls/shdocvw/tests shdocvw_test
@@ -18409,6 +19112,7 @@ wine_fn_config_test dlls/userenv/tests userenv_test
 wine_fn_config_dll usp10 enable_usp10 implib
 wine_fn_config_test dlls/usp10/tests usp10_test
 wine_fn_config_lib uuid
+wine_fn_config_dll uxtheme-gtk enable_uxtheme_gtk
 wine_fn_config_dll uxtheme enable_uxtheme implib
 wine_fn_config_test dlls/uxtheme/tests uxtheme_test
 wine_fn_config_dll vbscript enable_vbscript clean
@@ -18432,6 +19136,8 @@ wine_fn_config_dll vnbt.vxd enable_win16
 wine_fn_config_dll vnetbios.vxd enable_win16
 wine_fn_config_dll vssapi enable_vssapi
 wine_fn_config_dll vtdapi.vxd enable_win16
+wine_fn_config_dll vulkan-1 enable_vulkan_1
+wine_fn_config_dll vulkan enable_vulkan
 wine_fn_config_dll vwin32.vxd enable_win16
 wine_fn_config_dll w32skrnl enable_win16
 wine_fn_config_dll w32sys.dll16 enable_win16
@@ -18459,6 +19165,7 @@ wine_fn_config_dll winealsa.drv enable_winealsa_drv
 wine_fn_config_dll winebus.sys enable_winebus_sys
 wine_fn_config_dll winecoreaudio.drv enable_winecoreaudio_drv
 wine_fn_config_lib winecrt0
+wine_fn_config_dll wined3d-csmt enable_wined3d_csmt
 wine_fn_config_dll wined3d enable_wined3d implib
 wine_fn_config_dll winegstreamer enable_winegstreamer
 wine_fn_config_dll winehid.sys enable_winehid_sys
@@ -18583,7 +19290,7 @@ wine_fn_config_program expand enable_expand install
 wine_fn_config_program explorer enable_explorer clean,install
 wine_fn_config_program extrac32 enable_extrac32 install
 wine_fn_config_program findstr enable_findstr install
-wine_fn_config_program fsutil enable_fsutil install
+wine_fn_config_program fsutil enable_fsutil clean,install
 wine_fn_config_program hh enable_hh install
 wine_fn_config_program hostname enable_hostname clean,install
 wine_fn_config_program icacls enable_icacls install
@@ -18593,6 +19300,7 @@ wine_fn_config_program ipconfig enable_ipconfig clean,install
 wine_fn_config_program lodctr enable_lodctr install
 wine_fn_config_program mofcomp enable_mofcomp install
 wine_fn_config_program mshta enable_mshta install
+wine_fn_config_program msidb enable_msidb install,installbin
 wine_fn_config_program msiexec enable_msiexec install,installbin,manpage
 wine_fn_config_program msinfo32 enable_msinfo32 clean,install
 wine_fn_config_program net enable_net clean,install
@@ -18659,6 +19367,7 @@ wine_fn_config_program wordpad enable_wordpad clean,install
 wine_fn_config_program write enable_write clean,install
 wine_fn_config_program wscript enable_wscript clean,install
 wine_fn_config_test programs/wscript/tests wscript.exe_test
+wine_fn_config_program wuauserv enable_wuauserv install
 wine_fn_config_program wusa enable_wusa install
 wine_fn_config_program xcopy enable_xcopy clean,install
 wine_fn_config_test programs/xcopy/tests xcopy.exe_test
