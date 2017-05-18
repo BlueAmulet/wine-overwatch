@@ -46,7 +46,183 @@
 #define IMAGE_NT_OPTIONAL_HDR64_MAGIC 0x20b
 #define IMAGE_ROM_OPTIONAL_HDR_MAGIC  0x107
 
+struct export_func
+{
+    const char     *name;
+    unsigned int    name_rva;
+    int             ordinal;
+    unsigned int    va;
+};
+
+struct export
+{
+    struct export_func *exports;
+    int                 nb_exports;
+    int                 max_exports;
+};
+
 int needs_get_pc_thunk = 0;
+
+static inline int needs_syscalls( DLLSPEC *spec )
+{
+    return (target_cpu == CPU_x86_64) &&
+           spec->dll_name && strcmp(spec->dll_name, "ntdll") == 0;
+}
+
+static void add_export_func( struct export *exp, const char *name, int ordinal, unsigned int va )
+{
+    if (exp->nb_exports == exp->max_exports)
+    {
+        exp->max_exports *= 2;
+        if (exp->max_exports < 32) exp->max_exports = 32;
+        exp->exports = xrealloc( exp->exports, exp->max_exports * sizeof(*exp->exports) );
+    }
+    exp->exports[exp->nb_exports].name = name;
+    exp->exports[exp->nb_exports].name_rva = 0;
+    exp->exports[exp->nb_exports].ordinal = ordinal;
+    exp->exports[exp->nb_exports].va = va;
+    exp->nb_exports++;
+}
+
+static struct export *parse_syscall_exports( const char *name )
+{
+    FILE *f;
+    int err, ordinal = 0;
+    const char *prefix = "__wine_spec_syscall_";
+    size_t prefix_len = strlen( prefix );
+    const char *prog = get_nm_command();
+    char *cmd, buffer[1024];
+    struct export *export;
+
+    export = xmalloc( sizeof(*export) );
+    memset( export, 0, sizeof(*export) );
+
+    cmd = strmake( "%s -P -t x %s", prog, name );
+    if (!(f = popen( cmd, "r" )))
+        fatal_error( "Cannot execute '%s'\n", cmd );
+
+    while (fgets( buffer, sizeof(buffer), f ))
+    {
+        char *name;
+        char *p = buffer + strlen(buffer) - 1;
+        unsigned long va;
+        if (p < buffer) continue;
+        if (*p == '\n') *p-- = 0;
+        p = name = buffer;
+        while (*p && *p != ' ') p++;
+        if (*p == 0) continue;
+        *p++ = 0;
+        if (p[0] != 't' || p[1] != ' ') continue;
+        p += 2;
+        va = strtoul( p, NULL, 16 );
+        if (strncmp( name, prefix, prefix_len ) == 0)
+            add_export_func( export, xstrdup(name + prefix_len), ordinal++, va );
+    }
+    if ((err = pclose( f ))) warning( "%s failed with status %d\n", cmd, err );
+    free( cmd );
+
+    return export;
+}
+
+static void output_text_section( DLLSPEC *spec, unsigned int rva, const char *native )
+{
+    static const unsigned char dll_code_section[] = { 0x31, 0xc0,          /* xor %eax,%eax */
+                                                      0xc2, 0x0c, 0x00 };  /* ret $12 */
+
+    static const unsigned char exe_code_section[] = { 0xb8, 0x01, 0x00, 0x00, 0x00,  /* movl $1,%eax */
+                                                      0xc2, 0x04, 0x00 };            /* ret $4 */
+
+    static const unsigned char prefix[] = { 0x0f, 0x1f, 0x44, 0x00, 0x00, /* nop */
+                                            0x68 };                       /* push ... */
+
+    int i;
+    struct export *exp;
+
+    /* attempted to migrate this code to the new multi pass label system ~ gamax92 */
+
+    if (spec->characteristics & IMAGE_FILE_DLL)
+        put_data( dll_code_section, sizeof(dll_code_section) );
+    else
+        put_data( exe_code_section, sizeof(exe_code_section) );
+
+    if (native == NULL)
+        return;
+
+    exp = parse_syscall_exports( native );
+
+    /* export directory header */
+
+    align_output_rva( 32, 32 );
+    put_label( "export_start" );
+    put_dword( 0 ); /* Characteristics */
+    put_dword( 0 ); /* TimeDateStamp */
+    put_dword( 0 ); /* MajorVersion/MinorVersion */
+    put_dword( label_rva("dll_name") ); /* Name */
+    put_dword( 0 ); /* Base */
+    put_dword( exp->nb_exports ); /* NumberOfFunctions */
+    put_dword( exp->nb_exports ); /* NumberOfNames */
+    put_dword( label_rva("export_funcs") ); /* AddressOfFunctions */
+    put_dword( label_rva("export_names") ); /* AddressOfNames */
+    put_dword( label_rva("export_ordinals") ); /* AddressOfNameOrdinals */
+
+    /* function pointers */
+
+    align_output_rva( 4, 4 );
+    put_label( "export_funcs" );
+    for (i = 0; i < exp->nb_exports; i++)
+        put_dword( exp->exports[i].va - image_base );
+
+    /* names */
+
+    put_label( "dll_name" );
+    put_str( spec->file_name );
+    for (i = 0; i < exp->nb_exports; i++)
+    {
+        struct export_func *e = &exp->exports[i];
+        e->name_rva = output_buffer_rva;
+        put_str( e->name );
+    }
+
+    /* name ptrs */
+
+    align_output_rva( 4, 4 );
+    put_label( "export_names" );
+    for (i = 0; i < exp->nb_exports; i++)
+        put_dword( exp->exports[i].name_rva );
+
+    /* ordinals */
+
+    align_output_rva( 4, 4 );
+    put_label( "export_ordinals" );
+    for (i = 0; i < exp->nb_exports; i++)
+        put_word( exp->exports[i].ordinal );
+    align_output_rva( 4, 4 );
+
+    put_label( "export_end" );
+
+    /* fake code */
+
+    for (i = 0; i < exp->nb_exports; i++)
+    {
+        struct export_func *e = &exp->exports[i];
+        unsigned int offset = e->va - image_base - rva + label_pos("text_start");
+
+        if (offset + 16 > output_buffer_size)
+        {
+            output_buffer_size = offset + 16;
+            output_buffer = xrealloc( output_buffer, output_buffer_size );
+        }
+
+        output_buffer_pos = offset;
+        put_data( prefix, sizeof(prefix) );
+        put_dword( e->va );
+        put_byte( 0xc3 ); /* ret */
+    }
+
+	/* correct output_buffer_rva */
+
+	output_buffer_rva = output_buffer_pos - label_pos("text_start") + label_rva("text_start");
+}
 
 /* check if entry point needs a relay thunk */
 static inline int needs_relay( const ORDDEF *odp )
@@ -399,6 +575,11 @@ void output_exports( DLLSPEC *spec )
                 output( "\t%s %s_%s\n",
                          get_asm_ptr_keyword(), asm_name("__wine_spec_ext_link"), odp->link_name );
             }
+            else if (needs_syscalls(spec) && odp->type != TYPE_EXTERN)
+            {
+                /* system calls */
+                output( "\t%s __wine_spec_syscall_%s\n", get_asm_ptr_keyword(), odp->name );
+            }
             else
             {
                 output( "\t%s %s\n", get_asm_ptr_keyword(), asm_name(odp->link_name) );
@@ -461,6 +642,28 @@ void output_exports( DLLSPEC *spec )
     }
     output( "\t.align %d\n", get_alignment(get_ptr_size()) );
     output( ".L__wine_spec_exports_end:\n" );
+
+    /* output syscall wrappers */
+
+    if (needs_syscalls(spec))
+    {
+        output( "\t.text\n" );
+        for (i = spec->base; i <= spec->limit; i++)
+        {
+            ORDDEF *odp = spec->ordinals[i];
+            if (odp && (odp->flags & (FLAG_FORWARD|FLAG_EXT_LINK)) == 0)
+            {
+                if (odp->type != TYPE_STUB && odp->type != TYPE_EXTERN)
+                {
+                    output( "__wine_spec_syscall_%s:\n", odp->name );
+                    output( "\t.byte 0x0f, 0x1f, 0x44, 0x00, 0x00\n" );
+                    output( "\tjmp %s\n", asm_name(odp->link_name) );
+                    output( "\t.byte 0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00\n" );
+                }
+            }
+        }
+        output( "\t.data\n" );
+    }
 
     /* output relays */
 
@@ -832,14 +1035,8 @@ static void create_stub_exports_x86( DLLSPEC *spec )
  *
  * Helper to create a fake binary module from a spec file.
  */
-static void output_fake_module_pass( DLLSPEC *spec )
+static void output_fake_module_pass( DLLSPEC *spec, const char *native )
 {
-    static const unsigned char dll_code_section[] = { 0x31, 0xc0,          /* xor %eax,%eax */
-                                                      0xc2, 0x0c, 0x00 };  /* ret $12 */
-
-    static const unsigned char exe_code_section[] = { 0xb8, 0x01, 0x00, 0x00, 0x00,  /* movl $1,%eax */
-                                                      0xc2, 0x04, 0x00 };            /* ret $4 */
-
     static const char fakedll_signature[] = "Wine placeholder DLL";
     const unsigned int page_size = get_page_size();
     const unsigned int section_align = page_size;
@@ -903,7 +1100,8 @@ static void output_fake_module_pass( DLLSPEC *spec )
     put_dword( label_rva("text_start") );            /* AddressOfEntryPoint */
     put_dword( label_rva("text_start") );            /* BaseOfCode */
     if (get_ptr_size() == 4) put_dword( 0 );         /* BaseOfData */
-    put_pword( 0x10000000 );                         /* ImageBase */
+    if (image_base) put_pword( image_base );         /* ImageBase */
+    else put_pword( 0x10000000 );
     put_dword( section_align );                      /* SectionAlignment */
     put_dword( file_align );                         /* FileAlignment */
     put_word( 1 );                                   /* MajorOperatingSystemVersion */
@@ -1004,10 +1202,10 @@ static void output_fake_module_pass( DLLSPEC *spec )
         if (target_cpu == CPU_x86)
             create_stub_exports_x86( spec );
         else
-            put_data( dll_code_section, sizeof(dll_code_section) );
+            output_text_section( spec, section_align, native );
     }
     else
-        put_data( exe_code_section, sizeof(exe_code_section) );
+        output_text_section( spec, section_align, native );
     put_label( "text_end" );
 
     /* .reloc contents */
@@ -1035,18 +1233,18 @@ static void output_fake_module_pass( DLLSPEC *spec )
  *
  * Build a fake binary module from a spec file.
  */
-void output_fake_module( DLLSPEC *spec )
+void output_fake_module( DLLSPEC *spec, const char *native )
 {
     resolve_imports( spec );
 
     /* First pass */
     init_output_buffer();
-    output_fake_module_pass( spec );
+    output_fake_module_pass( spec, native );
 
     /* Second pass */
     output_buffer_pos = 0;
     output_buffer_rva = 0;
-    output_fake_module_pass( spec );
+    output_fake_module_pass( spec, native );
 
     flush_output_buffer();
 }

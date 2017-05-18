@@ -142,6 +142,7 @@ struct glsl_vs_program
     GLint uniform_i_locations[WINED3D_MAX_CONSTS_I];
     GLint uniform_b_locations[WINED3D_MAX_CONSTS_B];
     GLint pos_fixup_location;
+    GLint base_vertex_location;
 
     GLint modelview_matrix_location[MAX_VERTEX_BLENDS];
     GLint projection_matrix_location;
@@ -1736,6 +1737,12 @@ static void shader_glsl_load_constants(void *shader_priv, struct wined3d_context
         checkGLcall("glUniform4fv");
     }
 
+    if (update_mask & WINED3D_SHADER_CONST_BASE_VERTEX)
+    {
+        GL_EXTCALL(glUniform1i(prog->vs.base_vertex_location, state->base_vertex_index));
+        checkGLcall("glUniform1i");
+    }
+
     if (update_mask & WINED3D_SHADER_CONST_FFP_MODELVIEW)
     {
         struct wined3d_matrix mat;
@@ -2195,7 +2202,8 @@ static void shader_glsl_declare_generic_vertex_attribute(struct wined3d_string_b
 
     if (e->sysval_semantic == WINED3D_SV_VERTEX_ID)
     {
-        shader_addline(buffer, "vec4 vs_in%u = vec4(intBitsToFloat(gl_VertexID), 0.0, 0.0, 0.0);\n",
+        shader_addline(buffer, "uniform int base_vertex;\n");
+        shader_addline(buffer, "vec4 vs_in%u = vec4(intBitsToFloat(gl_VertexID - base_vertex), 0.0, 0.0, 0.0);\n",
                 index);
         return;
     }
@@ -2396,6 +2404,8 @@ static void shader_generate_glsl_declarations(const struct wined3d_context *cont
         switch (reg_maps->resource_info[entry->resource_idx].type)
         {
             case WINED3D_SHADER_RESOURCE_BUFFER:
+                if (shadow_sampler)
+                    FIXME("Unsupported Buffer shadow sampler.\n");
                 sampler_type = "samplerBuffer";
                 break;
 
@@ -2695,6 +2705,7 @@ static void shader_glsl_get_register_name(const struct wined3d_shader_register *
     const struct wined3d_shader_version *version = &reg_maps->shader_version;
     const struct wined3d_gl_info *gl_info = ins->ctx->gl_info;
     const char *prefix = shader_glsl_get_prefix(version->type);
+    struct shader_glsl_ctx_priv *priv = ins->ctx->backend_data;
     struct glsl_src_param rel_param0, rel_param1;
     char imm_str[4][17];
 
@@ -2713,8 +2724,6 @@ static void shader_glsl_get_register_name(const struct wined3d_shader_register *
         case WINED3DSPR_INPUT:
             if (version->type == WINED3D_SHADER_TYPE_VERTEX)
             {
-                struct shader_glsl_ctx_priv *priv = ins->ctx->backend_data;
-
                 if (reg->idx[0].rel_addr)
                     FIXME("VS3+ input registers relative addressing.\n");
                 if (priv->cur_vs_args->swizzle_map & (1u << reg->idx[0].offset))
@@ -2855,7 +2864,10 @@ static void shader_glsl_get_register_name(const struct wined3d_shader_register *
                 WARN("Write to render target %u, only %d supported.\n",
                         reg->idx[0].offset, gl_info->limits.buffers);
 
-            sprintf(register_name, "%s[%u]", get_fragment_output(gl_info), reg->idx[0].offset);
+            if (version->type == WINED3D_SHADER_TYPE_PIXEL && priv->cur_ps_args->dual_source_blend)
+                sprintf(register_name, "dualFragData%u", reg->idx[0].offset);
+            else
+                sprintf(register_name, "%s[%u]", get_fragment_output(gl_info), reg->idx[0].offset);
             break;
 
         case WINED3DSPR_RASTOUT:
@@ -3373,7 +3385,10 @@ static void shader_glsl_get_sample_function(const struct wined3d_shader_context 
             ERR("Unexpected flags %#x for texelFetch.\n", flags & ~texel_fetch_flags);
 
         base = "texelFetch";
-        type_part = "";
+        if (resource_type == WINED3D_SHADER_RESOURCE_BUFFER)
+            type_part = "Buffer";
+        else
+            type_part = "";
     }
 
     sample_function->name = string_buffer_get(priv->string_buffers);
@@ -5713,11 +5728,21 @@ static void shader_glsl_ld(const struct wined3d_shader_instruction *ins)
 
     shader_glsl_get_sample_function(ins->ctx, resource_idx, sampler_idx, flags, &sample_function);
     shader_glsl_add_src_param(ins, &ins->src[0], sample_function.coord_mask, &coord_param);
-    shader_glsl_add_src_param(ins, &ins->src[0], WINED3DSP_WRITEMASK_3, &lod_param);
-    sampler_bind_idx = shader_glsl_find_sampler(&reg_maps->sampler_map, resource_idx, sampler_idx);
-    shader_glsl_gen_sample_code(ins, sampler_bind_idx, &sample_function, ins->src[1].swizzle,
-            NULL, NULL, has_lod_param ? lod_param.param_str : NULL, &ins->texel_offset,
-            "%s", coord_param.param_str);
+    if (ins->ctx->reg_maps->resource_info[resource_idx].type == WINED3D_SHADER_RESOURCE_BUFFER)
+    {
+        /* texelFetchBuffer does not have a lod argument */
+        sampler_bind_idx = shader_glsl_find_sampler(&ins->ctx->reg_maps->sampler_map, resource_idx, sampler_idx);
+        shader_glsl_gen_sample_code(ins, sampler_bind_idx, &sample_function, ins->src[1].swizzle,
+                NULL, NULL, NULL, &ins->texel_offset, "%s", coord_param.param_str);
+    }
+    else
+    {
+        shader_glsl_add_src_param(ins, &ins->src[0], WINED3DSP_WRITEMASK_3, &lod_param);
+        sampler_bind_idx = shader_glsl_find_sampler(&reg_maps->sampler_map, resource_idx, sampler_idx);
+        shader_glsl_gen_sample_code(ins, sampler_bind_idx, &sample_function, ins->src[1].swizzle,
+                NULL, NULL, has_lod_param ? lod_param.param_str : NULL, &ins->texel_offset,
+                "%s", coord_param.param_str);
+    }
     shader_glsl_release_sample_function(ins->ctx, &sample_function);
 }
 
@@ -6945,10 +6970,14 @@ static void shader_glsl_enable_extensions(struct wined3d_string_buffer *buffer,
         shader_addline(buffer, "#extension GL_ARB_texture_query_levels : enable\n");
     if (gl_info->supported[ARB_UNIFORM_BUFFER_OBJECT])
         shader_addline(buffer, "#extension GL_ARB_uniform_buffer_object : enable\n");
+    if (gl_info->supported[EXT_GEOMETRY_SHADER4])
+        shader_addline(buffer, "#extension GL_EXT_geometry_shader4 : enable\n");
     if (gl_info->supported[EXT_GPU_SHADER4])
         shader_addline(buffer, "#extension GL_EXT_gpu_shader4 : enable\n");
     if (gl_info->supported[EXT_TEXTURE_ARRAY])
         shader_addline(buffer, "#extension GL_EXT_texture_array : enable\n");
+    if (gl_info->supported[ARB_TEXTURE_CUBE_MAP_ARRAY])
+        shader_addline(buffer, "#extension GL_ARB_texture_cube_map_array : enable\n");
 }
 
 static void shader_glsl_generate_ps_epilogue(const struct wined3d_gl_info *gl_info,
@@ -7084,6 +7113,12 @@ static GLuint shader_glsl_generate_pshader(const struct wined3d_context *context
         if (args->vp_mode == vertexshader)
             shader_glsl_declare_shader_inputs(gl_info, buffer, in_count);
         shader_addline(buffer, "vec4 %s_in[%u];\n", prefix, in_count);
+
+        if (args->dual_source_blend)
+        {
+            shader_addline(buffer, "varying out vec4 dualFragData0;\n");
+            shader_addline(buffer, "varying out vec4 dualFragData1;\n");
+        }
     }
 
     for (i = 0, map = reg_maps->bumpmat; map; map >>= 1, ++i)
@@ -8864,6 +8899,7 @@ static void shader_glsl_init_vs_uniform_locations(const struct wined3d_gl_info *
     }
 
     vs->pos_fixup_location = GL_EXTCALL(glGetUniformLocation(program_id, "pos_fixup"));
+    vs->base_vertex_location = GL_EXTCALL(glGetUniformLocation(program_id, "base_vertex"));
 
     for (i = 0; i < MAX_VERTEX_BLENDS; ++i)
     {
@@ -9312,6 +9348,14 @@ static void set_glsl_shader_program(const struct wined3d_context *context, const
         GL_EXTCALL(glAttachShader(program_id, ps_id));
         checkGLcall("glAttachShader");
 
+        if (state_is_dual_source_blend(state))
+        {
+            GL_EXTCALL(glBindFragDataLocationIndexed(program_id, 0, 0, "dualFragData0"));
+            checkGLcall("glBindFragDataLocationIndexed");
+            GL_EXTCALL(glBindFragDataLocationIndexed(program_id, 0, 1, "dualFragData1"));
+            checkGLcall("glBindFragDataLocationIndexed");
+        }
+
         list_add_head(ps_list, &entry->ps.shader_entry);
     }
 
@@ -9362,6 +9406,8 @@ static void set_glsl_shader_program(const struct wined3d_context *context, const
             entry->constant_update_mask |= WINED3D_SHADER_CONST_VS_B;
         if (entry->vs.pos_fixup_location != -1)
             entry->constant_update_mask |= WINED3D_SHADER_CONST_POS_FIXUP;
+        if (entry->vs.base_vertex_location != -1)
+            entry->constant_update_mask |= WINED3D_SHADER_CONST_BASE_VERTEX;
 
         shader_glsl_load_program_resources(context, priv, program_id, vshader);
     }

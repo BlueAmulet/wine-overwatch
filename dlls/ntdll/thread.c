@@ -961,10 +961,14 @@ NTSTATUS WINAPI NtSetContextThread( HANDLE handle, const CONTEXT *context )
     DWORD dummy, i;
     BOOL self;
 
-#ifdef __i386__
+#if defined(__i386__) || defined(__x86_64__)
     /* on i386 debug registers always require a server call */
     self = (handle == GetCurrentThread());
+#ifdef __i386__
     if (self && (context->ContextFlags & (CONTEXT_DEBUG_REGISTERS & ~CONTEXT_i386)))
+#elif defined(__x86_64__)
+    if (self && (context->ContextFlags & (CONTEXT_DEBUG_REGISTERS & ~CONTEXT_AMD64)))
+#endif
     {
         self = (ntdll_get_thread_data()->dr0 == context->Dr0 &&
                 ntdll_get_thread_data()->dr1 == context->Dr1 &&
@@ -1120,9 +1124,13 @@ NTSTATUS WINAPI NtGetContextThread( HANDLE handle, CONTEXT *context )
             copy_context( context, &ctx, ctx.ContextFlags & needed_flags );
             context->ContextFlags |= ctx.ContextFlags & needed_flags;
         }
-#ifdef __i386__
+#if defined(__i386__) || defined(__x86_64__)
         /* update the cached version of the debug registers */
+#ifdef __i386__
         if (context->ContextFlags & (CONTEXT_DEBUG_REGISTERS & ~CONTEXT_i386))
+#elif defined(__x86_64__)
+        if (context->ContextFlags & (CONTEXT_DEBUG_REGISTERS & ~CONTEXT_AMD64))
+#endif
         {
             ntdll_get_thread_data()->dr0 = context->Dr0;
             ntdll_get_thread_data()->dr1 = context->Dr1;

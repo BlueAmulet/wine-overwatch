@@ -1,0 +1,99 @@
+
+
+0. Warnings
+
+Overwatch requires a graphics card with drivers that can support recent OpenGL extensions. Only
+OpenGL 4.5 has been tested; OpenGL 4.3+ may work. Please use glxinfo to verify your OpenGL version before
+reporting issues.
+
+Overwatch tries to detect cheaters. Blizzard may decide that running Overwatch under wine is verboten
+and ban you; you have been warned.
+
+There is a good chance that when Overwatch is updated, it will stop working under wine. Even if this
+works for you currently, that is not a guarantee of future performance.
+
+Until DirectX 11 support in wine is complete, there are several graphical glitches and the frame rate may
+be horrible. Some of these issues are known and some are unknown.
+
+
+1. Build Instructions
+
+Compile wine as normal for shared WoW64 (https://wiki.winehq.org/Building_Wine#Shared_WoW64).
+
+Install as normal.
+
+The ntdll.dll.fake built by wine must match the one in C:\Windows\System32. Wine will do this automatically
+if it detects an update, but if you are building manually you may need to run wineboot update:
+
+$ wine wineboot --update
+
+
+2. Running Overwatch
+
+It is recommended that you download and run Overwatch using the Battle.net client.
+
+When you run Overwatch, it is recommended that you disable fixme logging because there will be a lot of
+error messages on your console otherwise. Run wine with a WINEDEBUG environment variable of "fixme-all":
+
+$ WINEDEBUG=fixme-all ./wine 'c:\program files (x86)\battle.net\battle.net.exe'
+
+If you are having issues running Overwatch through the Battle.net client, then try to run it manually
+with wine:
+
+$ ./wine 'c:\program files (x86)\overwatch\overwatch.exe'
+
+
+3. Development
+
+Some of these patches have been submitted to upstream. Most are not tested enough and/or are known to
+break support for other programs. Others, such as the fake ntdll patch, will never be accepted as-is.
+
+We use the 1DTextures patches from wine-staging. Its development is independent. Other wined3d patches
+from wine-staging are likely incompatible.
+
+
+4. Known Issues
+
+a) Winston's bubble and some other effects are opaque.
+
+Overwatch requires support for dual source blending. Current patch fixes this issue but also causes GPU
+to crash.
+
+b) After dying, mouse input no longer works.
+
+Cause is unknown. Workaround by ALT-TAB to another window and then ALT-TAB back.
+
+c) Graphics settings higher than Low are unsupported.
+
+
+5. Troubleshooting
+
+a) Bad or incorrect fake ntdll.dll
+
+If running Overwatch.exe crashes right after these messages:
+
+$ ./wine 'c:\program files (x86)\overwatch\overwatch.exe'
+fixme:heap:RtlSetHeapInformation 0x26e0000 0 0x23e8a0 4 stub
+fixme:module:load_library unsupported flag(s) used (flags: 0x00000800)
+fixme:module:load_library unsupported flag(s) used (flags: 0x00000800)
+fixme:module:load_library unsupported flag(s) used (flags: 0x00000800)
+fixme:ntdll:EtwEventRegister ({5eec90ab-c022-44b2-a5dd-fd716a222a15}, 0x2dd107c, 0x2e01030, 0x2e01050) stub.
+fixme:ntdll:EtwEventSetInformation (deadbeef, 2, 0x2dfcdf0, 43) stub
+fixme:module:load_library unsupported flag(s) used (flags: 0x00000800)
+fixme:module:load_library unsupported flag(s) used (flags: 0x00000800)
+fixme:module:load_library unsupported flag(s) used (flags: 0x00000800)
+fixme:module:load_library unsupported flag(s) used (flags: 0x00000800)
+fixme:module:load_library unsupported flag(s) used (flags: 0x00000800)
+fixme:module:load_library unsupported flag(s) used (flags: 0x00000800)
+fixme:ntdll:EtwEventRegister ({5eec90ab-c022-44b2-a5dd-fd716a222a15}, 0x27f107c, 0x2ca4030, 0x2ca4050) stub.
+fixme:ntdll:EtwEventSetInformation (deadbeef, 2, 0x2bdb578, 43) stub
+fixme:module:load_library unsupported flag(s) used (flags: 0x00000800)
+fixme:module:load_library unsupported flag(s) used (flags: 0x00000800)
+fixme:module:load_library unsupported flag(s) used (flags: 0x00000800)
+[some error message...]
+
+Then you probably need to fix your ntdll.dll in your wine system32 directory. It is suggested that in your
+wine64 build directory you rm dlls/ntdll/ntdll.dll.fake, make, and cp it into your system32 directory.
+
+Alternatively, ./wine64 wineboot --update, may also fix the issue.
+
