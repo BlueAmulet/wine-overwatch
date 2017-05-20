@@ -989,16 +989,24 @@ static gnutls_cipher_algorithm_t get_gnutls_cipher( const struct key *key )
     switch (key->alg_id)
     {
     case ALG_ID_AES:
-        WARN( "handle block size\n" );
+        if (key->secret_len != 16 && key->secret_len != 32)
+        {
+            FIXME( "bad secret_len %d for AES\n", key->secret_len );
+            return GNUTLS_CIPHER_UNKNOWN;
+        }
         switch (key->mode)
         {
-            case MODE_ID_GCM: return GNUTLS_CIPHER_AES_128_GCM;
-            case MODE_ID_ECB: /* can be emulated with CBC + empty IV */
-            case MODE_ID_CBC:
-            default:          return GNUTLS_CIPHER_AES_128_CBC;
+        case MODE_ID_GCM:
+            return key->secret_len == 16 ? GNUTLS_CIPHER_AES_128_GCM : GNUTLS_CIPHER_AES_256_GCM;
+        case MODE_ID_ECB: /* can be emulated with CBC + empty IV */
+        case MODE_ID_CBC:
+            return key->secret_len == 16 ? GNUTLS_CIPHER_AES_128_CBC : GNUTLS_CIPHER_AES_256_CBC;
+        default:
+            FIXME( "AES with mode %u not supported\n", key->mode );
+            return GNUTLS_CIPHER_UNKNOWN;
         }
     default:
-        FIXME( "algorithm %u not supported\n", key->alg_id );
+        FIXME( "algorithm %u with mode %u not supported\n", key->alg_id, key->mode );
         return GNUTLS_CIPHER_UNKNOWN;
     }
 }
