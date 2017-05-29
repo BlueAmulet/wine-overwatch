@@ -21,6 +21,22 @@
 
 #include "windef.h"
 #include "winbase.h"
+#include "wine/debug.h"
+
+#include "initguid.h"
+#include "mf_private.h"
+
+WINE_DEFAULT_DEBUG_CHANNEL(mf);
+
+/***********************************************************************
+ *      MFCreateMediaSession (mf.@)
+ */
+HRESULT WINAPI MFCreateMediaSession(IMFAttributes *configuration, IMFMediaSession **ms)
+{
+    FIXME("(%p, %p): stub\n", configuration, ms);
+
+    return create_session(ms);
+}
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
 {

@@ -30,6 +30,7 @@
 #include "initguid.h"
 #include "mfapi.h"
 #include "mferror.h"
+#include "mfidl.h"
 
 #include "wine/debug.h"
 #include "wine/unicode.h"
@@ -886,4 +887,14 @@ HRESULT WINAPI MFCreateAttributes(IMFAttributes **attributes, UINT32 size)
 
     *attributes = &object->IMFAttributes_iface;
     return S_OK;
+}
+
+/***********************************************************************
+ *      MFCreateSourceResolver (mfplat.@)
+ */
+HRESULT WINAPI MFCreateSourceResolver(IMFSourceResolver **source_resolver)
+{
+    FIXME("(%p): stub\n", source_resolver);
+
+    return E_NOTIMPL;
 }

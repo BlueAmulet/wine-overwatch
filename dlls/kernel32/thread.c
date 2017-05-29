@@ -113,6 +113,18 @@ HANDLE WINAPI CreateRemoteThread( HANDLE hProcess, SECURITY_ATTRIBUTES *sa, SIZE
 }
 
 
+/***************************************************************************
+ *                  CreateRemoteThreadEx   (KERNEL32.@)
+ */
+HANDLE WINAPI CreateRemoteThreadEx( HANDLE hProcess, SECURITY_ATTRIBUTES *sa, SIZE_T stack,
+                                    LPTHREAD_START_ROUTINE start, LPVOID param, DWORD flags,
+                                    LPPROC_THREAD_ATTRIBUTE_LIST attrs, LPDWORD id )
+{
+    FIXME( "attribute list ignored\n" );
+    return CreateRemoteThread( hProcess, sa, stack, start, param, flags, id );
+}
+
+
 /***********************************************************************
  * OpenThread  [KERNEL32.@]   Retrieves a handle to a thread from its thread id
  */
@@ -450,6 +462,28 @@ DWORD_PTR WINAPI SetThreadAffinityMask( HANDLE hThread, DWORD_PTR dwThreadAffini
     return tbi.AffinityMask;
 }
 
+/**********************************************************************
+ *           SetThreadIdealProcessorEx   (KERNEL32.@)
+ */
+BOOL WINAPI SetThreadIdealProcessorEx(HANDLE thread, PROCESSOR_NUMBER *processor, PROCESSOR_NUMBER *previous)
+{
+    FIXME("(%p, %p, %p): stub\n", thread, processor, previous);
+
+    if (!processor || processor->Group > 0 || processor->Number > MAXIMUM_PROCESSORS)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+
+    if (previous)
+    {
+        previous->Group = 0;
+        previous->Number = 0;
+        previous->Reserved = 0;
+    }
+
+    return TRUE;
+}
 
 /**********************************************************************
  * SetThreadIdealProcessor [KERNEL32.@]  Sets preferred processor for thread.
@@ -469,16 +503,6 @@ DWORD WINAPI SetThreadIdealProcessor(
         return ~0u;
     }
     return 0;
-}
-
-/***********************************************************************
- *              SetThreadIdealProcessorEx (KERNEL32.@)
- */
-BOOL SetThreadIdealProcessorEx( HANDLE thread, PROCESSOR_NUMBER *ideal, PROCESSOR_NUMBER *previous )
-{
-    FIXME("(%p %p %p): stub\n", thread, ideal, previous);
-    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
-    return FALSE;
 }
 
 /***********************************************************************

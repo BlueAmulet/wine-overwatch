@@ -301,8 +301,11 @@ GLenum wined3d_gl_compare_func(enum wined3d_cmp_func f)
         case WINED3D_CMP_ALWAYS:
             return GL_ALWAYS;
         default:
-            FIXME("Unrecognized compare function %#x.\n", f);
+        {
+            static int once;
+            if (f || !once++) FIXME("Unrecognized compare function %#x.\n", f);
             return GL_NONE;
+        }
     }
 }
 

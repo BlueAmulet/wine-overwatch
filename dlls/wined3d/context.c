@@ -139,7 +139,8 @@ static void context_attach_gl_texture_fbo(struct wined3d_context *context,
         gl_info->fbo_ops.glFramebufferTexture(fbo_target, attachment,
                 resource->object, resource->level);
     }
-    else if (resource->target == GL_TEXTURE_2D_ARRAY || resource->target == GL_TEXTURE_3D)
+    else if (resource->target == GL_TEXTURE_1D_ARRAY || resource->target == GL_TEXTURE_2D_ARRAY ||
+            resource->target == GL_TEXTURE_3D)
     {
         if (!gl_info->fbo_ops.glFramebufferTextureLayer)
         {
@@ -149,6 +150,12 @@ static void context_attach_gl_texture_fbo(struct wined3d_context *context,
 
         gl_info->fbo_ops.glFramebufferTextureLayer(fbo_target, attachment,
                 resource->object, resource->level, resource->layer);
+    }
+    else if (resource->target == GL_TEXTURE_1D)
+    {
+        gl_info->fbo_ops.glFramebufferTexture1D(fbo_target, attachment,
+                resource->target, resource->object, resource->level);
+        checkGLcall("glFramebufferTexture1D()");
     }
     else
     {
@@ -933,6 +940,43 @@ void context_free_so_statistics_query(struct wined3d_so_statistics_query *query)
     context->free_so_statistics_queries[context->free_so_statistics_query_count++] = query->u;
 }
 
+void context_alloc_pipeline_statistics_query(struct wined3d_context *context,
+        struct wined3d_pipeline_statistics_query *query)
+{
+    const struct wined3d_gl_info *gl_info = context->gl_info;
+
+    if (context->free_pipeline_statistics_query_count)
+    {
+        query->u = context->free_pipeline_statistics_queries[--context->free_pipeline_statistics_query_count];
+    }
+    else
+    {
+        GL_EXTCALL(glGenQueries(ARRAY_SIZE(query->u.id), query->u.id));
+        checkGLcall("glGenQueries");
+    }
+
+    query->context = context;
+    list_add_head(&context->pipeline_statistics_queries, &query->entry);
+}
+
+void context_free_pipeline_statistics_query(struct wined3d_pipeline_statistics_query *query)
+{
+    struct wined3d_context *context = query->context;
+
+    list_remove(&query->entry);
+    query->context = NULL;
+
+    if (!wined3d_array_reserve((void **)&context->free_pipeline_statistics_queries,
+            &context->free_pipeline_statistics_query_size, context->free_pipeline_statistics_query_count + 1,
+            sizeof(*context->free_pipeline_statistics_queries)))
+    {
+        ERR("Failed to grow free list, leaking GL queries in context %p.\n", context);
+        return;
+    }
+
+    context->free_pipeline_statistics_queries[context->free_pipeline_statistics_query_count++] = query->u;
+}
+
 typedef void (context_fbo_entry_func_t)(struct wined3d_context *context, struct fbo_entry *entry);
 
 static void context_enum_fbo_entries(const struct wined3d_device *device,
@@ -1225,6 +1269,7 @@ static void context_destroy_gl_resources(struct wined3d_context *context)
 {
     const struct wined3d_gl_info *gl_info = context->gl_info;
     struct wined3d_so_statistics_query *so_statistics_query;
+    struct wined3d_pipeline_statistics_query *pipeline_statistics_query;
     struct wined3d_timestamp_query *timestamp_query;
     struct wined3d_occlusion_query *occlusion_query;
     struct wined3d_event_query *event_query;
@@ -1247,6 +1292,14 @@ static void context_destroy_gl_resources(struct wined3d_context *context)
         if (context->valid)
             GL_EXTCALL(glDeleteQueries(ARRAY_SIZE(so_statistics_query->u.id), so_statistics_query->u.id));
         so_statistics_query->context = NULL;
+    }
+
+    LIST_FOR_EACH_ENTRY(pipeline_statistics_query, &context->pipeline_statistics_queries,
+            struct wined3d_pipeline_statistics_query, entry)
+    {
+        if (context->valid)
+            GL_EXTCALL(glDeleteQueries(ARRAY_SIZE(pipeline_statistics_query->u.id), pipeline_statistics_query->u.id));
+        pipeline_statistics_query->context = NULL;
     }
 
     LIST_FOR_EACH_ENTRY(timestamp_query, &context->timestamp_queries, struct wined3d_timestamp_query, entry)
@@ -1305,6 +1358,15 @@ static void context_destroy_gl_resources(struct wined3d_context *context)
             }
         }
 
+        if (gl_info->supported[ARB_PIPELINE_STATISTICS_QUERY])
+        {
+            for (i = 0; i < context->free_pipeline_statistics_query_count; ++i)
+            {
+                union wined3d_gl_pipeline_statistics_query *q = &context->free_pipeline_statistics_queries[i];
+                GL_EXTCALL(glDeleteQueries(ARRAY_SIZE(q->id), q->id));
+            }
+        }
+
         if (gl_info->supported[ARB_TIMER_QUERY])
             GL_EXTCALL(glDeleteQueries(context->free_timestamp_query_count, context->free_timestamp_queries));
 
@@ -1336,6 +1398,8 @@ static void context_destroy_gl_resources(struct wined3d_context *context)
         checkGLcall("context cleanup");
     }
 
+    HeapFree(GetProcessHeap(), 0, context->free_so_statistics_queries);
+    HeapFree(GetProcessHeap(), 0, context->free_pipeline_statistics_queries);
     HeapFree(GetProcessHeap(), 0, context->free_timestamp_queries);
     HeapFree(GetProcessHeap(), 0, context->free_occlusion_queries);
     HeapFree(GetProcessHeap(), 0, context->free_event_queries);
@@ -1636,6 +1700,7 @@ void context_bind_dummy_textures(const struct wined3d_device *device, const stru
         GL_EXTCALL(glActiveTexture(GL_TEXTURE0 + i));
         checkGLcall("glActiveTexture");
 
+        gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_1D, device->dummy_textures.tex_1d);
         gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_2D, device->dummy_textures.tex_2d);
 
         if (gl_info->supported[ARB_TEXTURE_RECTANGLE])
@@ -1651,7 +1716,10 @@ void context_bind_dummy_textures(const struct wined3d_device *device, const stru
             gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, device->dummy_textures.tex_cube_array);
 
         if (gl_info->supported[EXT_TEXTURE_ARRAY])
+        {
+            gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_1D_ARRAY, device->dummy_textures.tex_1d_array);
             gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_2D_ARRAY, device->dummy_textures.tex_2d_array);
+        }
 
         if (gl_info->supported[ARB_TEXTURE_BUFFER_OBJECT])
             gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_BUFFER, device->dummy_textures.tex_buffer);
@@ -1799,6 +1867,8 @@ struct wined3d_context *context_create(struct wined3d_swapchain *swapchain,
     list_init(&ret->event_queries);
 
     list_init(&ret->so_statistics_queries);
+
+    list_init(&ret->pipeline_statistics_queries);
 
     list_init(&ret->fbo_list);
     list_init(&ret->fbo_destroy_list);
@@ -2604,6 +2674,14 @@ void context_bind_texture(struct wined3d_context *context, GLenum target, GLuint
         {
             case GL_NONE:
                 /* nothing to do */
+                break;
+            case GL_TEXTURE_1D:
+                gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_1D, device->dummy_textures.tex_1d);
+                checkGLcall("glBindTexture");
+                break;
+            case GL_TEXTURE_1D_ARRAY:
+                gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_1D_ARRAY, device->dummy_textures.tex_1d_array);
+                checkGLcall("glBindTexture");
                 break;
             case GL_TEXTURE_2D:
                 gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_2D, device->dummy_textures.tex_2d);

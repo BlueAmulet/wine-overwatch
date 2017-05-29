@@ -3824,10 +3824,10 @@ static void test_create_query(void)
         {D3D10_QUERY_OCCLUSION,             FALSE, FALSE},
         {D3D10_QUERY_TIMESTAMP,             FALSE, FALSE},
         {D3D10_QUERY_TIMESTAMP_DISJOINT,    FALSE, FALSE},
-        {D3D10_QUERY_PIPELINE_STATISTICS,   FALSE, TRUE},
+        {D3D10_QUERY_PIPELINE_STATISTICS,   FALSE, FALSE},
         {D3D10_QUERY_OCCLUSION_PREDICATE,   TRUE,  FALSE},
-        {D3D10_QUERY_SO_STATISTICS,         FALSE, TRUE},
-        {D3D10_QUERY_SO_OVERFLOW_PREDICATE, TRUE,  TRUE},
+        {D3D10_QUERY_SO_STATISTICS,         FALSE, FALSE},
+        {D3D10_QUERY_SO_OVERFLOW_PREDICATE, TRUE,  FALSE},
     };
 
     ULONG refcount, expected_refcount;
@@ -10565,7 +10565,7 @@ static void test_required_format_support(void)
     for (format = DXGI_FORMAT_UNKNOWN; format <= DXGI_FORMAT_B4G4R4A4_UNORM; ++format)
     {
         hr = ID3D10Device_CheckFormatSupport(device, format, &format_support[format]);
-        todo_wine ok(hr == S_OK || (hr == E_FAIL && !format_support[format]),
+        ok(hr == S_OK || (hr == E_FAIL && !format_support[format]),
                 "Got unexpected result for format %#x: hr %#x, format_support %#x.\n",
                 format, hr, format_support[format]);
     }

@@ -402,6 +402,9 @@ struct wined3d_cs_update_sub_resource
     unsigned int sub_resource_idx;
     struct wined3d_box box;
     struct wined3d_sub_resource_data data;
+#if defined(STAGING_CSMT)
+    BYTE copy_data[1];
+#endif /* STAGING_CSMT */
 };
 
 struct wined3d_cs_add_dirty_texture_region
@@ -2093,18 +2096,11 @@ static void wined3d_cs_exec_update_sub_resource(struct wined3d_cs *cs, const voi
     if (op->resource->type == WINED3D_RTYPE_BUFFER)
     {
         struct wined3d_buffer *buffer = buffer_from_resource(op->resource);
+        HRESULT hr;
 
-        context = context_acquire(op->resource->device, NULL, 0);
-        if (!wined3d_buffer_load_location(buffer, context, WINED3D_LOCATION_BUFFER))
-        {
-            ERR("Failed to load buffer location.\n");
-            context_release(context);
-            goto done;
-        }
+        if (FAILED(hr = wined3d_buffer_upload_data(buffer, box, op->data.data)))
+            WARN("Failed to update buffer data, hr %#x.\n", hr);
 
-        wined3d_buffer_upload_data(buffer, context, box, op->data.data);
-        wined3d_buffer_invalidate_location(buffer, ~WINED3D_LOCATION_BUFFER);
-        context_release(context);
         goto done;
     }
 
@@ -2145,8 +2141,65 @@ void wined3d_cs_emit_update_sub_resource(struct wined3d_cs *cs, struct wined3d_r
         unsigned int slice_pitch)
 {
     struct wined3d_cs_update_sub_resource *op;
+#if !defined(STAGING_CSMT)
 
     op = cs->ops->require_space(cs, sizeof(*op), WINED3D_CS_QUEUE_DEFAULT);
+#else  /* STAGING_CSMT */
+    size_t data_size, size;
+
+    if (resource->type != WINED3D_RTYPE_BUFFER && resource->format_flags & WINED3DFMT_FLAG_BLOCKS)
+        goto no_async;
+
+    data_size = 0;
+    switch (resource->type)
+    {
+        case WINED3D_RTYPE_TEXTURE_3D:
+            data_size += (box->back - box->front - 1) * slice_pitch;
+            /* fall-through */
+        case WINED3D_RTYPE_TEXTURE_2D:
+            data_size += (box->bottom - box->top - 1) * row_pitch;
+            /* fall-through */
+        case WINED3D_RTYPE_TEXTURE_1D:
+            data_size += (box->right - box->left) * resource->format->byte_count;
+            break;
+        case WINED3D_RTYPE_BUFFER:
+            data_size = box->right - box->left;
+            break;
+    }
+
+    size = FIELD_OFFSET(struct wined3d_cs_update_sub_resource, copy_data[data_size]);
+    if (!cs->ops->check_space(cs, size, WINED3D_CS_QUEUE_DEFAULT))
+        goto no_async;
+
+    op = cs->ops->require_space(cs, size, WINED3D_CS_QUEUE_DEFAULT);
+#endif /* STAGING_CSMT */
+    op->opcode = WINED3D_CS_OP_UPDATE_SUB_RESOURCE;
+    op->resource = resource;
+    op->sub_resource_idx = sub_resource_idx;
+    op->box = *box;
+    op->data.row_pitch = row_pitch;
+    op->data.slice_pitch = slice_pitch;
+#if !defined(STAGING_CSMT)
+    op->data.data = data;
+#else  /* STAGING_CSMT */
+    op->data.data = op->copy_data;
+    memcpy(op->copy_data, data, data_size);
+#endif /* STAGING_CSMT */
+
+    wined3d_resource_acquire(resource);
+
+    cs->ops->submit(cs, WINED3D_CS_QUEUE_DEFAULT);
+#if !defined(STAGING_CSMT)
+    /* The data pointer may go away, so we need to wait until it is read.
+     * Copying the data may be faster if it's small. */
+    cs->ops->finish(cs, WINED3D_CS_QUEUE_DEFAULT);
+#else  /* STAGING_CSMT */
+    return;
+
+no_async:
+    wined3d_resource_wait_idle(resource);
+
+    op = cs->ops->require_space(cs, sizeof(*op), WINED3D_CS_QUEUE_MAP);
     op->opcode = WINED3D_CS_OP_UPDATE_SUB_RESOURCE;
     op->resource = resource;
     op->sub_resource_idx = sub_resource_idx;
@@ -2157,10 +2210,9 @@ void wined3d_cs_emit_update_sub_resource(struct wined3d_cs *cs, struct wined3d_r
 
     wined3d_resource_acquire(resource);
 
-    cs->ops->submit(cs, WINED3D_CS_QUEUE_DEFAULT);
-    /* The data pointer may go away, so we need to wait until it is read.
-     * Copying the data may be faster if it's small. */
-    cs->ops->finish(cs, WINED3D_CS_QUEUE_DEFAULT);
+    cs->ops->submit(cs, WINED3D_CS_QUEUE_MAP);
+    cs->ops->finish(cs, WINED3D_CS_QUEUE_MAP);
+#endif /* STAGING_CSMT */
 }
 
 static void wined3d_cs_exec_add_dirty_texture_region(struct wined3d_cs *cs, const void *data)
@@ -2286,6 +2338,13 @@ static void (* const wined3d_cs_op_handlers[])(struct wined3d_cs *cs, const void
     /* WINED3D_CS_OP_CLEAR_UNORDERED_ACCESS_VIEW */ wined3d_cs_exec_clear_unordered_access_view,
 };
 
+#if defined(STAGING_CSMT)
+static BOOL wined3d_cs_st_check_space(struct wined3d_cs *cs, size_t size, enum wined3d_cs_queue_id queue_id)
+{
+    return TRUE;
+}
+
+#endif /* STAGING_CSMT */
 static void *wined3d_cs_st_require_space(struct wined3d_cs *cs, size_t size, enum wined3d_cs_queue_id queue_id)
 {
     if (size > (cs->data_size - cs->end))
@@ -2339,6 +2398,9 @@ static void wined3d_cs_st_finish(struct wined3d_cs *cs, enum wined3d_cs_queue_id
 
 static const struct wined3d_cs_ops wined3d_cs_st_ops =
 {
+#if defined(STAGING_CSMT)
+    wined3d_cs_st_check_space,
+#endif /* STAGING_CSMT */
     wined3d_cs_st_require_space,
     wined3d_cs_st_submit,
     wined3d_cs_st_finish,
@@ -2371,6 +2433,21 @@ static void wined3d_cs_mt_submit(struct wined3d_cs *cs, enum wined3d_cs_queue_id
     wined3d_cs_queue_submit(&cs->queue[queue_id], cs);
 }
 
+#if defined(STAGING_CSMT)
+static BOOL wined3d_cs_queue_check_space(struct wined3d_cs_queue *queue, size_t size)
+{
+    size_t queue_size = ARRAY_SIZE(queue->data);
+    size_t header_size, packet_size, remaining;
+
+    header_size = FIELD_OFFSET(struct wined3d_cs_packet, data[0]);
+    size = (size + header_size - 1) & ~(header_size - 1);
+    packet_size = FIELD_OFFSET(struct wined3d_cs_packet, data[size]);
+
+    remaining = queue_size - queue->head;
+    return (remaining >= packet_size);
+}
+
+#endif /* STAGING_CSMT */
 static void *wined3d_cs_queue_require_space(struct wined3d_cs_queue *queue, size_t size, struct wined3d_cs *cs)
 {
     size_t queue_size = ARRAY_SIZE(queue->data);
@@ -2432,6 +2509,16 @@ static void *wined3d_cs_queue_require_space(struct wined3d_cs_queue *queue, size
     return packet->data;
 }
 
+#if defined(STAGING_CSMT)
+static BOOL wined3d_cs_mt_check_space(struct wined3d_cs *cs, size_t size, enum wined3d_cs_queue_id queue_id)
+{
+    if (cs->thread_id == GetCurrentThreadId())
+        return wined3d_cs_st_check_space(cs, size, queue_id);
+
+    return wined3d_cs_queue_check_space(&cs->queue[queue_id], size);
+}
+
+#endif /* STAGING_CSMT */
 static void *wined3d_cs_mt_require_space(struct wined3d_cs *cs, size_t size, enum wined3d_cs_queue_id queue_id)
 {
     if (cs->thread_id == GetCurrentThreadId())
@@ -2451,6 +2538,9 @@ static void wined3d_cs_mt_finish(struct wined3d_cs *cs, enum wined3d_cs_queue_id
 
 static const struct wined3d_cs_ops wined3d_cs_mt_ops =
 {
+#if defined(STAGING_CSMT)
+    wined3d_cs_mt_check_space,
+#endif /* STAGING_CSMT */
     wined3d_cs_mt_require_space,
     wined3d_cs_mt_submit,
     wined3d_cs_mt_finish,

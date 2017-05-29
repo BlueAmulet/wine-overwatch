@@ -33,6 +33,8 @@ static VOID     (WINAPI *pRtlFreeAnsiString)(PSTRING);
 static NTSTATUS (WINAPI *pRtlInt64ToUnicodeString)(ULONGLONG, ULONG, UNICODE_STRING *);
 static NTSTATUS (WINAPI *pRtlLargeIntegerToChar)(ULONGLONG *, ULONG, ULONG, PCHAR);
 static NTSTATUS (WINAPI *pRtlUnicodeStringToAnsiString)(STRING *, const UNICODE_STRING *, BOOLEAN);
+static void     (WINAPI *p_alldvrm)(LONGLONG, LONGLONG);
+static void     (WINAPI *p_aulldvrm)(ULONGLONG, ULONGLONG);
 
 
 static void InitFunctionPtrs(void)
@@ -45,6 +47,8 @@ static void InitFunctionPtrs(void)
 	pRtlInt64ToUnicodeString = (void *)GetProcAddress(hntdll, "RtlInt64ToUnicodeString");
 	pRtlLargeIntegerToChar = (void *)GetProcAddress(hntdll, "RtlLargeIntegerToChar");
 	pRtlUnicodeStringToAnsiString = (void *)GetProcAddress(hntdll, "RtlUnicodeStringToAnsiString");
+        p_alldvrm = (void *)GetProcAddress(hntdll, "_alldvrm");
+        p_aulldvrm = (void *)GetProcAddress(hntdll, "_aulldvrm");
     } /* if */
 }
 
@@ -439,6 +443,66 @@ static void test_RtlLargeIntegerToChar(void)
 }
 
 
+#ifdef __i386__
+
+#include "pshpack1.h"
+struct lldvrm_thunk
+{
+    BYTE push_ebx;      /* pushl %ebx */
+    DWORD push_esp1;    /* pushl 24(%esp) */
+    DWORD push_esp2;    /* pushl 24(%esp) */
+    DWORD push_esp3;    /* pushl 24(%esp) */
+    DWORD push_esp4;    /* pushl 24(%esp) */
+    DWORD call;         /* call 24(%esp) */
+    WORD mov_ecx_eax;   /* movl %ecx,%eax */
+    WORD mov_ebx_edx;   /* movl %ebx,%edx */
+    BYTE pop_ebx;       /* popl %ebx */
+    BYTE ret;           /* ret */
+};
+#include "poppack.h"
+
+static void test__alldvrm(void)
+{
+    struct lldvrm_thunk *thunk = VirtualAlloc(NULL, sizeof(*thunk), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+    ULONGLONG (CDECL *call_lldvrm_func)(void *func, ULONGLONG, ULONGLONG) = (void *)thunk;
+    ULONGLONG ret;
+
+    memset(thunk, 0x90, sizeof(*thunk));
+    thunk->push_ebx  = 0x53;        /* pushl %ebx */
+    thunk->push_esp1 = 0x182474ff;  /* pushl 24(%esp) */
+    thunk->push_esp2 = 0x182474ff;  /* pushl 24(%esp) */
+    thunk->push_esp3 = 0x182474ff;  /* pushl 24(%esp) */
+    thunk->push_esp4 = 0x182474ff;  /* pushl 24(%esp) */
+    thunk->call      = 0x182454ff;  /* call 24(%esp) */
+    thunk->pop_ebx   = 0x5b;        /* popl %ebx */
+    thunk->ret       = 0xc3;        /* ret */
+
+    ret = call_lldvrm_func(p_alldvrm, 0x0123456701234567ULL, 3);
+    ok(ret == 0x61172255b66c77ULL, "got %x%08x\n", (DWORD)(ret >> 32), (DWORD)ret);
+    ret = call_lldvrm_func(p_alldvrm, 0x0123456701234567ULL, -3);
+    ok(ret == 0xff9ee8ddaa499389ULL, "got %x%08x\n", (DWORD)(ret >> 32), (DWORD)ret);
+
+    ret = call_lldvrm_func(p_aulldvrm, 0x0123456701234567ULL, 3);
+    ok(ret == 0x61172255b66c77ULL, "got %x%08x\n", (DWORD)(ret >> 32), (DWORD)ret);
+    ret = call_lldvrm_func(p_aulldvrm, 0x0123456701234567ULL, -3);
+    ok(ret == 0, "got %x%08x\n", (DWORD)(ret >> 32), (DWORD)ret);
+
+    thunk->mov_ecx_eax = 0xc889;
+    thunk->mov_ebx_edx = 0xda89;
+
+    ret = call_lldvrm_func(p_alldvrm, 0x0123456701234567ULL, 3);
+    ok(ret == 2, "got %x%08x\n", (DWORD)(ret >> 32), (DWORD)ret);
+    ret = call_lldvrm_func(p_alldvrm, 0x0123456701234567ULL, -3);
+    ok(ret == 2, "got %x%08x\n", (DWORD)(ret >> 32), (DWORD)ret);
+
+    ret = call_lldvrm_func(p_aulldvrm, 0x0123456701234567ULL, 3);
+    ok(ret == 2, "got %x%08x\n", (DWORD)(ret >> 32), (DWORD)ret);
+    ret = call_lldvrm_func(p_aulldvrm, 0x0123456701234567ULL, -3);
+    ok(ret == 0x123456701234567ULL, "got %x%08x\n", (DWORD)(ret >> 32), (DWORD)ret);
+}
+#endif  /* __i386__ */
+
+
 START_TEST(large_int)
 {
     InitFunctionPtrs();
@@ -449,4 +513,8 @@ START_TEST(large_int)
 	    test_RtlInt64ToUnicodeString();
     if (pRtlLargeIntegerToChar)
         test_RtlLargeIntegerToChar();
+
+#ifdef __i386__
+    test__alldvrm();
+#endif  /* __i386__ */
 }

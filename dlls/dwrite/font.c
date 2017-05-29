@@ -1723,7 +1723,7 @@ static struct dwrite_font *unsafe_impl_from_IDWriteFont(IDWriteFont *iface)
     if (!iface)
         return NULL;
     assert(iface->lpVtbl == (IDWriteFontVtbl*)&dwritefontvtbl);
-    return CONTAINING_RECORD(iface, struct dwrite_font, IDWriteFont3_iface);
+    return CONTAINING_RECORD((IDWriteFont3 *)iface, struct dwrite_font, IDWriteFont3_iface);
 }
 
 static struct dwrite_fontface *unsafe_impl_from_IDWriteFontFace(IDWriteFontFace *iface)
@@ -1731,7 +1731,7 @@ static struct dwrite_fontface *unsafe_impl_from_IDWriteFontFace(IDWriteFontFace 
     if (!iface)
         return NULL;
     assert(iface->lpVtbl == (IDWriteFontFaceVtbl*)&dwritefontfacevtbl);
-    return CONTAINING_RECORD(iface, struct dwrite_fontface, IDWriteFontFace4_iface);
+    return CONTAINING_RECORD((IDWriteFontFace4 *)iface, struct dwrite_fontface, IDWriteFontFace4_iface);
 }
 
 void get_logfont_from_font(IDWriteFont *iface, LOGFONTW *lf)

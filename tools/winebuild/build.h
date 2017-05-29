@@ -102,6 +102,7 @@ typedef struct
     int         flags;
     char       *name;         /* public name of this function */
     char       *link_name;    /* name of the C symbol to link to */
+    char       *impl_name;    /* name of the C symbol of the real implementation (thunks only) */
     char       *export_name;  /* name exported under for noname exports */
     union
     {
@@ -128,6 +129,7 @@ typedef struct
     int              alloc_entry_points; /* number of allocated entry points */
     int              nb_names;           /* number of entry points with names */
     unsigned int     nb_resources;       /* number of resources */
+    int              nb_syscalls;        /* number of syscalls */
     int              characteristics;    /* characteristics for the PE header */
     int              dll_characteristics;/* DLL characteristics for the PE header */
     int              subsystem;          /* subsystem id */
@@ -137,6 +139,7 @@ typedef struct
     ORDDEF         **names;              /* array of entry point names (points into entry_points) */
     ORDDEF         **ordinals;           /* array of dll ordinals (points into entry_points) */
     struct resource *resources;          /* array of dll resources (format differs between Win16/Win32) */
+    ORDDEF         **syscalls;           /* array of syscalls (points into entry_points) */
 } DLLSPEC;
 
 enum target_cpu
@@ -176,6 +179,7 @@ struct strarray
 #define FLAG_FORWARD   0x100  /* function is a forwarded name */
 #define FLAG_EXT_LINK  0x200  /* function links to an external symbol */
 #define FLAG_EXPORT32  0x400  /* 32-bit export in 16-bit spec file */
+#define FLAG_SYSCALL   0x800  /* function should be called through a syscall thunk */
 
 #define FLAG_CPU(cpu)  (0x01000 << (cpu))
 #define FLAG_CPU_MASK  (FLAG_CPU(CPU_LAST + 1) - FLAG_CPU(0))
@@ -313,6 +317,8 @@ extern void add_16bit_exports( DLLSPEC *spec32, DLLSPEC *spec16 );
 extern int parse_spec_file( FILE *file, DLLSPEC *spec );
 extern int parse_def_file( FILE *file, DLLSPEC *spec );
 
+extern int sort_func_list( ORDDEF **list, int count, int (*compare)(const void *, const void *) );
+
 /* buffer management */
 
 extern int byte_swapped;
@@ -322,6 +328,7 @@ extern size_t input_buffer_pos;
 extern size_t input_buffer_size;
 extern unsigned char *output_buffer;
 extern size_t output_buffer_pos;
+extern size_t output_buffer_rva;
 extern size_t output_buffer_size;
 
 extern void init_input_buffer( const char *file );
@@ -336,7 +343,13 @@ extern void put_word( unsigned short val );
 extern void put_dword( unsigned int val );
 extern void put_qword( unsigned int val );
 extern void put_pword( unsigned int val );
+extern void put_str( const char *str );
 extern void align_output( unsigned int align );
+extern void align_output_rva( unsigned int file_align, unsigned int rva_align );
+extern size_t label_pos( const char *name );
+extern size_t label_rva( const char *name );
+extern size_t label_rva_align( const char *name );
+extern void put_label( const char *name );
 
 /* global variables */
 

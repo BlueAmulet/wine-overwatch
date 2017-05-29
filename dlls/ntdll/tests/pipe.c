@@ -331,6 +331,73 @@ static void test_overlapped(void)
     CloseHandle(hEvent);
 }
 
+static void test_completion(void)
+{
+    static const char buf[] = "testdata";
+    FILE_IO_COMPLETION_NOTIFICATION_INFORMATION info;
+    HANDLE port, pipe, client;
+    IO_STATUS_BLOCK iosb;
+    OVERLAPPED ov, *pov;
+    IO_STATUS_BLOCK io;
+    NTSTATUS status;
+    DWORD num_bytes;
+    ULONG_PTR key;
+    DWORD dwret;
+    BOOL ret;
+
+    memset(&ov, 0, sizeof(ov));
+    ov.hEvent = CreateEventA(NULL, TRUE, FALSE, NULL);
+    ok(ov.hEvent != INVALID_HANDLE_VALUE, "CreateEvent failed, error %u\n", GetLastError());
+
+    status = create_pipe(&pipe, FILE_SHARE_READ | FILE_SHARE_WRITE, 0 /* OVERLAPPED */);
+    ok(!status, "NtCreateNamedPipeFile returned %x\n", status);
+    status = listen_pipe(pipe, ov.hEvent, &iosb, FALSE);
+    ok(status == STATUS_PENDING, "NtFsControlFile returned %x\n", status);
+
+    client = CreateFileW(testpipe, GENERIC_READ | GENERIC_WRITE, 0, 0,
+                         OPEN_EXISTING, FILE_FLAG_OVERLAPPED, 0);
+    ok(client != INVALID_HANDLE_VALUE, "CreateFile failed, error %u\n", GetLastError());
+    dwret = WaitForSingleObject(ov.hEvent, 0);
+    ok(dwret == WAIT_OBJECT_0, "expected WAIT_OBJECT_0, got %u\n", dwret);
+
+    port = CreateIoCompletionPort(client, NULL, 0xdeadbeef, 0);
+    ok(port != NULL, "CreateIoCompletionPort failed, error %u\n", GetLastError());
+
+    ret = WriteFile(client, buf, sizeof(buf), &num_bytes, &ov);
+    ok(ret, "WriteFile failed, error %u\n", GetLastError());
+    ok(num_bytes == sizeof(buf), "expected sizeof(buf), got %u\n", num_bytes);
+
+    key = 0;
+    pov = NULL;
+    ret = GetQueuedCompletionStatus(port, &num_bytes, &key, &pov, 1000);
+    ok(ret, "GetQueuedCompletionStatus failed, error %u\n", GetLastError());
+    ok(key == 0xdeadbeef, "expected 0xdeadbeef, got %lx\n", key);
+    ok(pov == &ov, "expected %p, got %p\n", &ov, pov);
+
+    info.Flags = FILE_SKIP_COMPLETION_PORT_ON_SUCCESS;
+    status = pNtSetInformationFile(client, &io, &info, sizeof(info), FileIoCompletionNotificationInformation);
+    ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08x\n", status);
+
+    info.Flags = 0;
+    status = pNtQueryInformationFile(client, &io, &info, sizeof(info), FileIoCompletionNotificationInformation);
+    ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08x\n", status);
+    ok((info.Flags & FILE_SKIP_COMPLETION_PORT_ON_SUCCESS) != 0, "got %08x\n", info.Flags);
+
+    ret = WriteFile(client, buf, sizeof(buf), &num_bytes, &ov);
+    ok(ret, "WriteFile failed, error %u\n", GetLastError());
+    ok(num_bytes == sizeof(buf), "expected sizeof(buf), got %u\n", num_bytes);
+
+    pov = (void *)0xdeadbeef;
+    ret = GetQueuedCompletionStatus(port, &num_bytes, &key, &pov, 1000);
+    ok(!ret, "GetQueuedCompletionStatus succeeded\n");
+    ok(pov == NULL, "expected NULL, got %p\n", pov);
+
+    CloseHandle(ov.hEvent);
+    CloseHandle(client);
+    CloseHandle(pipe);
+    CloseHandle(port);
+}
+
 static BOOL userapc_called;
 static void CALLBACK userapc(ULONG_PTR dwParam)
 {
@@ -1113,6 +1180,9 @@ START_TEST(pipe)
 
     trace("starting overlapped tests\n");
     test_overlapped();
+
+    trace("starting completion tests\n");
+    test_completion();
 
     trace("starting FILE_PIPE_INFORMATION tests\n");
     test_filepipeinfo();

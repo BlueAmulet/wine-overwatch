@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2016 Michael Müller
  * Copyright 2017 Andrey Gusev
  *
  * This library is free software; you can redistribute it and/or
@@ -19,6 +20,15 @@
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(kernelbase);
+
+/***********************************************************************
+ *           QuirkIsEnabled   (KERNELBASE.@)
+ */
+BOOL WINAPI QuirkIsEnabled(void *arg)
+{
+    FIXME("(%p): stub\n", arg);
+    return FALSE;
+}
 
 /***********************************************************************
  *          QuirkIsEnabled3 (KERNELBASE.@)
