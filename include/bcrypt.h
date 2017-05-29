@@ -40,6 +40,8 @@
 typedef LONG NTSTATUS;
 #endif
 
+#define BCRYPT_KEY_DATA_BLOB (const WCHAR []){'K','e','y','D','a','t','a','B','l','o','b',0}
+
 #define BCRYPT_ALGORITHM_NAME (const WCHAR []){'A','l','g','o','r','i','t','h','m','N','a','m','e',0}
 #define BCRYPT_AUTH_TAG_LENGTH (const WCHAR []){'A','u','t','h','T','a','g','L','e','n','g','t','h',0}
 #define BCRYPT_BLOCK_LENGTH (const WCHAR []){'B','l','o','c','k','L','e','n','g','t','h',0}
@@ -128,6 +130,13 @@ typedef PVOID BCRYPT_HASH_HANDLE;
 
 /* Flags for BCryptEncrypt/BCryptDecrypt */
 #define BCRYPT_BLOCK_PADDING        0x00000001
+
+typedef struct _BCRYPT_KEY_DATA_BLOB_HEADER
+{
+    ULONG dwMagic;
+    ULONG dwVersion;
+    ULONG cbKeyData;
+} BCRYPT_KEY_DATA_BLOB_HEADER, *PBCRYPT_KEY_DATA_BLOB_HEADER;
 
 NTSTATUS WINAPI BCryptCloseAlgorithmProvider(BCRYPT_ALG_HANDLE, ULONG);
 NTSTATUS WINAPI BCryptCreateHash(BCRYPT_ALG_HANDLE, BCRYPT_HASH_HANDLE *, PUCHAR, ULONG, PUCHAR, ULONG, ULONG);

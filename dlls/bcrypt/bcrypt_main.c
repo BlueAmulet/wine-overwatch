@@ -1339,6 +1339,41 @@ NTSTATUS WINAPI BCryptDecrypt( BCRYPT_KEY_HANDLE handle, UCHAR *input, ULONG inp
     return status;
 }
 
+NTSTATUS WINAPI BCryptImportKey(BCRYPT_ALG_HANDLE algorithm, BCRYPT_KEY_HANDLE hImportKey,
+                                const WCHAR *blobtype, BCRYPT_KEY_HANDLE *handle, UCHAR *object,
+                                ULONG object_len, UCHAR *pbInput, ULONG cbInput, ULONG flags)
+{
+    struct algorithm *alg = algorithm;
+    struct key *key;
+    NTSTATUS status;
+
+    FIXME("%p, %p, %s, %p, %p, %08x, %p, %08x, %08x - semistub\n", alg, hImportKey,
+          wine_dbgstr_w(blobtype), handle, object, object_len, pbInput, cbInput, flags);
+
+	if (!strcmpW(blobtype, BCRYPT_KEY_DATA_BLOB)) {
+		struct _BCRYPT_KEY_DATA_BLOB_HEADER *kdbh = (BCRYPT_KEY_DATA_BLOB_HEADER*)pbInput;
+
+		if (!(key = HeapAlloc( GetProcessHeap(), 0, sizeof(*key) )))
+		{
+		    *handle = NULL;
+		    return STATUS_NO_MEMORY;
+		}
+		key->hdr.magic = MAGIC_KEY;
+
+		if ((status = key_init( key, alg, pbInput + sizeof(BCRYPT_KEY_DATA_BLOB_HEADER), kdbh->cbKeyData )))
+		{
+		    HeapFree( GetProcessHeap(), 0, key );
+		    *handle = NULL;
+		    return status;
+		}
+
+		*handle = key;
+		return STATUS_SUCCESS;
+	} else {
+		return STATUS_NOT_IMPLEMENTED;
+	}
+}
+
 BOOL WINAPI DllMain( HINSTANCE hinst, DWORD reason, LPVOID reserved )
 {
     switch (reason)
