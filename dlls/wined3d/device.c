@@ -4378,6 +4378,71 @@ HRESULT CDECL wined3d_device_clear_rendertarget_view(struct wined3d_device *devi
         return WINED3D_OK;
 
     resource = view->resource;
+    if (resource->type == WINED3D_RTYPE_TEXTURE_3D)
+    {
+        const struct wined3d_gl_info *gl_info;
+        struct wined3d_context *context;
+        struct wined3d_texture *texture = texture_from_resource(resource);
+        struct gl_texture *gl_texture = wined3d_texture_get_gl_texture(texture, FALSE);
+        unsigned int i;
+        GLuint fbo;
+        GLenum draw_buffer = GL_COLOR_ATTACHMENT0;
+
+        ERR("Clearing 3D target, flags=%x\n", flags);
+
+        context = context_acquire(device, NULL, 0);
+        gl_info = context->gl_info;
+
+        wined3d_texture_prepare_texture(texture, context, FALSE);
+
+        if (flags & WINED3DCLEAR_TARGET)
+        {
+            gl_info->gl_ops.gl.p_glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+            context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE));
+            context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE1));
+            context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE2));
+            context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE3));
+            gl_info->gl_ops.gl.p_glClearColor(color->r, color->g, color->b, color->a);
+            checkGLcall("glClearColor");
+        }
+
+        if (rect)
+            ERR("ignoring rect\n");
+
+        context_invalidate_state(context, STATE_RENDER(WINED3D_RS_SCISSORTESTENABLE));
+        gl_info->gl_ops.gl.p_glDisable(GL_SCISSOR_TEST);
+
+        gl_info->fbo_ops.glGenFramebuffers(1, &fbo);
+        checkGLcall("glGenFramebuffers()");
+
+        gl_info->fbo_ops.glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        checkGLcall("glBindFramebuffer()");
+
+        for (i = 0; i < view->layer_count; i++)
+        {
+            gl_info->fbo_ops.glFramebufferTexture3D(GL_FRAMEBUFFER, draw_buffer,
+                    GL_TEXTURE_3D, gl_texture->name, gl_texture->base_level, i);
+            checkGLcall("glFramebufferTexture3D()");
+
+            GL_EXTCALL(glDrawBuffers(1, &draw_buffer));
+            checkGLcall("glDrawBuffers()");
+
+            gl_info->gl_ops.gl.p_glClear(GL_COLOR_BUFFER_BIT);
+            checkGLcall("glClear");
+        }
+
+        gl_info->fbo_ops.glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        checkGLcall("glBindFramebuffer()");
+        gl_info->fbo_ops.glDeleteFramebuffers(1, &fbo);
+        checkGLcall("glDeleteFramebuffer()");
+
+        if (wined3d_settings.strict_draw_ordering)
+            gl_info->gl_ops.gl.p_glFlush();
+
+        context_release(context);
+        return WINED3D_OK;
+    }
+
     if (resource->type != WINED3D_RTYPE_TEXTURE_2D)
     {
         FIXME("Not implemented for %s resources.\n", debug_d3dresourcetype(resource->type));

@@ -109,6 +109,7 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_APPLE_ycbcr_422",                  APPLE_YCBCR_422               },
 
     /* ARB */
+    {"GL_ARB_base_instance",                ARB_BASE_INSTANCE             },
     {"GL_ARB_blend_func_extended",          ARB_BLEND_FUNC_EXTENDED       },
     {"GL_ARB_clear_buffer_object",          ARB_CLEAR_BUFFER_OBJECT       },
     {"GL_ARB_clear_texture",                ARB_CLEAR_TEXTURE             },
@@ -217,6 +218,7 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_EXT_framebuffer_blit",             EXT_FRAMEBUFFER_BLIT          },
     {"GL_EXT_framebuffer_multisample",      EXT_FRAMEBUFFER_MULTISAMPLE   },
     {"GL_EXT_framebuffer_object",           EXT_FRAMEBUFFER_OBJECT        },
+    {"GL_EXT_geometry_shader4",             EXT_GEOMETRY_SHADER4          },
     {"GL_EXT_gpu_program_parameters",       EXT_GPU_PROGRAM_PARAMETERS    },
     {"GL_EXT_gpu_shader4",                  EXT_GPU_SHADER4               },
     {"GL_EXT_packed_depth_stencil",         EXT_PACKED_DEPTH_STENCIL      },
@@ -2695,6 +2697,9 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     /* GL_APPLE_flush_buffer_range */
     USE_GL_FUNC(glBufferParameteriAPPLE)
     USE_GL_FUNC(glFlushMappedBufferRangeAPPLE)
+    /* GL_ARB_base_instance */
+    USE_GL_FUNC(glDrawArraysInstancedBaseInstance)
+    USE_GL_FUNC(glDrawElementsInstancedBaseVertexBaseInstance)
     /* GL_ARB_blend_func_extended */
     USE_GL_FUNC(glBindFragDataLocationIndexed)
     USE_GL_FUNC(glGetFragDataIndex)

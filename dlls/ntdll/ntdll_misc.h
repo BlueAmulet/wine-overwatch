@@ -225,25 +225,27 @@ struct debug_info
 /* thread private data, stored in NtCurrentTeb()->SpareBytes1 */
 struct ntdll_thread_data
 {
+#if defined(__i386__) || defined(__x86_64__)
+    DWORD_PTR          dr0;           /* 1bc/2e8 Debug registers */
+    DWORD_PTR          dr1;           /* 1c0/2f0 */
+    DWORD_PTR          dr2;           /* 1c4/2f8 */
+    DWORD_PTR          dr3;           /* 1c8/300 */
+    DWORD_PTR          dr6;           /* 1cc/308 */
+    DWORD_PTR          dr7;           /* 1d0/310 */
+#endif
 #ifdef __i386__
-    DWORD              dr0;           /* 1bc Debug registers */
-    DWORD              dr1;           /* 1c0 */
-    DWORD              dr2;           /* 1c4 */
-    DWORD              dr3;           /* 1c8 */
-    DWORD              dr6;           /* 1cc */
-    DWORD              dr7;           /* 1d0 */
     DWORD              fs;            /* 1d4 TEB selector */
     DWORD              gs;            /* 1d8 libc selector; update winebuild if you move this! */
     void              *vm86_ptr;      /* 1dc data for vm86 mode */
 #else
-    void              *exit_frame;    /*    /2e8 exit frame pointer */
+    void              *exit_frame;    /*    /318 exit frame pointer */
 #endif
-    struct debug_info *debug_info;    /* 1e0/2f0 info for debugstr functions */
-    int                request_fd;    /* 1e4/2f8 fd for sending server requests */
-    int                reply_fd;      /* 1e8/2fc fd for receiving server replies */
-    int                wait_fd[2];    /* 1ec/300 fd for sleeping server requests */
-    BOOL               wow64_redir;   /* 1f4/308 Wow64 filesystem redirection flag */
-    pthread_t          pthread_id;    /* 1f8/310 pthread thread id */
+    struct debug_info *debug_info;    /* 1e0/320 info for debugstr functions */
+    int                request_fd;    /* 1e4/328 fd for sending server requests */
+    int                reply_fd;      /* 1e8/32c fd for receiving server replies */
+    int                wait_fd[2];    /* 1ec/330 fd for sleeping server requests */
+    BOOL               wow64_redir;   /* 1f4/338 Wow64 filesystem redirection flag */
+    pthread_t          pthread_id;    /* 1f8/340 pthread thread id */
 #ifdef __i386__
     WINE_VM86_TEB_INFO vm86;          /* 1fc vm86 private data */
     void              *exit_frame;    /* 204 exit frame pointer */
