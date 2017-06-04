@@ -3537,7 +3537,7 @@ BOOL WINAPI FlashWindowEx( PFLASHWINFO pfinfo )
         if (!wndPtr || wndPtr == WND_OTHER_PROCESS || wndPtr == WND_DESKTOP) return FALSE;
         hwnd = wndPtr->obj.handle;  /* make it a full handle */
 
-        if (pfinfo->dwFlags) wparam = !(wndPtr->flags & WIN_NCACTIVATED);
+        if (pfinfo->dwFlags) wparam = (wndPtr->flags & WIN_NCACTIVATED) != 0;
         else wparam = (hwnd == GetForegroundWindow());
 
         WIN_ReleasePtr( wndPtr );
