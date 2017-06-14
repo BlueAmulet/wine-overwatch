@@ -80,7 +80,9 @@ char *spec_file_name = NULL;
 FILE *output_file = NULL;
 const char *output_file_name = NULL;
 static const char *output_file_source_name;
+unsigned long image_base = 0;
 static int fake_module;
+static const char *fake_native;
 
 struct strarray lib_path = { 0 };
 struct strarray as_command = { 0 };
@@ -260,9 +262,11 @@ static const char usage_str[] =
 "   -f FLAGS                  Compiler flags (-fPIC and -fasynchronous-unwind-tables are supported)\n"
 "   -F, --filename=DLLFILE    Set the DLL filename (default: from input file name)\n"
 "       --fake-module         Create a fake binary module\n"
+"       --fake-native=DLLFILE Set the native DLL filename for a fake binary module\n"
 "   -h, --help                Display this help message\n"
 "   -H, --heap=SIZE           Set the heap size for a Win16 dll\n"
 "   -I DIR                    Ignored for C flags compatibility\n"
+"       --image-base=ADDRESS  Set the DLL base address\n"
 "   -k, --kill-at             Kill stdcall decorations in generated .def files\n"
 "   -K, FLAGS                 Compiler flags (only -KPIC is supported)\n"
 "       --large-address-aware Support an address space larger than 2Gb\n"
@@ -300,6 +304,8 @@ enum long_options_values
     LONG_OPT_CCCMD,
     LONG_OPT_EXTERNAL_SYMS,
     LONG_OPT_FAKE_MODULE,
+    LONG_OPT_FAKE_NATIVE,
+    LONG_OPT_IMAGE_BASE,
     LONG_OPT_LARGE_ADDRESS_AWARE,
     LONG_OPT_LDCMD,
     LONG_OPT_NMCMD,
@@ -322,6 +328,8 @@ static const struct option long_options[] =
     { "cc-cmd",        1, 0, LONG_OPT_CCCMD },
     { "external-symbols", 0, 0, LONG_OPT_EXTERNAL_SYMS },
     { "fake-module",   0, 0, LONG_OPT_FAKE_MODULE },
+    { "fake-native",   1, 0, LONG_OPT_FAKE_NATIVE },
+    { "image-base",    1, 0, LONG_OPT_IMAGE_BASE },
     { "large-address-aware", 0, 0, LONG_OPT_LARGE_ADDRESS_AWARE },
     { "ld-cmd",        1, 0, LONG_OPT_LDCMD },
     { "nm-cmd",        1, 0, LONG_OPT_NMCMD },
@@ -496,6 +504,12 @@ static char **parse_options( int argc, char **argv, DLLSPEC *spec )
         case LONG_OPT_FAKE_MODULE:
             fake_module = 1;
             break;
+        case LONG_OPT_FAKE_NATIVE:
+            fake_native = xstrdup( optarg );
+            break;
+        case LONG_OPT_IMAGE_BASE:
+            image_base = strtoul( optarg, NULL, 0 );
+            break;
         case LONG_OPT_EXTERNAL_SYMS:
             link_ext_symbols = 1;
             break;
@@ -644,7 +658,7 @@ int main(int argc, char **argv)
         if (fake_module)
         {
             if (spec->type == SPEC_WIN16) output_fake_module16( spec );
-            else output_fake_module( spec );
+            else output_fake_module( spec, fake_native );
             break;
         }
         read_undef_symbols( spec, argv );

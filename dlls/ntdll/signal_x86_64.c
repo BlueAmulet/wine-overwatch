@@ -1649,7 +1649,9 @@ static inline BOOL is_inside_signal_stack( void *ptr )
  */
 static void save_context( CONTEXT *context, const ucontext_t *sigcontext )
 {
-    context->ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_SEGMENTS;
+    struct ntdll_thread_data * const regs = ntdll_get_thread_data();
+
+    context->ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_SEGMENTS | CONTEXT_DEBUG_REGISTERS;
     context->Rax    = RAX_sig(sigcontext);
     context->Rcx    = RCX_sig(sigcontext);
     context->Rdx    = RDX_sig(sigcontext);
@@ -1686,6 +1688,12 @@ static void save_context( CONTEXT *context, const ucontext_t *sigcontext )
 #else
     __asm__("movw %%ss,%0" : "=m" (context->SegSs));
 #endif
+    context->Dr0          = regs->dr0;
+    context->Dr1          = regs->dr1;
+    context->Dr2          = regs->dr2;
+    context->Dr3          = regs->dr3;
+    context->Dr6          = regs->dr6;
+    context->Dr7          = regs->dr7;
     if (FPU_sig(sigcontext))
     {
         context->ContextFlags |= CONTEXT_FLOATING_POINT;
@@ -1702,6 +1710,14 @@ static void save_context( CONTEXT *context, const ucontext_t *sigcontext )
  */
 static void restore_context( const CONTEXT *context, ucontext_t *sigcontext )
 {
+    struct ntdll_thread_data * const regs = ntdll_get_thread_data();
+
+    regs->dr0 = context->Dr0;
+    regs->dr1 = context->Dr1;
+    regs->dr2 = context->Dr2;
+    regs->dr3 = context->Dr3;
+    regs->dr6 = context->Dr6;
+    regs->dr7 = context->Dr7;
     RAX_sig(sigcontext) = context->Rax;
     RCX_sig(sigcontext) = context->Rcx;
     RDX_sig(sigcontext) = context->Rdx;
@@ -1861,6 +1877,16 @@ __ASM_GLOBAL_FUNC( set_full_cpu_context,
 void set_cpu_context( const CONTEXT *context )
 {
     DWORD flags = context->ContextFlags & ~CONTEXT_AMD64;
+
+    if (flags & CONTEXT_DEBUG_REGISTERS)
+    {
+        ntdll_get_thread_data()->dr0 = context->Dr0;
+        ntdll_get_thread_data()->dr1 = context->Dr1;
+        ntdll_get_thread_data()->dr2 = context->Dr2;
+        ntdll_get_thread_data()->dr3 = context->Dr3;
+        ntdll_get_thread_data()->dr6 = context->Dr6;
+        ntdll_get_thread_data()->dr7 = context->Dr7;
+    }
     if (flags & CONTEXT_FULL)
     {
         if (!(flags & CONTEXT_CONTROL))
@@ -2563,10 +2589,40 @@ static void raise_segv_exception( EXCEPTION_RECORD *rec, CONTEXT *context )
         }
         break;
     }
-    status = raise_exception( rec, context, TRUE );
+    status = NtRaiseException( rec, context, TRUE );
     if (status) raise_status( status, rec );
 done:
     set_cpu_context( context );
+}
+
+
+/**********************************************************************
+ *		raise_trap_exception
+ */
+static void raise_trap_exception( EXCEPTION_RECORD *rec, CONTEXT *context )
+{
+    NTSTATUS status;
+
+    if (rec->ExceptionCode == EXCEPTION_SINGLE_STEP)
+    {
+        /* when single stepping can't tell whether this is a hw bp or a
+         * single step interrupt. try to avoid as much overhead as possible
+         * and only do a server call if there is any hw bp enabled. */
+
+        if( !(context->EFlags & 0x100) || (ntdll_get_thread_data()->dr7 & 0xff) )
+        {
+            /* (possible) hardware breakpoint, fetch the debug registers */
+            DWORD saved_flags = context->ContextFlags;
+            context->ContextFlags = CONTEXT_DEBUG_REGISTERS;
+            NtGetContextThread(GetCurrentThread(), context);
+            context->ContextFlags |= saved_flags;  /* restore flags */
+        }
+
+        context->EFlags &= ~0x100;  /* clear single-step flag */
+    }
+
+    status = NtRaiseException( rec, context, TRUE );
+    raise_status( status, rec );
 }
 
 
@@ -2577,7 +2633,7 @@ done:
  */
 static void raise_generic_exception( EXCEPTION_RECORD *rec, CONTEXT *context )
 {
-    NTSTATUS status = raise_exception( rec, context, TRUE );
+    NTSTATUS status = NtRaiseException( rec, context, TRUE );
     if (status) raise_status( status, rec );
     set_cpu_context( context );
 }
@@ -2592,6 +2648,9 @@ static inline BOOL handle_interrupt( unsigned int interrupt, EXCEPTION_RECORD *r
 {
     switch(interrupt)
     {
+    case 0x2c:
+        rec->ExceptionCode = STATUS_ASSERTION_FAILURE;
+        return TRUE;
     case 0x2d:
         context->Rip += 3;
         rec->ExceptionCode = EXCEPTION_BREAKPOINT;
@@ -2655,7 +2714,6 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
             WORD err = ERROR_sig(ucontext);
             if ((err & 7) == 2 && handle_interrupt( err >> 3, rec, win_context )) break;
             rec->ExceptionCode = err ? EXCEPTION_ACCESS_VIOLATION : EXCEPTION_PRIV_INSTRUCTION;
-            rec->ExceptionCode = EXCEPTION_ACCESS_VIOLATION;
         }
         break;
     case TRAP_x86_PAGEFLT:  /* Page fault */
@@ -2688,7 +2746,8 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
  */
 static void trap_handler( int signal, siginfo_t *siginfo, void *sigcontext )
 {
-    EXCEPTION_RECORD *rec = setup_exception( sigcontext, raise_generic_exception );
+    ucontext_t *ucontext = sigcontext;
+    EXCEPTION_RECORD *rec = setup_exception( sigcontext, raise_trap_exception );
 
     switch (siginfo->si_code)
     {
@@ -2697,6 +2756,16 @@ static void trap_handler( int signal, siginfo_t *siginfo, void *sigcontext )
         rec->ExceptionCode = EXCEPTION_SINGLE_STEP;
         break;
     case TRAP_BRKPT:   /* Breakpoint exception */
+    case SI_KERNEL:    /* Software breakpoint */
+        /* Check if this is actuallly icebp instruction */
+        if (((unsigned char *)rec->ExceptionAddress)[-1] == 0xF1)
+        {
+            rec->ExceptionCode = EXCEPTION_SINGLE_STEP;
+            break;
+        }
+        /* Validate assumption that SI_KERNEL == TRAP_x86_BPTFLT */
+        if (siginfo->si_code == SI_KERNEL && TRAP_sig(ucontext) != TRAP_x86_BPTFLT)
+            FIXME( "si_code == SI_KERNEL, but TRAP_sig(context) == %lld\n", TRAP_sig(ucontext) );
         rec->ExceptionAddress = (char *)rec->ExceptionAddress - 1;  /* back up over the int3 instruction */
         /* fall through */
     default:

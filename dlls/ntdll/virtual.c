@@ -1605,6 +1605,11 @@ NTSTATUS virtual_handle_fault( LPCVOID addr, DWORD err, BOOL on_signal_stack )
             if (VIRTUAL_SetProt( view, page, page_size, *vprot )) ret = STATUS_SUCCESS;
             else *vprot &= ~VPROT_READ; /* don't bother to call VIRTUAL_SetProt again */
         }
+        if (err == 0 && (view->protect & VPROT_SYSTEM))
+        {
+            wine_anon_mmap(page, page_size, PROT_READ, MAP_FIXED);
+            ret = STATUS_SUCCESS;
+        }
         if (!on_signal_stack && (*vprot & VPROT_GUARD))
         {
             VIRTUAL_SetProt( view, page, page_size, *vprot & ~VPROT_GUARD );
