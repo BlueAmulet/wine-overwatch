@@ -133,6 +133,7 @@ static const struct object_ops handle_table_ops =
     no_link_name,                    /* link_name */
     NULL,                            /* unlink_name */
     no_open_file,                    /* open_file */
+    no_alloc_handle,                 /* alloc_handle */
     no_close_handle,                 /* close_handle */
     handle_table_destroy             /* destroy */
 };
@@ -232,7 +233,7 @@ static int grow_handle_table( struct handle_table *table )
 }
 
 /* allocate the first free entry in the handle table */
-static obj_handle_t alloc_entry( struct handle_table *table, void *obj, unsigned int access )
+static obj_handle_t alloc_entry( struct handle_table *table, struct object *obj, unsigned int access )
 {
     struct handle_entry *entry = table->entries + table->free;
     int i;
@@ -248,6 +249,10 @@ static obj_handle_t alloc_entry( struct handle_table *table, void *obj, unsigned
     table->free = i + 1;
     entry->ptr    = grab_object_for_handle( obj );
     entry->access = access;
+
+    if (table->process)
+        obj->ops->alloc_handle( obj, table->process, index_to_handle(i) );
+
     return index_to_handle(i);
 }
 
@@ -373,7 +378,11 @@ struct handle_table *copy_handle_table( struct process *process, struct process 
         for (i = 0; i <= table->last; i++, ptr++)
         {
             if (!ptr->ptr) continue;
-            if (ptr->access & RESERVED_INHERIT) grab_object_for_handle( ptr->ptr );
+            if (ptr->access & RESERVED_INHERIT)
+            {
+                ptr->ptr->ops->alloc_handle( ptr->ptr, process, index_to_handle(i) );
+                grab_object_for_handle( ptr->ptr );
+            }
             else ptr->ptr = NULL; /* don't inherit this entry */
         }
     }
@@ -488,7 +497,7 @@ obj_handle_t find_inherited_handle( struct process *process, const struct object
 /* enumerate handles of a given type */
 /* this is needed for window stations and desktops */
 obj_handle_t enumerate_handles( struct process *process, const struct object_ops *ops,
-                                unsigned int *index )
+                                obj_handle_t *index, struct object **obj )
 {
     struct handle_table *table = process->handles;
     unsigned int i;
@@ -501,6 +510,7 @@ obj_handle_t enumerate_handles( struct process *process, const struct object_ops
         if (!entry->ptr) continue;
         if (entry->ptr->ops != ops) continue;
         *index = i + 1;
+        if (obj) *obj = grab_object( entry->ptr );
         return index_to_handle(i);
     }
     return 0;
@@ -673,12 +683,89 @@ DECL_HANDLER(get_object_info)
     release_object( obj );
 }
 
+/* merge security labels into an existing SACL */
+static int merge_security_labels( ACL **out, const ACL *old_sacl, const ACL *new_sacl )
+{
+    const ACE_HEADER *ace;
+    ACE_HEADER *merged_ace;
+    size_t size = sizeof(ACL);
+    int i, count = 0;
+    BYTE revision = ACL_REVISION;
+    ACL *merged_acl;
+
+    *out = NULL;
+    if (!old_sacl && !new_sacl) return 1;
+
+    if (old_sacl)
+    {
+        revision = max( revision, old_sacl->AclRevision );
+        ace = (const ACE_HEADER *)(old_sacl + 1);
+        for (i = 0; i < old_sacl->AceCount; i++, ace = ace_next( ace ))
+        {
+            if (ace->AceType == SYSTEM_MANDATORY_LABEL_ACE_TYPE) continue;
+            size += ace->AceSize;
+            count++;
+        }
+    }
+
+    if (new_sacl)
+    {
+        revision = max( revision, new_sacl->AclRevision );
+        ace = (const ACE_HEADER *)(new_sacl + 1);
+        for (i = 0; i < new_sacl->AceCount; i++, ace = ace_next( ace ))
+        {
+            /* FIXME: Should this be handled as error? */
+            if (ace->AceType != SYSTEM_MANDATORY_LABEL_ACE_TYPE) continue;
+            size += ace->AceSize;
+            count++;
+        }
+    }
+
+    merged_acl = mem_alloc( size );
+    if (!merged_acl) return 0;
+
+    merged_acl->AclRevision = revision;
+    merged_acl->Sbz1 = 0;
+    merged_acl->AclSize = size;
+    merged_acl->AceCount = count;
+    merged_acl->Sbz2 = 0;
+    merged_ace = (ACE_HEADER *)(merged_acl + 1);
+
+    if (old_sacl)
+    {
+        ace = (const ACE_HEADER *)(old_sacl + 1);
+        for (i = 0; i < old_sacl->AceCount; i++, ace = ace_next( ace ))
+        {
+            if (ace->AceType == SYSTEM_MANDATORY_LABEL_ACE_TYPE) continue;
+            memcpy( merged_ace, ace, ace->AceSize );
+            merged_ace = (ACE_HEADER *)ace_next( merged_ace );
+        }
+    }
+
+    if (new_sacl)
+    {
+        ace = (const ACE_HEADER *)(new_sacl + 1);
+        for (i = 0; i < new_sacl->AceCount; i++, ace = ace_next( ace ))
+        {
+            if (ace->AceType != SYSTEM_MANDATORY_LABEL_ACE_TYPE) continue;
+            memcpy( merged_ace, ace, ace->AceSize );
+            merged_ace = (ACE_HEADER *)ace_next( merged_ace );
+        }
+    }
+
+    *out = merged_acl;
+    return 1;
+}
+
 DECL_HANDLER(set_security_object)
 {
     data_size_t sd_size = get_req_data_size();
     const struct security_descriptor *sd = get_req_data();
+    struct security_descriptor *merged_sd = NULL;
+    ACL *merged_sacl = NULL;
     struct object *obj;
     unsigned int access = 0;
+    unsigned int security_info = req->security_info;
 
     if (!sd_is_valid( sd, sd_size ))
     {
@@ -687,7 +774,8 @@ DECL_HANDLER(set_security_object)
     }
 
     if (req->security_info & OWNER_SECURITY_INFORMATION ||
-        req->security_info & GROUP_SECURITY_INFORMATION)
+        req->security_info & GROUP_SECURITY_INFORMATION ||
+        req->security_info & LABEL_SECURITY_INFORMATION)
         access |= WRITE_OWNER;
     if (req->security_info & SACL_SECURITY_INFORMATION)
         access |= ACCESS_SYSTEM_SECURITY;
@@ -696,8 +784,103 @@ DECL_HANDLER(set_security_object)
 
     if (!(obj = get_handle_obj( current->process, req->handle, access, NULL ))) return;
 
-    obj->ops->set_sd( obj, sd, req->security_info );
+    /* check if we need to merge the security labels with the existing SACLs */
+    if ((security_info & LABEL_SECURITY_INFORMATION) &&
+        !(security_info & SACL_SECURITY_INFORMATION) &&
+        (sd->control & SE_SACL_PRESENT))
+    {
+        const struct security_descriptor *old_sd;
+        const ACL *old_sacl = NULL;
+        int present;
+        char *ptr;
+
+        if ((old_sd = obj->ops->get_sd( obj )))
+        {
+            old_sacl = sd_get_sacl( old_sd, &present );
+            if (!present) old_sacl = NULL;
+        }
+
+        if (!merge_security_labels( &merged_sacl, old_sacl, sd_get_sacl( sd, &present ) )) goto error;
+
+        /* allocate a new SD and replace SACL with merged version */
+        merged_sd = mem_alloc( sizeof(*merged_sd) + sd->owner_len + sd->group_len +
+                               (merged_sacl ? merged_sacl->AclSize : 0) + sd->dacl_len );
+        if (!merged_sd) goto error;
+
+        merged_sd->control   = sd->control;
+        merged_sd->owner_len = sd->owner_len;
+        merged_sd->group_len = sd->group_len;
+        merged_sd->sacl_len  = merged_sacl ? merged_sacl->AclSize : 0;
+        merged_sd->dacl_len  = sd->dacl_len;
+
+        ptr = (char *)(merged_sd + 1);
+        memcpy( ptr, sd_get_owner( sd ), sd->owner_len );
+        ptr += sd->owner_len;
+        memcpy( ptr, sd_get_group( sd ), sd->group_len );
+        ptr += sd->group_len;
+        if (merged_sacl)
+        {
+            memcpy( ptr, merged_sacl, merged_sacl->AclSize );
+            ptr += merged_sacl->AclSize;
+        }
+        memcpy( ptr, sd_get_dacl( sd, &present ), sd->dacl_len );
+
+        security_info |= SACL_SECURITY_INFORMATION;
+        sd = merged_sd;
+    }
+
+    obj->ops->set_sd( obj, sd, security_info );
+
+error:
     release_object( obj );
+    free( merged_sacl );
+    free( merged_sd );
+}
+
+/* extract security labels from SACL */
+static int extract_security_label( ACL **out, const ACL *sacl )
+{
+    const ACE_HEADER *ace;
+    ACE_HEADER *label_ace;
+    size_t size = sizeof(ACL);
+    int i, count = 0;
+    ACL *label_acl;
+
+    *out = NULL;
+    if (!sacl) return 1;
+
+    ace = (const ACE_HEADER *)(sacl + 1);
+    for (i = 0; i < sacl->AceCount; i++, ace = ace_next( ace ))
+    {
+        if (ace->AceType == SYSTEM_MANDATORY_LABEL_ACE_TYPE)
+        {
+            size += ace->AceSize;
+            count++;
+        }
+    }
+
+    label_acl = mem_alloc( size );
+    if (!label_acl) return 0;
+
+    label_acl->AclRevision = sacl->AclRevision;
+    label_acl->Sbz1 = 0;
+    label_acl->AclSize = size;
+    label_acl->AceCount = count;
+    label_acl->Sbz2 = 0;
+    label_ace = (ACE_HEADER *)(label_acl + 1);
+
+    ace = (const ACE_HEADER *)(sacl + 1);
+    for (i = 0; i < sacl->AceCount; i++, ace = ace_next( ace ))
+    {
+        if (ace->AceType == SYSTEM_MANDATORY_LABEL_ACE_TYPE)
+        {
+            memcpy( label_ace, ace, ace->AceSize );
+            label_ace = (ACE_HEADER *)ace_next( label_ace );
+        }
+    }
+
+    *out = label_acl;
+    return 1;
 }
 
 DECL_HANDLER(get_security_object)
@@ -709,6 +892,7 @@ DECL_HANDLER(get_security_object)
     int present;
     const SID *owner, *group;
     const ACL *sacl, *dacl;
+    ACL *label_acl = NULL;
 
     if (req->security_info & SACL_SECURITY_INFORMATION)
         access |= ACCESS_SYSTEM_SECURITY;
@@ -732,14 +916,18 @@ DECL_HANDLER(get_security_object)
         else
             req_sd.group_len = 0;
 
-        req_sd.control |= SE_SACL_PRESENT;
         sacl = sd_get_sacl( sd, &present );
         if (req->security_info & SACL_SECURITY_INFORMATION && present)
             req_sd.sacl_len = sd->sacl_len;
+        else if (req->security_info & LABEL_SECURITY_INFORMATION && present)
+        {
+            if (!extract_security_label( &label_acl, sacl )) goto error;
+            req_sd.sacl_len = label_acl ? label_acl->AclSize : 0;
+            sacl = label_acl;
+        }
         else
             req_sd.sacl_len = 0;
 
-        req_sd.control |= SE_DACL_PRESENT;
         dacl = sd_get_dacl( sd, &present );
         if (req->security_info & DACL_SECURITY_INFORMATION && present)
             req_sd.dacl_len = sd->dacl_len;
@@ -766,7 +954,9 @@ DECL_HANDLER(get_security_object)
             set_error(STATUS_BUFFER_TOO_SMALL);
     }
 
+error:
     release_object( obj );
+    free( label_acl );
 }
 
 struct enum_handle_info
@@ -781,6 +971,7 @@ static int enum_handles( struct process *process, void *user )
     struct handle_table *table = process->handles;
     struct handle_entry *entry;
     struct handle_info *handle;
+    struct object_type *type;
     unsigned int i;
 
     if (!table)
@@ -799,6 +990,15 @@ static int enum_handles( struct process *process, void *user )
         handle->owner  = process->id;
         handle->handle = index_to_handle(i);
         handle->access = entry->access & ~RESERVED_ALL;
+
+        if ((type = entry->ptr->ops->get_type(entry->ptr)))
+        {
+            handle->type = type_get_index(type);
+            release_object(type);
+        }
+        else
+            handle->type = 0;
+
         info->count--;
     }
 

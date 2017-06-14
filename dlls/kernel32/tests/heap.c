@@ -109,6 +109,9 @@ static void test_heap(void)
     }
 
     /* test some border cases of HeapAlloc and HeapReAlloc */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Walloc-size-larger-than="
     mem = HeapAlloc(GetProcessHeap(), 0, 0);
     ok(mem != NULL, "memory not allocated for size 0\n");
     msecond = HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, mem, ~(SIZE_T)0 - 7);
@@ -125,6 +128,7 @@ static void test_heap(void)
     ok(size == 0 || broken(size == 1) /* some vista and win7 */,
        "HeapSize should have returned 0 instead of %lu\n", size);
     HeapFree(GetProcessHeap(), 0, msecond);
+#pragma GCC diagnostic pop
 
     /* large blocks must be 16-byte aligned */
     mem = HeapAlloc(GetProcessHeap(), 0, 512 * 1024);

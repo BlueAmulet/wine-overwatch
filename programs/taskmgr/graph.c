@@ -44,6 +44,7 @@ static void Graph_DrawCpuUsageGraph(HDC hDC, HWND hWnd)
     RECT            rcClient;
     RECT            rcBarLeft;
     RECT            rcBarRight;
+    RECT            rcText;
     WCHAR            Text[256];
     ULONG            CpuUsage;
     ULONG            CpuKernelUsage;
@@ -97,7 +98,11 @@ static void Graph_DrawCpuUsageGraph(HDC hDC, HWND hWnd)
      * Draw the font text onto the graph
      * The bottom 20 pixels are reserved for the text
      */
-    Font_DrawText(hDC, Text, ((rcClient.right - rcClient.left) - 32) / 2, rcClient.bottom - 11 - 5);
+    CopyRect(&rcText, &rcClient);
+    rcText.top = rcText.bottom - 19;
+
+    SetTextColor(hDC, BRIGHT_GREEN);
+    DrawTextW(hDC, Text, -1, &rcText, DT_CENTER);
 
     /*
      * Now we have to draw the graph
@@ -224,6 +229,7 @@ static void Graph_DrawMemUsageGraph(HDC hDC, HWND hWnd)
     RECT            rcClient;
     RECT            rcBarLeft;
     RECT            rcBarRight;
+    RECT            rcText;
     WCHAR            Text[256];
     ULONGLONG        CommitChargeTotal;
     ULONGLONG        CommitChargeLimit;
@@ -234,8 +240,10 @@ static void Graph_DrawMemUsageGraph(HDC hDC, HWND hWnd)
 /* Top bars that are "unused", i.e. are dark green, representing free memory */
     int                i;
 
-    static const WCHAR    wszFormat[] = {'%','d','K',0};
-    
+    static const WCHAR    wszFormatKB[] = {'%','u',' ','K','B',0};
+    static const WCHAR    wszFormatMB[] = {'%','u',' ','M','B',0};
+    static const WCHAR    wszFormatGB[] = {'%','.','1','f',' ','G','B',0};
+
     /*
      * Get the client area rectangle
      */
@@ -252,13 +260,22 @@ static void Graph_DrawMemUsageGraph(HDC hDC, HWND hWnd)
     CommitChargeTotal = (ULONGLONG)PerfDataGetCommitChargeTotalK();
     CommitChargeLimit = (ULONGLONG)PerfDataGetCommitChargeLimitK();
 
-    sprintfW(Text, wszFormat, (int)CommitChargeTotal);
-    
+    if (CommitChargeTotal > 1048576)
+        sprintfW(Text, wszFormatGB, (float)CommitChargeTotal / 1048576);
+    else if (CommitChargeTotal > 1024)
+        sprintfW(Text, wszFormatMB, (DWORD)CommitChargeTotal / 1024);
+    else
+        sprintfW(Text, wszFormatKB, (DWORD)CommitChargeTotal);
+
     /*
      * Draw the font text onto the graph
      * The bottom 20 pixels are reserved for the text
      */
-    Font_DrawText(hDC, Text, ((rcClient.right - rcClient.left) - (strlenW(Text) * 8)) / 2, rcClient.bottom - 11 - 5);
+    CopyRect(&rcText, &rcClient);
+    rcText.top = rcText.bottom - 19;
+
+    SetTextColor(hDC, BRIGHT_GREEN);
+    DrawTextW(hDC, Text, -1, &rcText, DT_CENTER);
 
     /*
      * Now we have to draw the graph

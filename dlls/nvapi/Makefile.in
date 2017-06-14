@@ -1,0 +1,4 @@
+MODULE    = nvapi.dll
+
+C_SRCS = \
+	nvapi.c

@@ -63,6 +63,9 @@ struct opengl_context
     DWORD               tid;           /* thread that the context is current in */
     HDC                 draw_dc;       /* current drawing DC */
     HDC                 read_dc;       /* current reading DC */
+    void     (CALLBACK *debug_callback)(GLenum, GLenum, GLuint, GLenum,
+                                        GLsizei, const GLchar *, const void *); /* debug callback */
+    const void         *debug_user;    /* debug user parameter */
     GLubyte            *extensions;    /* extension string */
     GLuint             *disabled_exts; /* indices of disabled extensions */
     struct wgl_context *drv_ctx;       /* driver context */
@@ -887,24 +890,7 @@ PROC WINAPI wglGetProcAddress( LPCSTR name )
         void *driver_func = funcs->wgl.p_wglGetProcAddress( name );
 
         if (!is_extension_supported(ext_ret->extension))
-        {
-            unsigned int i;
-            static const struct { const char *name, *alt; } alternatives[] =
-            {
-                { "glCopyTexSubImage3DEXT", "glCopyTexSubImage3D" },     /* needed by RuneScape */
-                { "glVertexAttribDivisor", "glVertexAttribDivisorARB"},  /* needed by Caffeine */
-            };
-
-            for (i = 0; i < sizeof(alternatives)/sizeof(alternatives[0]); i++)
-            {
-                if (strcmp( name, alternatives[i].name )) continue;
-                WARN("Extension %s required for %s not supported, trying %s\n",
-                    ext_ret->extension, name, alternatives[i].alt );
-                return wglGetProcAddress( alternatives[i].alt );
-            }
             WARN("Extension %s required for %s not supported\n", ext_ret->extension, name);
-            return NULL;
-        }
 
         if (driver_func == NULL)
         {
@@ -1932,6 +1918,60 @@ const GLubyte * WINAPI glGetString( GLenum name )
             ret = ptr->u.context->extensions;
     }
     return ret;
+}
+
+/* wrapper for glDebugMessageCallback* functions */
+static void gl_debug_message_callback( GLenum source, GLenum type, GLuint id, GLenum severity,
+                                       GLsizei length, const GLchar *message,const void *userParam )
+{
+    struct wgl_handle *ptr = (struct wgl_handle *)userParam;
+    if (!ptr->u.context->debug_callback) return;
+    ptr->u.context->debug_callback( source, type, id, severity, length, message, ptr->u.context->debug_user );
+}
+
+/***********************************************************************
+ *      glDebugMessageCallback
+ */
+void WINAPI glDebugMessageCallback( void *callback, const void *userParam )
+{
+    struct wgl_handle *ptr = get_current_context_ptr();
+    const struct opengl_funcs *funcs = NtCurrentTeb()->glTable;
+
+    TRACE("(%p, %p)\n", callback, userParam );
+
+    ptr->u.context->debug_callback = callback;
+    ptr->u.context->debug_user     = userParam;
+    funcs->ext.p_glDebugMessageCallback( gl_debug_message_callback, ptr );
+}
+
+/***********************************************************************
+ *      glDebugMessageCallbackAMD
+ */
+void WINAPI glDebugMessageCallbackAMD( void *callback, void *userParam )
+{
+    struct wgl_handle *ptr = get_current_context_ptr();
+    const struct opengl_funcs *funcs = NtCurrentTeb()->glTable;
+
+    TRACE("(%p, %p)\n", callback, userParam );
+
+    ptr->u.context->debug_callback = callback;
+    ptr->u.context->debug_user     = userParam;
+    funcs->ext.p_glDebugMessageCallbackAMD( gl_debug_message_callback, ptr );
+}
+
+/***********************************************************************
+ *      glDebugMessageCallbackARB
+ */
+void WINAPI glDebugMessageCallbackARB( void *callback, const void *userParam )
+{
+    struct wgl_handle *ptr = get_current_context_ptr();
+    const struct opengl_funcs *funcs = NtCurrentTeb()->glTable;
+
+    TRACE("(%p, %p)\n", callback, userParam );
+
+    ptr->u.context->debug_callback = callback;
+    ptr->u.context->debug_user     = userParam;
+    funcs->ext.p_glDebugMessageCallbackARB( gl_debug_message_callback, ptr );
 }
 
 /***********************************************************************

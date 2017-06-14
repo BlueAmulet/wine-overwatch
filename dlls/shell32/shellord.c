@@ -2146,18 +2146,30 @@ void WINAPI SHFlushSFCache(void)
  */
 HRESULT WINAPI SHGetImageList(int iImageList, REFIID riid, void **ppv)
 {
-    HIMAGELIST hLarge, hSmall;
+    HIMAGELIST hSmall, hLarge, hExtraLarge, hJumbo;
     HIMAGELIST hNew;
 
-    /* Wine currently only maintains large and small image lists */
-    if ((iImageList != SHIL_LARGE) && (iImageList != SHIL_SMALL) && (iImageList != SHIL_SYSSMALL))
-    {
-        FIXME("Unsupported image list %i requested\n", iImageList);
-        return E_FAIL;
-    }
+    SHELL_GetInternalImageLists( &hSmall, &hLarge, &hExtraLarge, &hJumbo );
 
-    Shell_GetImageLists(&hLarge, &hSmall);
-    hNew = (iImageList == SHIL_LARGE) ? hLarge : hSmall;
+    switch (iImageList)
+    {
+        case SHIL_SMALL:
+        case SHIL_SYSSMALL:
+            hNew = hSmall;
+            break;
+        case SHIL_LARGE:
+            hNew = hLarge;
+            break;
+        case SHIL_EXTRALARGE:
+            hNew = hExtraLarge;
+            break;
+        case SHIL_JUMBO:
+            hNew = hJumbo;
+            break;
+        default:
+            FIXME("Unsupported image list %i requested\n", iImageList);
+            return E_FAIL;
+    }
 
     return HIMAGELIST_QueryInterface(hNew, riid, ppv);
 }

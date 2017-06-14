@@ -176,7 +176,7 @@ WCHAR *get_object_full_name( struct object *obj, data_size_t *ret_len )
     while (ptr && ptr->name)
     {
         struct object_name *name = ptr->name;
-        len += name->len + sizeof(WCHAR);
+        if (name->len) len += name->len + sizeof(WCHAR);
         ptr = name->parent;
     }
     if (!len) return NULL;
@@ -186,9 +186,12 @@ WCHAR *get_object_full_name( struct object *obj, data_size_t *ret_len )
     while (obj && obj->name)
     {
         struct object_name *name = obj->name;
-        memcpy( ret + len - name->len, name->name, name->len );
-        len -= name->len + sizeof(WCHAR);
-        memcpy( ret + len, &backslash, sizeof(WCHAR) );
+        if (name->len)
+        {
+            memcpy( ret + len - name->len, name->name, name->len );
+            len -= name->len + sizeof(WCHAR);
+            memcpy( ret + len, &backslash, sizeof(WCHAR) );
+        }
         obj = name->parent;
     }
     return (WCHAR *)ret;
@@ -276,8 +279,8 @@ struct object *lookup_named_object( struct object *root, const struct unicode_st
     return parent;
 }
 
-static struct object *create_object( struct object *parent, const struct object_ops *ops,
-                                     const struct unicode_str *name, const struct security_descriptor *sd )
+void *create_object( struct object *parent, const struct object_ops *ops,
+                     const struct unicode_str *name, const struct security_descriptor *sd )
 {
     struct object *obj;
     struct object_name *name_ptr;
@@ -372,8 +375,11 @@ static void dump_name( struct object *obj )
 
     if (!name) return;
     if (name->parent) dump_name( name->parent );
-    fputs( "\\\\", stderr );
-    dump_strW( name->name, name->len / sizeof(WCHAR), stderr, "[]" );
+    if (name->len)
+    {
+        fputs( "\\\\", stderr );
+        dump_strW( name->name, name->len / sizeof(WCHAR), stderr, "[]" );
+    }
 }
 
 /* dump the name of an object to stderr */
@@ -535,16 +541,15 @@ struct security_descriptor *default_get_sd( struct object *obj )
     return obj->sd;
 }
 
-int set_sd_defaults_from_token( struct object *obj, const struct security_descriptor *sd,
-                                unsigned int set_info, struct token *token )
+struct security_descriptor *set_sd_from_token_internal( const struct security_descriptor *sd,
+                                                        const struct security_descriptor *old_sd,
+                                                        unsigned int set_info, struct token *token )
 {
     struct security_descriptor new_sd, *new_sd_ptr;
     int present;
     const SID *owner = NULL, *group = NULL;
     const ACL *sacl, *dacl;
     char *ptr;
-
-    if (!set_info) return 1;
 
     new_sd.control = sd->control & ~SE_SELF_RELATIVE;
 
@@ -553,10 +558,10 @@ int set_sd_defaults_from_token( struct object *obj, const struct security_descri
         owner = sd_get_owner( sd );
         new_sd.owner_len = sd->owner_len;
     }
-    else if (obj->sd && obj->sd->owner_len)
+    else if (old_sd && old_sd->owner_len)
     {
-        owner = sd_get_owner( obj->sd );
-        new_sd.owner_len = obj->sd->owner_len;
+        owner = sd_get_owner( old_sd );
+        new_sd.owner_len = old_sd->owner_len;
     }
     else if (token)
     {
@@ -570,10 +575,10 @@ int set_sd_defaults_from_token( struct object *obj, const struct security_descri
         group = sd_get_group( sd );
         new_sd.group_len = sd->group_len;
     }
-    else if (obj->sd && obj->sd->group_len)
+    else if (old_sd && old_sd->group_len)
     {
-        group = sd_get_group( obj->sd );
-        new_sd.group_len = obj->sd->group_len;
+        group = sd_get_group( old_sd );
+        new_sd.group_len = old_sd->group_len;
     }
     else if (token)
     {
@@ -582,33 +587,44 @@ int set_sd_defaults_from_token( struct object *obj, const struct security_descri
     }
     else new_sd.group_len = 0;
 
-    new_sd.control |= SE_SACL_PRESENT;
     sacl = sd_get_sacl( sd, &present );
     if (set_info & SACL_SECURITY_INFORMATION && present)
+    {
+        new_sd.control |= SE_SACL_PRESENT;
         new_sd.sacl_len = sd->sacl_len;
+    }
     else
     {
-        if (obj->sd) sacl = sd_get_sacl( obj->sd, &present );
+        if (old_sd) sacl = sd_get_sacl( old_sd, &present );
 
-        if (obj->sd && present)
-            new_sd.sacl_len = obj->sd->sacl_len;
+        if (old_sd && present)
+        {
+            new_sd.control |= SE_SACL_PRESENT;
+            new_sd.sacl_len = old_sd->sacl_len;
+        }
         else
             new_sd.sacl_len = 0;
     }
 
-    new_sd.control |= SE_DACL_PRESENT;
     dacl = sd_get_dacl( sd, &present );
     if (set_info & DACL_SECURITY_INFORMATION && present)
+    {
+        new_sd.control |= SE_DACL_PRESENT;
         new_sd.dacl_len = sd->dacl_len;
+    }
     else
     {
-        if (obj->sd) dacl = sd_get_dacl( obj->sd, &present );
+        if (old_sd) dacl = sd_get_dacl( old_sd, &present );
 
-        if (obj->sd && present)
-            new_sd.dacl_len = obj->sd->dacl_len;
+        if (old_sd && present)
+        {
+            new_sd.control |= SE_DACL_PRESENT;
+            new_sd.dacl_len = old_sd->dacl_len;
+        }
         else if (token)
         {
             dacl = token_get_default_dacl( token );
+            new_sd.control |= SE_DACL_PRESENT;
             new_sd.dacl_len = dacl->AclSize;
         }
         else new_sd.dacl_len = 0;
@@ -616,7 +632,7 @@ int set_sd_defaults_from_token( struct object *obj, const struct security_descri
 
     ptr = mem_alloc( sizeof(new_sd) + new_sd.owner_len + new_sd.group_len +
                      new_sd.sacl_len + new_sd.dacl_len );
-    if (!ptr) return 0;
+    if (!ptr) return NULL;
     new_sd_ptr = (struct security_descriptor*)ptr;
 
     memcpy( ptr, &new_sd, sizeof(new_sd) );
@@ -629,9 +645,25 @@ int set_sd_defaults_from_token( struct object *obj, const struct security_descri
     ptr += new_sd.sacl_len;
     memcpy( ptr, dacl, new_sd.dacl_len );
 
-    free( obj->sd );
-    obj->sd = new_sd_ptr;
-    return 1;
+    return new_sd_ptr;
+}
+
+int set_sd_defaults_from_token( struct object *obj, const struct security_descriptor *sd,
+                                unsigned int set_info, struct token *token )
+{
+    struct security_descriptor *new_sd;
+
+    if (!set_info) return 1;
+
+    new_sd = set_sd_from_token_internal( sd, obj->sd, set_info, token );
+    if (new_sd)
+    {
+        free( obj->sd );
+        obj->sd = new_sd;
+        return 1;
+    }
+
+    return 0;
 }
 
 /** Set the security descriptor using the current primary token for defaults. */
@@ -666,6 +698,10 @@ struct object *no_open_file( struct object *obj, unsigned int access, unsigned i
     return NULL;
 }
 
+void no_alloc_handle( struct object *obj, struct process *process, obj_handle_t handle )
+{
+}
+
 int no_close_handle( struct object *obj, struct process *process, obj_handle_t handle )
 {
     return 1;  /* ok to close */
@@ -673,4 +709,40 @@ int no_close_handle( struct object *obj, struct process *process, obj_handle_t h
 
 void no_destroy( struct object *obj )
 {
+}
+
+static const struct unicode_str type_array[] =
+{
+    {type_Type,          sizeof(type_Type)},
+    {type_Directory,     sizeof(type_Directory)},
+    {type_SymbolicLink,  sizeof(type_SymbolicLink)},
+    {type_Token,         sizeof(type_Token)},
+    {type_Job,           sizeof(type_Job)},
+    {type_Process,       sizeof(type_Process)},
+    {type_Thread,        sizeof(type_Thread)},
+    {type_Event,         sizeof(type_Event)},
+    {type_Mutant,        sizeof(type_Mutant)},
+    {type_Semaphore,     sizeof(type_Semaphore)},
+    {type_Timer,         sizeof(type_Timer)},
+    {type_KeyedEvent,    sizeof(type_KeyedEvent)},
+    {type_WindowStation, sizeof(type_WindowStation)},
+    {type_Desktop,       sizeof(type_Desktop)},
+    {type_Device,        sizeof(type_Device)},
+    /* Driver */
+    {type_IoCompletion,  sizeof(type_IoCompletion)},
+    {type_File,          sizeof(type_File)},
+    {type_Section,       sizeof(type_Section)},
+    {type_Key,           sizeof(type_Key)},
+};
+
+void init_types(void)
+{
+    struct object_type *type;
+    unsigned int i;
+
+    for (i = 0; i < sizeof(type_array) / sizeof(type_array[0]); i++)
+    {
+        type = get_object_type(&type_array[i]);
+        if (type) release_object(type);
+    }
 }

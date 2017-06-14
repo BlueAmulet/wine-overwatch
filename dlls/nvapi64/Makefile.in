@@ -1,0 +1,5 @@
+MODULE    = nvapi64.dll
+PARENTSRC = ../nvapi
+
+C_SRCS = \
+	nvapi.c
