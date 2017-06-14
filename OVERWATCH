@@ -59,11 +59,7 @@ a) Winston's bubble and some other effects are opaque.
 Overwatch requires support for dual source blending. Current patch fixes this issue but also causes GPU
 to crash.
 
-b) After dying, mouse input no longer works.
-
-Cause is unknown. Workaround by ALT-TAB to another window and then ALT-TAB back.
-
-c) Graphics settings higher than Low are unsupported.
+b) Graphics settings higher than Low are unsupported.
 
 
 5. Troubleshooting
