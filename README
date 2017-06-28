@@ -13,15 +13,12 @@ LICENSE for the details.
 
 2. QUICK START
 
-From the top-level directory of the Wine source (which contains this file),
-run:
+Overwatch requires a Shared WoW64 build of wine. Follow the directions at
+(https://wiki.winehq.org/Building_Wine#Shared_WoW64).
 
-./configure
-make
-
-Run programs as "wine program".  For more information and problem
-resolution, read the rest of this file, the Wine man page, and
-especially the wealth of information found at http://www.winehq.org.
+Ubuntu users will need to setup up a 32bit chroot or container,
+instructions to do that are here:
+(https://wiki.winehq.org/Building_Biarch_Wine_On_Ubuntu#Build_64-bit_Wine)
 
 
 3. REQUIREMENTS
