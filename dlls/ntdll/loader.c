@@ -1537,6 +1537,13 @@ done:
     return status;
 }
 
+NTSTATUS WINAPI LdrRegisterDllNotification(ULONG flags, void *notification_fn, PVOID context, PVOID *cookie)
+{
+    FIXME("(%08x, %p, %p, %p),  stub\n", flags, notification_fn, context, cookie);
+
+    return STATUS_SUCCESS;
+}
+
 /******************************************************************
  *		LdrDisableThreadCalloutsForDll (NTDLL.@)
  *
