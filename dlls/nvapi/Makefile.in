@@ -1,0 +1,5 @@
+MODULE    = nvapi.dll
+IMPORTS   = wined3d
+
+C_SRCS = \
+	nvapi.c

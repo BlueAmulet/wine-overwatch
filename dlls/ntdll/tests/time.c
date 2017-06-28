@@ -18,7 +18,9 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#define NONAMELESSUNION
 #include "ntdll_test.h"
+#include "ddk/wdm.h"
 
 #define TICKSPERSEC        10000000
 #define TICKSPERMSEC       10000
@@ -27,6 +29,7 @@
 static VOID (WINAPI *pRtlTimeToTimeFields)( const LARGE_INTEGER *liTime, PTIME_FIELDS TimeFields) ;
 static VOID (WINAPI *pRtlTimeFieldsToTime)(  PTIME_FIELDS TimeFields,  PLARGE_INTEGER Time) ;
 static NTSTATUS (WINAPI *pNtQueryPerformanceCounter)( LARGE_INTEGER *counter, LARGE_INTEGER *frequency );
+static ULONG (WINAPI *pNtGetTickCount)(void);
 
 static const int MonthLengths[2][12] =
 {
@@ -115,15 +118,40 @@ static void test_NtQueryPerformanceCounter(void)
     ok(status == STATUS_SUCCESS, "expected STATUS_SUCCESS, got %08x\n", status);
 }
 
+static void test_NtGetTickCount(void)
+{
+#ifndef _WIN64
+    KSHARED_USER_DATA *user_shared_data = (void *)0x7ffe0000;
+    LONG diff;
+    int i;
+
+    if (!pNtGetTickCount)
+    {
+        win_skip("NtGetTickCount is not available\n");
+        return;
+    }
+
+    for (i = 0; i < 5; ++i)
+    {
+        diff = (user_shared_data->u.TickCountQuad * user_shared_data->TickCountMultiplier) >> 24;
+        diff = pNtGetTickCount() - diff;
+        ok(diff < 32, "NtGetTickCount - TickCountQuad too high, expected < 32 got %d\n", diff);
+        Sleep(50);
+    }
+#endif
+}
+
 START_TEST(time)
 {
     HMODULE mod = GetModuleHandleA("ntdll.dll");
     pRtlTimeToTimeFields = (void *)GetProcAddress(mod,"RtlTimeToTimeFields");
     pRtlTimeFieldsToTime = (void *)GetProcAddress(mod,"RtlTimeFieldsToTime");
     pNtQueryPerformanceCounter = (void *)GetProcAddress(mod, "NtQueryPerformanceCounter");
+    pNtGetTickCount = (void *)GetProcAddress(mod,"NtGetTickCount");
     if (pRtlTimeToTimeFields && pRtlTimeFieldsToTime)
         test_pRtlTimeToTimeFields();
     else
         win_skip("Required time conversion functions are not available\n");
     test_NtQueryPerformanceCounter();
+    test_NtGetTickCount();
 }

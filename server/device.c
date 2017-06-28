@@ -75,6 +75,7 @@ static const struct object_ops irp_call_ops =
     no_link_name,                     /* link_name */
     NULL,                             /* unlink_name */
     no_open_file,                     /* open_file */
+    no_alloc_handle,                  /* alloc_handle */
     no_close_handle,                  /* close_handle */
     irp_call_destroy                  /* destroy */
 };
@@ -111,6 +112,7 @@ static const struct object_ops device_manager_ops =
     no_link_name,                     /* link_name */
     NULL,                             /* unlink_name */
     no_open_file,                     /* open_file */
+    no_alloc_handle,                  /* alloc_handle */
     no_close_handle,                  /* close_handle */
     device_manager_destroy            /* destroy */
 };
@@ -152,6 +154,7 @@ static const struct object_ops device_ops =
     directory_link_name,              /* link_name */
     default_unlink_name,              /* unlink_name */
     device_open_file,                 /* open_file */
+    no_alloc_handle,                  /* alloc_handle */
     no_close_handle,                  /* close_handle */
     device_destroy                    /* destroy */
 };
@@ -197,6 +200,7 @@ static const struct object_ops device_file_ops =
     no_link_name,                     /* link_name */
     NULL,                             /* unlink_name */
     no_open_file,                     /* open_file */
+    no_alloc_handle,                  /* alloc_handle */
     device_file_close_handle,         /* close_handle */
     device_file_destroy               /* destroy */
 };
@@ -619,7 +623,11 @@ static void delete_device( struct device *device )
     if (!device->manager) return;  /* already deleted */
 
     LIST_FOR_EACH_ENTRY_SAFE( file, next, &device->files, struct device_file, entry )
+    {
+        grab_object( &file->obj );
         delete_file( file );
+        release_object( &file->obj );
+    }
 
     unlink_named_object( &device->obj );
     list_remove( &device->entry );
@@ -647,7 +655,9 @@ static void device_manager_destroy( struct object *obj )
     while ((ptr = list_head( &manager->devices )))
     {
         struct device *device = LIST_ENTRY( ptr, struct device, entry );
+        grab_object( &device->obj );
         delete_device( device );
+        release_object( &device->obj );
     }
 }
 

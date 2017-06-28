@@ -72,6 +72,7 @@ struct window
     rectangle_t      visible_rect;    /* visible part of window rect (relative to parent client area) */
     rectangle_t      client_rect;     /* client rectangle (relative to parent client area) */
     struct region   *win_region;      /* region for shaped windows (relative to window rect) */
+    struct region   *layer_region;    /* region for layered windows (relative to window rect) */
     struct region   *update_region;   /* update region (relative to window rect) */
     unsigned int     style;           /* window style */
     unsigned int     ex_style;        /* window extended style */
@@ -477,6 +478,7 @@ static struct window *create_window( struct window *parent, struct window *owner
     win->atom           = atom;
     win->last_active    = win->handle;
     win->win_region     = NULL;
+    win->layer_region   = NULL;
     win->update_region  = NULL;
     win->style          = 0;
     win->ex_style       = 0;
@@ -653,6 +655,9 @@ static inline int is_point_in_window( struct window *win, int x, int y )
     if (win->win_region &&
         !point_in_region( win->win_region, x - win->window_rect.left, y - win->window_rect.top ))
         return 0;  /* not in window region */
+    if (win->layer_region &&
+        !point_in_region( win->layer_region, x - win->window_rect.left, y - win->window_rect.top ))
+        return 0;  /* not in layer mask region */
     return 1;
 }
 
@@ -875,6 +880,18 @@ static struct region *intersect_window_region( struct region *region, struct win
 }
 
 
+/* intersect the layer region with the specified region, relative to the window parent */
+static struct region *intersect_layer_region( struct region *region, struct window *win )
+{
+    /* make region relative to window rect */
+    offset_region( region, -win->window_rect.left, -win->window_rect.top );
+    if (!intersect_region( region, region, win->layer_region )) return NULL;
+    /* make region relative to parent again */
+    offset_region( region, win->window_rect.left, win->window_rect.top );
+    return region;
+}
+
+
 /* convert coordinates from client to screen coords */
 static inline void client_to_screen( struct window *win, int *x, int *y )
 {
@@ -925,6 +942,11 @@ static struct region *clip_children( struct window *parent, struct window *last,
         if (ptr->ex_style & WS_EX_TRANSPARENT) continue;
         set_region_rect( tmp, &ptr->visible_rect );
         if (ptr->win_region && !intersect_window_region( tmp, ptr ))
+        {
+            free_region( tmp );
+            return NULL;
+        }
+        if (ptr->layer_region && !intersect_layer_region( tmp, ptr ))
         {
             free_region( tmp );
             return NULL;
@@ -990,11 +1012,13 @@ static struct region *get_visible_region( struct window *win, unsigned int flags
     {
         set_region_rect( region, &win->visible_rect );
         if (win->win_region && !intersect_window_region( region, win )) goto error;
+        if (win->layer_region && !intersect_layer_region( region, win )) goto error;
     }
     else
     {
         set_region_client_rect( region, win );
         if (win->win_region && !intersect_window_region( region, win )) goto error;
+        if (win->layer_region && !intersect_layer_region( region, win )) goto error;
     }
 
     /* clip children */
@@ -1039,6 +1063,7 @@ static struct region *get_visible_region( struct window *win, unsigned int flags
             }
             set_region_client_rect( tmp, win );
             if (win->win_region && !intersect_window_region( tmp, win )) goto error;
+            if (win->layer_region && !intersect_layer_region( tmp, win )) goto error;
             if (!intersect_region( region, region, tmp )) goto error;
             if (is_region_empty( region )) break;
         }
@@ -1071,6 +1096,7 @@ static struct region *clip_pixel_format_children( struct window *parent, struct 
         /* add the visible rect */
         set_region_rect( clip, &ptr->visible_rect );
         if (ptr->win_region && !intersect_window_region( clip, ptr )) break;
+        if (ptr->layer_region && !intersect_layer_region( clip, ptr )) break;
         offset_region( clip, offset_x, offset_y );
         if (!intersect_region( clip, clip, parent_clip )) break;
         if (!union_region( region, region, clip )) break;
@@ -1079,6 +1105,7 @@ static struct region *clip_pixel_format_children( struct window *parent, struct 
         /* subtract the client rect if it uses a custom pixel format */
         set_region_rect( clip, &ptr->client_rect );
         if (ptr->win_region && !intersect_window_region( clip, ptr )) break;
+        if (ptr->layer_region && !intersect_layer_region( clip, ptr )) break;
         offset_region( clip, offset_x, offset_y );
         if (!intersect_region( clip, clip, parent_clip )) break;
         if ((ptr->paint_flags & PAINT_HAS_PIXEL_FORMAT) && !subtract_region( region, region, clip ))
@@ -1105,8 +1132,10 @@ static struct region *get_surface_region( struct window *win )
     if (!(clip = create_empty_region())) goto error;
     set_region_rect( region, &win->visible_rect );
     if (win->win_region && !intersect_window_region( region, win )) goto error;
+    if (win->layer_region && !intersect_layer_region( region, win )) goto error;
     set_region_rect( clip, &win->client_rect );
     if (win->win_region && !intersect_window_region( clip, win )) goto error;
+    if (win->layer_region && !intersect_layer_region( clip, win )) goto error;
 
     if ((win->paint_flags & PAINT_HAS_PIXEL_FORMAT) && !subtract_region( region, region, clip ))
         goto error;
@@ -1825,6 +1854,14 @@ static void set_window_region( struct window *win, struct region *region, int re
 }
 
 
+/* set the layer region */
+static void set_layer_region( struct window *win, struct region *region )
+{
+    if (win->layer_region) free_region( win->layer_region );
+    win->layer_region = region;
+}
+
+
 /* destroy a window */
 void destroy_window( struct window *win )
 {
@@ -1873,6 +1910,7 @@ void destroy_window( struct window *win )
 
     detach_window_thread( win );
     if (win->win_region) free_region( win->win_region );
+    if (win->layer_region) free_region( win->layer_region );
     if (win->update_region) free_region( win->update_region );
     if (win->class) release_class( win->class );
     free( win->text );
@@ -2537,6 +2575,24 @@ DECL_HANDLER(set_window_region)
 }
 
 
+/* set the layer region */
+DECL_HANDLER(set_layer_region)
+{
+    struct region *region = NULL;
+    struct window *win = get_window( req->window );
+
+    if (!win) return;
+
+    if (get_req_data_size())  /* no data means remove the region completely */
+    {
+        if (!(region = create_region_from_req_data( get_req_data(), get_req_data_size() )))
+            return;
+        if (win->ex_style & WS_EX_LAYOUTRTL) mirror_region( &win->window_rect, region );
+    }
+    set_layer_region( win, region );
+}
+
+
 /* get a window update region */
 DECL_HANDLER(get_update_region)
 {
@@ -2632,6 +2688,12 @@ DECL_HANDLER(update_window_zorder)
             tmp = rect;
             offset_rect( &tmp, -ptr->window_rect.left, -ptr->window_rect.top );
             if (!rect_in_region( ptr->win_region, &tmp )) continue;
+        }
+        if (ptr->layer_region)
+        {
+            tmp = rect;
+            offset_rect( &tmp, -ptr->window_rect.left, -ptr->window_rect.top );
+            if (!rect_in_region( ptr->layer_region, &tmp )) continue;
         }
         /* found a window obscuring the rectangle, now move win above this one */
         /* making sure to not violate the topmost rule */

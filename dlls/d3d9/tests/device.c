@@ -8583,7 +8583,13 @@ static void test_surface_blocks(void)
                     break;
 
                 default:
+                    hr = E_FAIL;
                     break;
+            }
+            if (FAILED(hr))
+            {
+                skip("Failed to create surface, skipping tests.\n");
+                continue;
             }
 
             if (formats[i].block_width > 1)
@@ -9081,10 +9087,13 @@ static void test_vidmem_accounting(void)
     }
     vidmem_end = IDirect3DDevice9_GetAvailableTextureMem(device);
 
-    ok(vidmem_start > vidmem_end, "Expected available texture memory to decrease during texture creation.\n");
-    diff = vidmem_start - vidmem_end;
-    ok(diff > 1024 * 1024 * 2 * i, "Expected a video memory difference of at least %u MB, got %u MB.\n",
-            2 * i, diff / 1024 / 1024);
+    todo_wine_if(vidmem_start == vidmem_end)
+    {
+        ok(vidmem_start > vidmem_end, "Expected available texture memory to decrease during texture creation.\n");
+        diff = vidmem_start - vidmem_end;
+        ok(diff > 1024 * 1024 * 2 * i, "Expected a video memory difference of at least %u MB, got %u MB.\n",
+                2 * i, diff / 1024 / 1024);
+    }
 
     for (i = 0; i < ARRAY_SIZE(textures); i++)
     {
@@ -9534,6 +9543,11 @@ static void test_volume_blocks(void)
         hr = IDirect3DDevice9_CreateVolumeTexture(device, 24, 8, 8, 1, 0,
                 formats[i].fmt, D3DPOOL_SCRATCH, &texture, NULL);
         ok(SUCCEEDED(hr), "Failed to create volume texture, hr %#x.\n", hr);
+        if (FAILED(hr))
+        {
+            skip("Failed to create texture, skipping tests.\n");
+            continue;
+        }
 
         /* Test lockrect offset */
         for (j = 0; j < ARRAY_SIZE(offset_tests); j++)
@@ -11538,6 +11552,21 @@ static void test_format_unknown(void)
     DestroyWindow(window);
 }
 
+static void test_desktop_window(void)
+{
+    IDirect3DDevice9 *device = NULL;
+    IDirect3D9 *d3d;
+
+    d3d = Direct3DCreate9(D3D_SDK_VERSION);
+    ok(!!d3d, "Failed to create a D3D object.\n");
+
+    device = create_device(d3d, GetDesktopWindow(), NULL);
+    ok(!!device, "Failed to created device on desktop window.\n");
+
+    if (device) IDirect3DDevice9_Release(device);
+    IDirect3D9_Release(d3d);
+}
+
 START_TEST(device)
 {
     WNDCLASSA wc = {0};
@@ -11656,6 +11685,7 @@ START_TEST(device)
     test_get_render_target_data();
     test_render_target_device_mismatch();
     test_format_unknown();
+    test_desktop_window();
 
     UnregisterClassA("d3d9_test_wc", GetModuleHandleA(NULL));
 }
