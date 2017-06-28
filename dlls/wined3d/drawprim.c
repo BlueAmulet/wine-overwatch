@@ -72,6 +72,23 @@ static void draw_primitive_arrays(struct wined3d_context *context, const struct 
         return;
     }
 
+    if (gl_info->supported[ARB_BASE_INSTANCE] && start_instance)
+    {
+        if (!idx_size)
+        {
+            GL_EXTCALL(glDrawArraysInstancedBaseInstance(state->gl_primitive_type, start_idx, count,
+                    instance_count, start_instance));
+            checkGLcall("glDrawArraysInstancedBaseInstance");
+            return;
+        }
+
+        GL_EXTCALL(glDrawElementsInstancedBaseVertexBaseInstance(state->gl_primitive_type, count, idx_type,
+                    (const char *)idx_data + (idx_size * start_idx), instance_count, base_vertex_idx,
+                    start_instance));
+        checkGLcall("glDrawElementsInstancedBaseVertexBaseInstance");
+        return;
+    }
+
     if (start_instance)
         FIXME("Start instance (%u) not supported.\n", start_instance);
 
