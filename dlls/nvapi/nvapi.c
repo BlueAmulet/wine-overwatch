@@ -505,6 +505,18 @@ static NvAPI_Status CDECL NvAPI_DISP_GetGDIPrimaryDisplayId(NvU32* displayId)
     return NVAPI_OK;
 }
 
+static NvAPI_Status CDECL NvAPI_DISP_GetDisplayIdByDisplayName(const char * displayName, NvU32* displayId)
+{
+    TRACE("(%s, %p)\n", displayName, displayId);
+
+    if (!displayName || !displayId)
+        return NVAPI_INVALID_ARGUMENT;
+
+    *displayId = FAKE_DISPLAY_ID;
+    return NVAPI_OK;
+}
+
+
 static NvAPI_Status CDECL NvAPI_EnumNvidiaDisplayHandle(NvU32 thisEnum, NvDisplayHandle *pNvDispHandle)
 {
     TRACE("(%u, %p)\n", thisEnum, pNvDispHandle);
@@ -531,6 +543,17 @@ static NvAPI_Status CDECL NvAPI_SYS_GetDriverAndBranchVersion(NvU32* pDriverVers
     memcpy(szBuildBranchString, build_str, sizeof(build_str));
     *pDriverVersion = 33788;
 
+    return NVAPI_OK;
+}
+
+static NvAPI_Status CDECL NvAPI_SYS_GetPhysicalGpuFromDisplayId(NvU32 displayId, NvPhysicalGpuHandle *hPhysicalGpu)
+{
+    TRACE("(%u, %p)\n", displayId, hPhysicalGpu);
+
+    if (!displayId || !hPhysicalGpu)
+        return NVAPI_INVALID_ARGUMENT;
+
+    *hPhysicalGpu = FAKE_PHYSICAL_GPU;
     return NVAPI_OK;
 }
 
@@ -681,6 +704,48 @@ static NvAPI_Status CDECL NvAPI_GPU_GetGpuCoreCount(NvPhysicalGpuHandle hPhysica
     return NVAPI_OK;
 }
 
+static NvAPI_Status CDECL NvAPI_GPU_GetSystemType(NvPhysicalGpuHandle hPhysicalGpu, NV_SYSTEM_TYPE *pSystemType)
+{
+    TRACE("(%p, %p)\n", hPhysicalGpu, pSystemType);
+
+    if (!hPhysicalGpu)
+        return NVAPI_EXPECTED_PHYSICAL_GPU_HANDLE;
+
+    if (hPhysicalGpu != FAKE_PHYSICAL_GPU)
+    {
+        FIXME("invalid handle: %p\n", hPhysicalGpu);
+        return NVAPI_INVALID_HANDLE;
+    }
+
+    if (!pSystemType)
+        return NVAPI_INVALID_ARGUMENT;
+
+    /* The choice of being a desktop is arguable
+       but it seems like the "safest" choice. */
+    *pSystemType = NV_SYSTEM_TYPE_DESKTOP;
+    return NVAPI_OK;
+}
+
+static NvAPI_Status CDECL NvAPI_GPU_GetThermalSettings(NvPhysicalGpuHandle hPhysicalGpu, NvU32 sensorIndex, NV_GPU_THERMAL_SETTINGS *pThermalSettings)
+{
+    TRACE("(%p, %u, %p)\n", hPhysicalGpu, sensorIndex, pThermalSettings);
+
+    if (!hPhysicalGpu)
+        return NVAPI_EXPECTED_PHYSICAL_GPU_HANDLE;
+
+    if (hPhysicalGpu != FAKE_PHYSICAL_GPU)
+    {
+        FIXME("invalid handle: %p\n", hPhysicalGpu);
+        return NVAPI_INVALID_HANDLE;
+    }
+
+    if (!sensorIndex || !pThermalSettings)
+        return NVAPI_INVALID_ARGUMENT;
+
+    *pThermalSettings = NVAPI_THERMAL_CONTROLLER_NONE;
+    return NVAPI_OK;
+}
+
 void* CDECL nvapi_QueryInterface(unsigned int offset)
 {
     static const struct
@@ -716,8 +781,10 @@ void* CDECL nvapi_QueryInterface(unsigned int offset)
         {0x33c7358c, NULL}, /* This functions seems to be optional */
         {0x593e8644, NULL}, /* This functions seems to be optional */
         {0x1e9d8a31, NvAPI_DISP_GetGDIPrimaryDisplayId},
+        {0xae457190, NvAPI_DISP_GetDisplayIdByDisplayName},
         {0x9abdd40d, NvAPI_EnumNvidiaDisplayHandle},
         {0x2926aaad, NvAPI_SYS_GetDriverAndBranchVersion},
+        {0x9ea74659, NvAPI_SYS_GetPhysicalGpuFromDisplayId},
         {0xd22bdd7e, NvAPI_Unload},
         {0x4b708b54, NvAPI_D3D_GetCurrentSLIState},
         {0xee1370cf, NvAPI_GetLogicalGPUFromDisplay},
@@ -726,6 +793,8 @@ void* CDECL nvapi_QueryInterface(unsigned int offset)
         {0x46fbeb03, NvAPI_GPU_GetPhysicalFrameBufferSize},
         {0x5a04b644, NvAPI_GPU_GetVirtualFrameBufferSize},
         {0xc7026a87, NvAPI_GPU_GetGpuCoreCount},
+        {0xbaaabfcc, NvAPI_GPU_GetSystemType},
+        {0xe3640a56, NvAPI_GPU_GetThermalSettings}
     };
     unsigned int i;
     TRACE("(%x)\n", offset);
