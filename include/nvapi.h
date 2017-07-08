@@ -47,6 +47,12 @@ typedef unsigned int NvU32;
 #define NVAPI_ADVANCED_DISPLAY_HEADS 4
 #define NVAPI_MAX_DISPLAYS (NVAPI_PHYSICAL_GPUS * NVAPI_ADVANCED_DISPLAY_HEADS)
 
+#define NVAPI_THERMAL_CONTROLLER_NONE 0
+
+#define NV_SYSTEM_TYPE_UNKNOWN 0
+#define NV_SYSTEM_TYPE_LAPTOP 1
+#define NV_SYSTEM_TYPE_DESKTOP 2
+
 typedef char NvAPI_ShortString[NVAPI_SHORT_STRING_MAX];
 
 #define MAKE_NVAPI_VERSION(type,version) (NvU32)(sizeof(type) | ((version)<<16))
@@ -56,6 +62,8 @@ typedef void *NvLogicalGpuHandle;
 typedef void *NvDisplayHandle;
 typedef void *StereoHandle;
 typedef void *NVDX_ObjectHandle;
+typedef void *NV_GPU_THERMAL_SETTINGS;
+typedef void *NV_SYSTEM_TYPE;
 
 typedef struct
 {
