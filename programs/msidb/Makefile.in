@@ -1,0 +1,8 @@
+MODULE    = msidb.exe
+APPMODE   = -mconsole -municode
+IMPORTS   = msi
+
+C_SRCS = \
+	main.c
+
+INSTALL_LIB = msidb.exe msidb

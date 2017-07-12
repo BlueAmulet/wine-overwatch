@@ -90,6 +90,7 @@ static const DWORD pixel_states_render[] =
     WINED3D_RS_ZENABLE,
     WINED3D_RS_ZFUNC,
     WINED3D_RS_ZWRITEENABLE,
+    WINED3D_RS_DEPTHCLIP,
 };
 
 static const DWORD pixel_states_texture[] =
@@ -1243,6 +1244,7 @@ static void state_init_default(struct wined3d_state *state, const struct wined3d
     state->render_states[WINED3D_RS_BLENDFACTOR] = 0xffffffff;
     state->render_states[WINED3D_RS_SRGBWRITEENABLE] = 0;
     state->render_states[WINED3D_RS_DEPTHBIAS] = 0;
+    state->render_states[WINED3D_RS_DEPTHCLIP] = TRUE;
     state->render_states[WINED3D_RS_WRAP8] = 0;
     state->render_states[WINED3D_RS_WRAP9] = 0;
     state->render_states[WINED3D_RS_WRAP10] = 0;

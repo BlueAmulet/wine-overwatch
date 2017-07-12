@@ -3158,6 +3158,10 @@ typedef struct _CTL_FIND_SUBJECT_PARA
 #define szOID_NETSCAPE_DATA_TYPE             "2.16.840.1.113730.2"
 #define szOID_NETSCAPE_CERT_SEQUENCE         "2.16.840.1.113730.2.5"
 
+#define szOID_NIST_sha256                    "2.16.840.1.101.3.4.2.1"
+#define szOID_NIST_sha384                    "2.16.840.1.101.3.4.2.2"
+#define szOID_NIST_sha512                    "2.16.840.1.101.3.4.2.3"
+
 /* Bits for szOID_NETSCAPE_CERT_TYPE */
 #define NETSCAPE_SSL_CLIENT_AUTH_CERT_TYPE 0x80
 #define NETSCAPE_SSL_SERVER_AUTH_CERT_TYPE 0x40

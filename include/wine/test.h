@@ -61,7 +61,13 @@ extern int winetest_loop_todo(void);
 extern void winetest_end_todo(void);
 extern int winetest_get_mainargs( char*** pargv );
 extern LONG winetest_get_failures(void);
+extern int winetest_get_report_success(void);
+extern int winetest_get_debug(void);
 extern void winetest_add_failures( LONG new_failures );
+extern void winetest_add_successes( LONG new_successes );
+extern void winetest_add_todo_failures( LONG new_todo_failures );
+extern void winetest_add_todo_successes( LONG new_todo_successes );
+extern void winetest_add_skipped( LONG new_skipped );
 extern void winetest_wait_child_process( HANDLE process );
 
 extern const char *wine_dbgstr_wn( const WCHAR *str, int n );
@@ -430,10 +436,39 @@ LONG winetest_get_failures(void)
     return failures;
 }
 
+int winetest_get_report_success(void)
+{
+    return report_success;
+}
+
+int winetest_get_debug(void)
+{
+    return winetest_debug;
+}
+
 void winetest_add_failures( LONG new_failures )
 {
-    while (new_failures-- > 0)
-        InterlockedIncrement( &failures );
+    InterlockedExchangeAdd( &failures, new_failures );
+}
+
+void winetest_add_successes( LONG new_successes )
+{
+    InterlockedExchangeAdd( &successes, new_successes );
+}
+
+void winetest_add_todo_failures( LONG new_todo_failures )
+{
+    InterlockedExchangeAdd( &todo_failures, new_todo_failures );
+}
+
+void winetest_add_todo_successes( LONG new_todo_successes )
+{
+    InterlockedExchangeAdd( &todo_successes, new_todo_successes );
+}
+
+void winetest_add_skipped( LONG new_skipped )
+{
+    InterlockedExchangeAdd( &skipped, new_skipped );
 }
 
 void winetest_wait_child_process( HANDLE process )

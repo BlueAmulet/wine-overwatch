@@ -421,9 +421,7 @@ static void test_items(void)
         r = FolderItems_get_Count(items, NULL);
 
     r = FolderItems_get_Count(items, &lcount);
-todo_wine
     ok(r == S_OK, "FolderItems::get_Count failed: %08x\n", r);
-todo_wine
     ok(!lcount, "expected 0 files, got %d\n", lcount);
 
     V_VT(&var) = VT_I4;

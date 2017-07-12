@@ -32,6 +32,8 @@
 
 #include "wine/list.h"
 
+DEFINE_GUID(IID_IWineD3DDevice, 0xd56e2a4c, 0x5127, 0x8437, 0x65, 0x8a, 0x98, 0xc5, 0xbb, 0x78, 0x94, 0x98);
+
 #define WINED3D_OK                                              S_OK
 
 #define _FACWINED3D                                             0x876
@@ -381,8 +383,9 @@ enum wined3d_render_state
     WINED3D_RS_SRCBLENDALPHA                = 207,
     WINED3D_RS_DESTBLENDALPHA               = 208,
     WINED3D_RS_BLENDOPALPHA                 = 209,
+    WINED3D_RS_DEPTHCLIP                    = 210,
 };
-#define WINEHIGHEST_RENDER_STATE                                WINED3D_RS_BLENDOPALPHA
+#define WINEHIGHEST_RENDER_STATE                                WINED3D_RS_DEPTHCLIP
 
 enum wined3d_blend
 {
@@ -672,8 +675,9 @@ enum wined3d_resource_type
 {
     WINED3D_RTYPE_NONE                      = 0,
     WINED3D_RTYPE_BUFFER                    = 1,
-    WINED3D_RTYPE_TEXTURE_2D                = 2,
-    WINED3D_RTYPE_TEXTURE_3D                = 3,
+    WINED3D_RTYPE_TEXTURE_1D                = 2,
+    WINED3D_RTYPE_TEXTURE_2D                = 3,
+    WINED3D_RTYPE_TEXTURE_3D                = 4,
 };
 
 enum wined3d_pool
@@ -1307,6 +1311,8 @@ enum wined3d_shader_byte_code_format
 #define WINED3D_LEGACY_UNBOUND_RESOURCE_COLOR                   0x00000400
 #define WINED3D_NO_PRIMITIVE_RESTART                            0x00000800
 #define WINED3D_LEGACY_CUBEMAP_FILTERING                        0x00001000
+#define WINED3D_FORWARD_DEPTH_BIAS                              0x00002000
+#define WINED3D_REQUEST_D3D10                                   0x00004000
 
 #define WINED3D_RESZ_CODE                                       0x7fa05000
 
@@ -1794,6 +1800,13 @@ struct wined3d_map_desc
     UINT row_pitch;
     UINT slice_pitch;
     void *data;
+};
+
+struct wined3d_map_info
+{
+    UINT row_pitch;
+    UINT slice_pitch;
+    UINT size;
 };
 
 struct wined3d_sub_resource_data
@@ -2551,6 +2564,8 @@ void * __cdecl wined3d_resource_get_parent(const struct wined3d_resource *resour
 DWORD __cdecl wined3d_resource_get_priority(const struct wined3d_resource *resource);
 HRESULT __cdecl wined3d_resource_map(struct wined3d_resource *resource, unsigned int sub_resource_idx,
         struct wined3d_map_desc *map_desc, const struct wined3d_box *box, DWORD flags);
+HRESULT __cdecl wined3d_resource_map_info(struct wined3d_resource *resource, unsigned int sub_resource_idx,
+        struct wined3d_map_info *info, DWORD flags);
 void __cdecl wined3d_resource_preload(struct wined3d_resource *resource);
 void __cdecl wined3d_resource_set_parent(struct wined3d_resource *resource, void *parent);
 DWORD __cdecl wined3d_resource_set_priority(struct wined3d_resource *resource, DWORD priority);
@@ -2743,5 +2758,19 @@ static inline void wined3d_box_set(struct wined3d_box *box, unsigned int left, u
     box->front = front;
     box->back = back;
 }
+
+BOOL wined3d_dxt1_decode(const BYTE *src, BYTE *dst, DWORD pitch_in, DWORD pitch_out,
+                         enum wined3d_format_id format, unsigned int w, unsigned int h);
+BOOL wined3d_dxt1_encode(const BYTE *src, BYTE *dst, DWORD pitch_in, DWORD pitch_out,
+                         enum wined3d_format_id format, unsigned int w, unsigned int h);
+BOOL wined3d_dxt3_decode(const BYTE *src, BYTE *dst, DWORD pitch_in, DWORD pitch_out,
+                         enum wined3d_format_id format, unsigned int w, unsigned int h);
+BOOL wined3d_dxt3_encode(const BYTE *src, BYTE *dst, DWORD pitch_in, DWORD pitch_out,
+                         enum wined3d_format_id format, unsigned int w, unsigned int h);
+BOOL wined3d_dxt5_decode(const BYTE *src, BYTE *dst, DWORD pitch_in, DWORD pitch_out,
+                         enum wined3d_format_id format, unsigned int w, unsigned int h);
+BOOL wined3d_dxt5_encode(const BYTE *src, BYTE *dst, DWORD pitch_in, DWORD pitch_out,
+                         enum wined3d_format_id format, unsigned int w, unsigned int h);
+BOOL wined3d_dxtn_supported(void);
 
 #endif /* __WINE_WINED3D_H */

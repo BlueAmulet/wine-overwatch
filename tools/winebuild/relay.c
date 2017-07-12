@@ -31,7 +31,7 @@
 #include "build.h"
 
 /* offset of the stack pointer relative to %fs:(0) */
-#define STACKOFFSET 0xc0  /* FIELD_OFFSET(TEB,WOW32Reserved) */
+#define STACKOFFSET 0xcc  /* FIELD_OFFSET(TEB,SystemReserved1[0]) */
 
 /* fix this if the ntdll_thread_regs structure is changed */
 #define GS_OFFSET  0x1d8  /* FIELD_OFFSET(TEB,SpareBytes1) + FIELD_OFFSET(ntdll_thread_data,gs) */

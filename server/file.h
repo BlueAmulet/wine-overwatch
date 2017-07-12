@@ -142,6 +142,10 @@ extern struct file *create_file_for_fd_obj( struct fd *fd, unsigned int access, 
 extern void file_set_error(void);
 extern struct security_descriptor *mode_to_sd( mode_t mode, const SID *user, const SID *group );
 extern mode_t sd_to_mode( const struct security_descriptor *sd, const SID *owner );
+extern int set_file_sd( struct object *obj, struct fd *fd, mode_t *mode, uid_t *uid,
+                        const struct security_descriptor *sd, unsigned int set_info );
+extern struct security_descriptor *get_file_sd( struct object *obj, struct fd *fd, mode_t *mode,
+                                                uid_t *uid );
 
 /* file mapping functions */
 
@@ -159,11 +163,20 @@ extern struct object *create_mailslot_device( struct object *root, const struct 
 extern struct object *create_unix_device( struct object *root, const struct unicode_str *name,
                                           const char *unix_path );
 
+/* shared memory functions */
+
+extern int allocate_shared_memory( int *fd, void **memory, size_t size );
+extern void release_shared_memory( int fd, void *memory, size_t size );
+extern void init_shared_memory( void );
+extern shmglobal_t *shmglobal;
+extern int          shmglobal_fd;
+
 /* change notification functions */
 
 extern void do_change_notify( int unix_fd );
 extern void sigio_callback(void);
-extern struct object *create_dir_obj( struct fd *fd, unsigned int access, mode_t mode );
+extern struct object *create_dir_obj( struct fd *fd, unsigned int access, mode_t mode,
+                                      const struct security_descriptor *sd );
 extern struct dir *get_dir_obj( struct process *process, obj_handle_t handle, unsigned int access );
 
 /* completion */
@@ -180,7 +193,7 @@ extern struct object *create_serial( struct fd *fd );
 /* async I/O functions */
 extern void free_async_queue( struct async_queue *queue );
 extern struct async *create_async( struct fd *fd, struct thread *thread, const async_data_t *data, struct iosb *iosb );
-extern struct async *create_request_async( struct fd *fd, const async_data_t *data );
+extern struct async *create_request_async( struct fd *fd, unsigned int comp_flags, const async_data_t *data );
 extern obj_handle_t async_handoff( struct async *async, int success, data_size_t *result );
 extern void queue_async( struct async_queue *queue, struct async *async );
 extern void async_set_timeout( struct async *async, timeout_t timeout, unsigned int status );

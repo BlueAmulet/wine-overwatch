@@ -1607,6 +1607,35 @@ enum fogsource {
     FOGSOURCE_COORD,
 };
 
+union wined3d_gl_fence_object
+{
+    GLuint id;
+    GLsync sync;
+};
+
+enum wined3d_fence_result
+{
+    WINED3D_FENCE_OK,
+    WINED3D_FENCE_WAITING,
+    WINED3D_FENCE_NOT_STARTED,
+    WINED3D_FENCE_WRONG_THREAD,
+    WINED3D_FENCE_ERROR,
+};
+
+struct wined3d_fence
+{
+    struct list entry;
+    union wined3d_gl_fence_object object;
+    struct wined3d_context *context;
+};
+
+HRESULT wined3d_fence_create(struct wined3d_device *device, struct wined3d_fence **fence) DECLSPEC_HIDDEN;
+void wined3d_fence_destroy(struct wined3d_fence *fence) DECLSPEC_HIDDEN;
+void wined3d_fence_issue(struct wined3d_fence *fence,
+        const struct wined3d_device *device) DECLSPEC_HIDDEN;
+enum wined3d_fence_result wined3d_fence_wait(const struct wined3d_fence *fence,
+        const struct wined3d_device *device) DECLSPEC_HIDDEN;
+
 /* Direct3D terminology with little modifications. We do not have an issued
  * state because only the driver knows about it, but we have a created state
  * because D3D allows GetData() on a created query, but OpenGL doesn't. */
@@ -1641,35 +1670,13 @@ struct wined3d_query
     struct list poll_list_entry;
 };
 
-union wined3d_gl_query_object
-{
-    GLuint id;
-    GLsync sync;
-};
-
 struct wined3d_event_query
 {
     struct wined3d_query query;
 
-    struct list entry;
-    union wined3d_gl_query_object object;
-    struct wined3d_context *context;
+    struct wined3d_fence fence;
     BOOL signalled;
 };
-
-enum wined3d_event_query_result
-{
-    WINED3D_EVENT_QUERY_OK,
-    WINED3D_EVENT_QUERY_WAITING,
-    WINED3D_EVENT_QUERY_NOT_STARTED,
-    WINED3D_EVENT_QUERY_WRONG_THREAD,
-    WINED3D_EVENT_QUERY_ERROR
-};
-
-enum wined3d_event_query_result wined3d_event_query_finish(const struct wined3d_event_query *query,
-        const struct wined3d_device *device) DECLSPEC_HIDDEN;
-void wined3d_event_query_issue(struct wined3d_event_query *query, const struct wined3d_device *device) DECLSPEC_HIDDEN;
-BOOL wined3d_event_query_supported(const struct wined3d_gl_info *gl_info) DECLSPEC_HIDDEN;
 
 struct wined3d_occlusion_query
 {
@@ -1876,10 +1883,10 @@ struct wined3d_context
     unsigned int free_occlusion_query_count;
     struct list occlusion_queries;
 
-    union wined3d_gl_query_object *free_event_queries;
-    SIZE_T free_event_query_size;
-    unsigned int free_event_query_count;
-    struct list event_queries;
+    union wined3d_gl_fence_object *free_fences;
+    SIZE_T free_fence_size;
+    unsigned int free_fence_count;
+    struct list fences;
 
     GLuint *free_timestamp_queries;
     SIZE_T free_timestamp_query_size;
@@ -1899,8 +1906,8 @@ struct wined3d_context
     struct wined3d_stream_info stream_info;
 
     /* Fences for GL_APPLE_flush_buffer_range */
-    struct wined3d_event_query *buffer_queries[MAX_ATTRIBS];
-    unsigned int num_buffer_queries;
+    struct wined3d_fence *buffer_fences[MAX_ATTRIBS];
+    unsigned int buffer_fence_count;
 
     DWORD tex_unit_map[MAX_COMBINED_SAMPLERS];
     DWORD rev_tex_unit_map[MAX_GL_FRAGMENT_SAMPLERS + MAX_VERTEX_SAMPLERS];
@@ -2047,8 +2054,8 @@ BOOL wined3d_clip_blit(const RECT *clip_rect, RECT *clipped, RECT *other) DECLSP
 
 struct wined3d_context *context_acquire(const struct wined3d_device *device,
         struct wined3d_texture *texture, unsigned int sub_resource_idx) DECLSPEC_HIDDEN;
-void context_alloc_event_query(struct wined3d_context *context,
-        struct wined3d_event_query *query) DECLSPEC_HIDDEN;
+void context_alloc_fence(struct wined3d_context *context,
+        struct wined3d_fence *fence) DECLSPEC_HIDDEN;
 void context_alloc_occlusion_query(struct wined3d_context *context,
         struct wined3d_occlusion_query *query) DECLSPEC_HIDDEN;
 void context_apply_blit_state(struct wined3d_context *context, const struct wined3d_device *device) DECLSPEC_HIDDEN;
@@ -2072,7 +2079,7 @@ struct wined3d_context *context_create(struct wined3d_swapchain *swapchain, stru
 HGLRC context_create_wgl_attribs(const struct wined3d_gl_info *gl_info, HDC hdc, HGLRC share_ctx) DECLSPEC_HIDDEN;
 void context_destroy(struct wined3d_device *device, struct wined3d_context *context) DECLSPEC_HIDDEN;
 void context_end_transform_feedback(struct wined3d_context *context) DECLSPEC_HIDDEN;
-void context_free_event_query(struct wined3d_event_query *query) DECLSPEC_HIDDEN;
+void context_free_fence(struct wined3d_fence *fence) DECLSPEC_HIDDEN;
 void context_free_occlusion_query(struct wined3d_occlusion_query *query) DECLSPEC_HIDDEN;
 struct wined3d_context *context_get_current(void) DECLSPEC_HIDDEN;
 GLenum context_get_offscreen_gl_buffer(const struct wined3d_context *context) DECLSPEC_HIDDEN;
@@ -2261,6 +2268,7 @@ enum wined3d_pci_device
     CARD_NVIDIA_GEFORCE_GTX550      = 0x1244,
     CARD_NVIDIA_GEFORCE_GT555M      = 0x04b8,
     CARD_NVIDIA_GEFORCE_GTX560TI    = 0x1200,
+    CARD_NVIDIA_GEFORCE_GTX560M     = 0x1251,
     CARD_NVIDIA_GEFORCE_GTX560      = 0x1201,
     CARD_NVIDIA_GEFORCE_GTX570      = 0x1081,
     CARD_NVIDIA_GEFORCE_GTX580      = 0x1080,
@@ -2765,6 +2773,16 @@ struct wined3d_state
     struct wined3d_rasterizer_state *rasterizer_state;
 };
 
+#if defined(STAGING_CSMT)
+struct wined3d_gl_bo
+{
+    GLuint name;
+    GLenum usage;
+    GLenum type_hint;
+    UINT size;
+};
+
+#endif /* STAGING_CSMT */
 #define WINED3D_UNMAPPED_STAGE ~0u
 
 /* Multithreaded flag. Removed from the public header to signal that
@@ -2840,11 +2858,13 @@ struct wined3d_device
     /* Textures for when no other textures are mapped */
     struct
     {
+        GLuint tex_1d;
         GLuint tex_2d;
         GLuint tex_rect;
         GLuint tex_3d;
         GLuint tex_cube;
         GLuint tex_cube_array;
+        GLuint tex_1d_array;
         GLuint tex_2d_array;
         GLuint tex_buffer;
     } dummy_textures;
@@ -2874,6 +2894,12 @@ LRESULT device_process_message(struct wined3d_device *device, HWND window, BOOL 
 void device_resource_add(struct wined3d_device *device, struct wined3d_resource *resource) DECLSPEC_HIDDEN;
 void device_resource_released(struct wined3d_device *device, struct wined3d_resource *resource) DECLSPEC_HIDDEN;
 void device_invalidate_state(const struct wined3d_device *device, DWORD state) DECLSPEC_HIDDEN;
+#if defined(STAGING_CSMT)
+struct wined3d_gl_bo *wined3d_device_get_bo(struct wined3d_device *device, UINT size, GLenum gl_usage,
+        GLenum type_hint, struct wined3d_context *context) DECLSPEC_HIDDEN;
+void wined3d_device_release_bo(struct wined3d_device *device, struct wined3d_gl_bo *bo,
+        const struct wined3d_context *context) DECLSPEC_HIDDEN;
+#endif /* STAGING_CSMT */
 
 static inline BOOL isStateDirty(const struct wined3d_context *context, DWORD state)
 {
@@ -2893,6 +2919,8 @@ struct wined3d_resource_ops
     void (*resource_unload)(struct wined3d_resource *resource);
     HRESULT (*resource_sub_resource_map)(struct wined3d_resource *resource, unsigned int sub_resource_idx,
             struct wined3d_map_desc *map_desc, const struct wined3d_box *box, DWORD flags);
+    HRESULT (*resource_map_info)(struct wined3d_resource *resource, unsigned int sub_resource_idx,
+            struct wined3d_map_info *info, DWORD flags);
     HRESULT (*resource_sub_resource_unmap)(struct wined3d_resource *resource, unsigned int sub_resource_idx);
 };
 
@@ -3059,7 +3087,11 @@ struct wined3d_texture
 
         unsigned int map_count;
         DWORD locations;
+#if !defined(STAGING_CSMT)
         GLuint buffer_object;
+#else  /* STAGING_CSMT */
+        struct wined3d_gl_bo *buffer;
+#endif /* STAGING_CSMT */
     } sub_resources[1];
 };
 
@@ -3374,6 +3406,9 @@ struct wined3d_cs_queue
 
 struct wined3d_cs_ops
 {
+#if defined(STAGING_CSMT)
+    BOOL (*check_space)(struct wined3d_cs *cs, size_t size, enum wined3d_cs_queue_id queue_id);
+#endif /* STAGING_CSMT */
     void *(*require_space)(struct wined3d_cs *cs, size_t size, enum wined3d_cs_queue_id queue_id);
     void (*submit)(struct wined3d_cs *cs, enum wined3d_cs_queue_id queue_id);
     void (*finish)(struct wined3d_cs *cs, enum wined3d_cs_queue_id queue_id);
@@ -3478,6 +3513,9 @@ void wined3d_cs_emit_unload_resource(struct wined3d_cs *cs, struct wined3d_resou
 void wined3d_cs_emit_update_sub_resource(struct wined3d_cs *cs, struct wined3d_resource *resource,
         unsigned int sub_resource_idx, const struct wined3d_box *box, const void *data, unsigned int row_pitch,
         unsigned int slice_pitch) DECLSPEC_HIDDEN;
+void wined3d_cs_emit_copy_sub_resource(struct wined3d_cs *cs, struct wined3d_resource *dst_resource,
+        unsigned int dst_sub_resource_idx, const struct wined3d_box *dst_box, struct wined3d_resource *src_resource,
+        unsigned int src_sub_resource_idx, const struct wined3d_box *src_box) DECLSPEC_HIDDEN;
 void wined3d_cs_init_object(struct wined3d_cs *cs,
         void (*callback)(void *object), void *object) DECLSPEC_HIDDEN;
 HRESULT wined3d_cs_map(struct wined3d_cs *cs, struct wined3d_resource *resource, unsigned int sub_resource_idx,
@@ -3533,7 +3571,7 @@ struct wined3d_buffer
 
     struct wined3d_map_range *maps;
     SIZE_T maps_size, modified_areas;
-    struct wined3d_event_query *query;
+    struct wined3d_fence *fence;
 
     /* conversion stuff */
     UINT decl_change_count, full_conversion_count;
@@ -3558,7 +3596,7 @@ BOOL wined3d_buffer_load_location(struct wined3d_buffer *buffer,
 BYTE *wined3d_buffer_load_sysmem(struct wined3d_buffer *buffer, struct wined3d_context *context) DECLSPEC_HIDDEN;
 HRESULT wined3d_buffer_copy(struct wined3d_buffer *dst_buffer, unsigned int dst_offset,
         struct wined3d_buffer *src_buffer, unsigned int src_offset, unsigned int size) DECLSPEC_HIDDEN;
-void wined3d_buffer_upload_data(struct wined3d_buffer *buffer, struct wined3d_context *context,
+HRESULT wined3d_buffer_upload_data(struct wined3d_buffer *buffer,
         const struct wined3d_box *box, const void *data) DECLSPEC_HIDDEN;
 
 struct wined3d_rendertarget_view
@@ -4244,6 +4282,9 @@ static inline void wined3d_not_from_cs(struct wined3d_cs *cs)
 {
     assert(cs->thread_id != GetCurrentThreadId());
 }
+
+BOOL wined3d_dxtn_init(void) DECLSPEC_HIDDEN;
+void wined3d_dxtn_free(void) DECLSPEC_HIDDEN;
 
 /* The WNDCLASS-Name for the fake window which we use to retrieve the GL capabilities */
 #define WINED3D_OPENGL_WINDOW_CLASS_NAME "WineD3D_OpenGL"

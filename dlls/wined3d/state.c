@@ -1726,6 +1726,7 @@ static void state_depthbias(struct wined3d_context *context, const struct wined3
         union
         {
             DWORD d;
+            INT   i;
             float f;
         } scale_bias, const_bias;
 
@@ -1740,6 +1741,11 @@ static void state_depthbias(struct wined3d_context *context, const struct wined3
             float bias = -(float)const_bias.d;
             gl_info->gl_ops.gl.p_glPolygonOffset(bias, bias);
             checkGLcall("glPolygonOffset");
+        }
+        else if (context->d3d_info->wined3d_creation_flags & WINED3D_FORWARD_DEPTH_BIAS)
+        {
+            gl_info->gl_ops.gl.p_glPolygonOffset(scale_bias.f, const_bias.i);
+            checkGLcall("glPolygonOffset(...)");
         }
         else
         {
@@ -1769,6 +1775,28 @@ static void state_depthbias(struct wined3d_context *context, const struct wined3
         gl_info->gl_ops.gl.p_glDisable(GL_POLYGON_OFFSET_FILL);
         checkGLcall("glDisable(GL_POLYGON_OFFSET_FILL)");
     }
+}
+
+static void state_depthclip(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
+{
+    const struct wined3d_gl_info *gl_info = context->gl_info;
+
+    if (state->render_states[WINED3D_RS_DEPTHCLIP])
+    {
+        gl_info->gl_ops.gl.p_glDisable(GL_DEPTH_CLAMP);
+        checkGLcall("glDisable(GL_DEPTH_CLAMP)");
+    }
+    else
+    {
+        gl_info->gl_ops.gl.p_glEnable(GL_DEPTH_CLAMP);
+        checkGLcall("glEnable(GL_DEPTH_CLAMP)");
+    }
+}
+
+static void state_depthclip_w(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
+{
+    if (!state->render_states[WINED3D_RS_DEPTHCLIP])
+        FIXME("Depth clamping not supported by GL.\n");
 }
 
 static void state_zvisible(struct wined3d_context *context, const struct wined3d_state *state, DWORD state_id)
@@ -5214,6 +5242,8 @@ const struct StateEntryTemplate misc_state_template[] =
     { STATE_RENDER(WINED3D_RS_BLENDFACTOR),               { STATE_RENDER(WINED3D_RS_BLENDFACTOR),               state_blendfactor_w }, WINED3D_GL_EXT_NONE             },
     { STATE_RENDER(WINED3D_RS_DEPTHBIAS),                 { STATE_RENDER(WINED3D_RS_DEPTHBIAS),                 state_depthbias     }, WINED3D_GL_EXT_NONE             },
     { STATE_RENDER(WINED3D_RS_ZVISIBLE),                  { STATE_RENDER(WINED3D_RS_ZVISIBLE),                  state_zvisible      }, WINED3D_GL_EXT_NONE             },
+    { STATE_RENDER(WINED3D_RS_DEPTHCLIP),                 { STATE_RENDER(WINED3D_RS_DEPTHCLIP),                 state_depthclip     }, ARB_DEPTH_CLAMP                 },
+    { STATE_RENDER(WINED3D_RS_DEPTHCLIP),                 { STATE_RENDER(WINED3D_RS_DEPTHCLIP),                 state_depthclip_w   }, WINED3D_GL_EXT_NONE             },
     /* Samplers */
     { STATE_SAMPLER(0),                                   { STATE_SAMPLER(0),                                   sampler             }, WINED3D_GL_EXT_NONE             },
     { STATE_SAMPLER(1),                                   { STATE_SAMPLER(1),                                   sampler             }, WINED3D_GL_EXT_NONE             },

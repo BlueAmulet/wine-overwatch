@@ -283,13 +283,13 @@ static const struct ID3D10BlendState1Vtbl d3d10_blend_state_vtbl =
     d3d10_blend_state_GetDesc1,
 };
 
+/* requires wined3d lock */
 HRESULT d3d_blend_state_init(struct d3d_blend_state *state, struct d3d_device *device,
         const D3D11_BLEND_DESC *desc)
 {
     state->ID3D11BlendState_iface.lpVtbl = &d3d11_blend_state_vtbl;
     state->ID3D10BlendState1_iface.lpVtbl = &d3d10_blend_state_vtbl;
     state->refcount = 1;
-    wined3d_mutex_lock();
     wined3d_private_store_init(&state->private_store);
     state->desc = *desc;
 
@@ -297,10 +297,8 @@ HRESULT d3d_blend_state_init(struct d3d_blend_state *state, struct d3d_device *d
     {
         ERR("Failed to insert blend state entry.\n");
         wined3d_private_store_cleanup(&state->private_store);
-        wined3d_mutex_unlock();
         return E_FAIL;
     }
-    wined3d_mutex_unlock();
 
     state->device = &device->ID3D11Device_iface;
     ID3D11Device_AddRef(state->device);
@@ -562,13 +560,13 @@ static const struct ID3D10DepthStencilStateVtbl d3d10_depthstencil_state_vtbl =
     d3d10_depthstencil_state_GetDesc,
 };
 
+/* requires wined3d lock */
 HRESULT d3d_depthstencil_state_init(struct d3d_depthstencil_state *state, struct d3d_device *device,
         const D3D11_DEPTH_STENCIL_DESC *desc)
 {
     state->ID3D11DepthStencilState_iface.lpVtbl = &d3d11_depthstencil_state_vtbl;
     state->ID3D10DepthStencilState_iface.lpVtbl = &d3d10_depthstencil_state_vtbl;
     state->refcount = 1;
-    wined3d_mutex_lock();
     wined3d_private_store_init(&state->private_store);
     state->desc = *desc;
 
@@ -576,10 +574,8 @@ HRESULT d3d_depthstencil_state_init(struct d3d_depthstencil_state *state, struct
     {
         ERR("Failed to insert depthstencil state entry.\n");
         wined3d_private_store_cleanup(&state->private_store);
-        wined3d_mutex_unlock();
         return E_FAIL;
     }
-    wined3d_mutex_unlock();
 
     state->device = &device->ID3D11Device_iface;
     ID3D11Device_AddRef(state->device);
@@ -869,6 +865,7 @@ static const struct wined3d_parent_ops d3d_rasterizer_state_wined3d_parent_ops =
     d3d_rasterizer_state_wined3d_object_destroyed,
 };
 
+/* requires wined3d lock */
 HRESULT d3d_rasterizer_state_init(struct d3d_rasterizer_state *state, struct d3d_device *device,
         const D3D11_RASTERIZER_DESC *desc)
 {
@@ -878,7 +875,6 @@ HRESULT d3d_rasterizer_state_init(struct d3d_rasterizer_state *state, struct d3d
     state->ID3D11RasterizerState_iface.lpVtbl = &d3d11_rasterizer_state_vtbl;
     state->ID3D10RasterizerState_iface.lpVtbl = &d3d10_rasterizer_state_vtbl;
     state->refcount = 1;
-    wined3d_mutex_lock();
     wined3d_private_store_init(&state->private_store);
     state->desc = *desc;
 
@@ -886,7 +882,6 @@ HRESULT d3d_rasterizer_state_init(struct d3d_rasterizer_state *state, struct d3d
     {
         ERR("Failed to insert rasterizer state entry.\n");
         wined3d_private_store_cleanup(&state->private_store);
-        wined3d_mutex_unlock();
         return E_FAIL;
     }
 
@@ -900,10 +895,8 @@ HRESULT d3d_rasterizer_state_init(struct d3d_rasterizer_state *state, struct d3d
         WARN("Failed to create wined3d rasterizer state, hr %#x.\n", hr);
         wined3d_private_store_cleanup(&state->private_store);
         wine_rb_remove(&device->rasterizer_states, &state->entry);
-        wined3d_mutex_unlock();
         return hr;
     }
-    wined3d_mutex_unlock();
 
     ID3D11Device_AddRef(state->device = &device->ID3D11Device_iface);
 
@@ -1228,6 +1221,7 @@ static enum wined3d_cmp_func wined3d_cmp_func_from_d3d11(D3D11_COMPARISON_FUNC f
     return (enum wined3d_cmp_func)f;
 }
 
+/* requires wined3d lock */
 HRESULT d3d_sampler_state_init(struct d3d_sampler_state *state, struct d3d_device *device,
         const D3D11_SAMPLER_DESC *desc)
 {
@@ -1237,7 +1231,6 @@ HRESULT d3d_sampler_state_init(struct d3d_sampler_state *state, struct d3d_devic
     state->ID3D11SamplerState_iface.lpVtbl = &d3d11_sampler_state_vtbl;
     state->ID3D10SamplerState_iface.lpVtbl = &d3d10_sampler_state_vtbl;
     state->refcount = 1;
-    wined3d_mutex_lock();
     wined3d_private_store_init(&state->private_store);
     state->desc = *desc;
 
@@ -1261,7 +1254,6 @@ HRESULT d3d_sampler_state_init(struct d3d_sampler_state *state, struct d3d_devic
     {
         ERR("Failed to insert sampler state entry.\n");
         wined3d_private_store_cleanup(&state->private_store);
-        wined3d_mutex_unlock();
         return E_FAIL;
     }
 
@@ -1273,10 +1265,8 @@ HRESULT d3d_sampler_state_init(struct d3d_sampler_state *state, struct d3d_devic
         WARN("Failed to create wined3d sampler, hr %#x.\n", hr);
         wined3d_private_store_cleanup(&state->private_store);
         wine_rb_remove(&device->sampler_states, &state->entry);
-        wined3d_mutex_unlock();
         return hr;
     }
-    wined3d_mutex_unlock();
 
     state->device = &device->ID3D11Device_iface;
     ID3D11Device_AddRef(state->device);
