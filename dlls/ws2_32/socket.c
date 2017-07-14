@@ -5957,6 +5957,10 @@ int WINAPI WS_setsockopt(SOCKET s, int level, int optname,
             break;
 #endif
 
+        case WS_SO_RANDOMIZE_PORT:
+            FIXME("SO_RANDOMIZE_PORT: %x\n", *(uint16_t*)optval);
+            return 0;
+
         default:
             TRACE("Unknown SOL_SOCKET optname: 0x%08x\n", optname);
             SetLastError(WSAENOPROTOOPT);
