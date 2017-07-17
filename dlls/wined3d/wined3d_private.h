@@ -3812,15 +3812,11 @@ void state_shademode(struct wined3d_context *context,
 static inline BOOL state_is_dual_source_blend(const struct wined3d_state *state)
 {
 #define IS_DUAL_SOURCE_BLEND(x) ((x) >= WINED3D_BLEND_SRC1COLOR && (x) <= WINED3D_BLEND_INVSRC1ALPHA)
-    if (state->render_states[WINED3D_RS_ALPHABLENDENABLE] &&
-            (IS_DUAL_SOURCE_BLEND(state->render_states[WINED3D_RS_SRCBLENDALPHA]) ||
-             IS_DUAL_SOURCE_BLEND(state->render_states[WINED3D_RS_DESTBLENDALPHA])))
-    {
-        return TRUE;
-    }
-
-    return IS_DUAL_SOURCE_BLEND(state->render_states[WINED3D_RS_SRCBLEND]) ||
-            IS_DUAL_SOURCE_BLEND(state->render_states[WINED3D_RS_DESTBLEND]);
+    return state->render_states[WINED3D_RS_ALPHABLENDENABLE] &&
+          (IS_DUAL_SOURCE_BLEND(state->render_states[WINED3D_RS_SRCBLENDALPHA]) ||
+           IS_DUAL_SOURCE_BLEND(state->render_states[WINED3D_RS_DESTBLENDALPHA]) ||
+           IS_DUAL_SOURCE_BLEND(state->render_states[WINED3D_RS_SRCBLEND]) ||
+           IS_DUAL_SOURCE_BLEND(state->render_states[WINED3D_RS_DESTBLEND]));
 #undef IS_DUAL_SOURCE_BLEND
 }
 
