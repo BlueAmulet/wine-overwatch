@@ -3552,10 +3552,7 @@ static void shader_glsl_get_sample_function(const struct wined3d_shader_context 
             ERR("Unexpected flags %#x for texelFetch.\n", flags & ~texel_fetch_flags);
 
         base = "texelFetch";
-        if (resource_type == WINED3D_SHADER_RESOURCE_BUFFER)
-            type_part = "Buffer";
-        else
-            type_part = "";
+        type_part = "";
     }
 
     sample_function->name = string_buffer_get(priv->string_buffers);
@@ -5919,7 +5916,7 @@ static void shader_glsl_ld(const struct wined3d_shader_instruction *ins)
     shader_glsl_add_src_param(ins, &ins->src[0], sample_function.coord_mask, &coord_param);
     if (ins->ctx->reg_maps->resource_info[resource_idx].type == WINED3D_SHADER_RESOURCE_BUFFER)
     {
-        /* texelFetchBuffer does not have a lod argument */
+        /* texelFetch(samplerBuffer) does not have a lod argument */
         sampler_bind_idx = shader_glsl_find_sampler(&ins->ctx->reg_maps->sampler_map, resource_idx, sampler_idx);
         shader_glsl_gen_sample_code(ins, sampler_bind_idx, &sample_function, ins->src[1].swizzle,
                 NULL, NULL, NULL, &ins->texel_offset, "%s", coord_param.param_str);
