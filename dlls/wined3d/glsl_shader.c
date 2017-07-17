@@ -7255,8 +7255,6 @@ static void shader_glsl_enable_extensions(struct wined3d_string_buffer *buffer,
         shader_addline(buffer, "#extension GL_EXT_gpu_shader4 : enable\n");
     if (gl_info->supported[EXT_TEXTURE_ARRAY])
         shader_addline(buffer, "#extension GL_EXT_texture_array : enable\n");
-    if (gl_info->supported[ARB_TEXTURE_CUBE_MAP_ARRAY])
-        shader_addline(buffer, "#extension GL_ARB_texture_cube_map_array : enable\n");
 }
 
 static void shader_glsl_generate_ps_epilogue(const struct wined3d_gl_info *gl_info,
