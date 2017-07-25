@@ -780,7 +780,7 @@ static NET_API_STATUS share_info_to_samba( DWORD level, const BYTE *buf, unsigne
 static NET_API_STATUS share_add( LMSTR servername, DWORD level, LPBYTE buf, LPDWORD parm_err )
 {
     char *server = NULL;
-    unsigned char *info;
+    unsigned char *info = NULL;
     NET_API_STATUS status;
 
     if (servername && !(server = strdup_unixcp( servername ))) return ERROR_OUTOFMEMORY;

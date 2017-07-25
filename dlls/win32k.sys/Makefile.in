@@ -1,0 +1,6 @@
+MODULE    = win32k.sys
+IMPORTS   = ntoskrnl
+EXTRADLLFLAGS = -Wb,--subsystem,native
+
+C_SRCS = \
+	main.c

@@ -139,7 +139,8 @@ static void context_attach_gl_texture_fbo(struct wined3d_context *context,
         gl_info->fbo_ops.glFramebufferTexture(fbo_target, attachment,
                 resource->object, resource->level);
     }
-    else if (resource->target == GL_TEXTURE_2D_ARRAY || resource->target == GL_TEXTURE_3D)
+    else if (resource->target == GL_TEXTURE_1D_ARRAY || resource->target == GL_TEXTURE_2D_ARRAY ||
+            resource->target == GL_TEXTURE_3D)
     {
         if (!gl_info->fbo_ops.glFramebufferTextureLayer)
         {
@@ -149,6 +150,12 @@ static void context_attach_gl_texture_fbo(struct wined3d_context *context,
 
         gl_info->fbo_ops.glFramebufferTextureLayer(fbo_target, attachment,
                 resource->object, resource->level, resource->layer);
+    }
+    else if (resource->target == GL_TEXTURE_1D)
+    {
+        gl_info->fbo_ops.glFramebufferTexture1D(fbo_target, attachment,
+                resource->target, resource->object, resource->level);
+        checkGLcall("glFramebufferTexture1D()");
     }
     else
     {
@@ -1102,7 +1109,7 @@ static BOOL context_set_pixel_format(struct wined3d_context *context, HDC dc, BO
     if (dc == context->hdc && context->hdc_is_private && context->hdc_has_format)
         return TRUE;
 
-    if (dc == context->hdc && !context->hdc_is_private && WindowFromDC(dc) != context->win_handle)
+    if (dc == context->hdc && !private && WindowFromDC(dc) != context->win_handle)
         return FALSE;
 
     current = gl_info->gl_ops.wgl.p_wglGetPixelFormat(dc);
@@ -1703,6 +1710,7 @@ void context_bind_dummy_textures(const struct wined3d_device *device, const stru
         GL_EXTCALL(glActiveTexture(GL_TEXTURE0 + i));
         checkGLcall("glActiveTexture");
 
+        gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_1D, device->dummy_textures.tex_1d);
         gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_2D, device->dummy_textures.tex_2d);
 
         if (gl_info->supported[ARB_TEXTURE_RECTANGLE])
@@ -1718,7 +1726,10 @@ void context_bind_dummy_textures(const struct wined3d_device *device, const stru
             gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, device->dummy_textures.tex_cube_array);
 
         if (gl_info->supported[EXT_TEXTURE_ARRAY])
+        {
+            gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_1D_ARRAY, device->dummy_textures.tex_1d_array);
             gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_2D_ARRAY, device->dummy_textures.tex_2d_array);
+        }
 
         if (gl_info->supported[ARB_TEXTURE_BUFFER_OBJECT])
             gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_BUFFER, device->dummy_textures.tex_buffer);
@@ -2510,10 +2521,8 @@ static void SetupForBlit(const struct wined3d_device *device, struct wined3d_con
     }
     gl_info->gl_ops.gl.p_glColorMask(GL_TRUE, GL_TRUE,GL_TRUE,GL_TRUE);
     checkGLcall("glColorMask");
-    context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE));
-    context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE1));
-    context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE2));
-    context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITEENABLE3));
+    for (i = 0; i < MAX_RENDER_TARGETS; ++i)
+        context_invalidate_state(context, STATE_RENDER(WINED3D_RS_COLORWRITE(i)));
     if (gl_info->supported[EXT_SECONDARY_COLOR])
     {
         gl_info->gl_ops.gl.p_glDisable(GL_COLOR_SUM_EXT);
@@ -2672,6 +2681,14 @@ void context_bind_texture(struct wined3d_context *context, GLenum target, GLuint
         {
             case GL_NONE:
                 /* nothing to do */
+                break;
+            case GL_TEXTURE_1D:
+                gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_1D, device->dummy_textures.tex_1d);
+                checkGLcall("glBindTexture");
+                break;
+            case GL_TEXTURE_1D_ARRAY:
+                gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_1D_ARRAY, device->dummy_textures.tex_1d_array);
+                checkGLcall("glBindTexture");
                 break;
             case GL_TEXTURE_2D:
                 gl_info->gl_ops.gl.p_glBindTexture(GL_TEXTURE_2D, device->dummy_textures.tex_2d);

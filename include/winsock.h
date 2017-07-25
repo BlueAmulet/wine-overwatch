@@ -664,6 +664,10 @@ typedef struct WS(WSAData)
 #define SO_TYPE                    0x1008
 #define SO_BSP_STATE               0x1009
 
+#define SO_RANDOMIZE_PORT          0x3005
+#define SO_PORT_SCALABILITY        0x3006
+#define SO_REUSE_UNICASTPORT       0x3007
+#define SO_REUSE_MULTICASTPORT     0x3008
 
 #define IOCPARM_MASK               0x7f
 #define IOC_VOID                   0x20000000
@@ -698,6 +702,11 @@ typedef struct WS(WSAData)
 #define WS_SO_ERROR                0x1007
 #define WS_SO_TYPE                 0x1008
 #define WS_SO_BSP_STATE            0x1009
+
+#define WS_SO_RANDOMIZE_PORT       0x3005
+#define WS_SO_PORT_SCALABILITY     0x3006
+#define WS_SO_REUSE_UNICASTPORT    0x3007
+#define WS_SO_REUSE_MULTICASTPORT  0x3008
 
 #define WS_IOCPARM_MASK            0x7f
 #define WS_IOC_VOID                0x20000000
@@ -816,6 +825,7 @@ typedef struct WS(WSAData)
 
 /* internal per-socket flags */
 #ifdef __WINESRC__
+#define FD_WINE_REUSE              0x08000000
 #define FD_WINE_LISTENING          0x10000000
 #define FD_WINE_NONBLOCKING        0x20000000
 #define FD_WINE_CONNECTED          0x40000000

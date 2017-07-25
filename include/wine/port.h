@@ -363,6 +363,22 @@ extern int mkstemps(char *template, int suffix_len);
 extern int _spawnvp(int mode, const char *cmdname, const char * const argv[]);
 #endif
 
+/* Extended attribute functions */
+
+#ifndef XATTR_USER_PREFIX
+# define XATTR_USER_PREFIX "user."
+#endif
+#ifndef XATTR_SIZE_MAX
+# define XATTR_SIZE_MAX    65536
+#endif
+
+extern int xattr_fget( int filedes, const char *name, void *value, size_t size );
+extern int xattr_fremove( int filedes, const char *name );
+extern int xattr_fset( int filedes, const char *name, void *value, size_t size );
+extern int xattr_get( const char *path, const char *name, void *value, size_t size );
+extern int xattr_remove( const char *path, const char *name );
+extern int xattr_set( const char *path, const char *name, void *value, size_t size );
+
 /* Interlocked functions */
 
 #if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))

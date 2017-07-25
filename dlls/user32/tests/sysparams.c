@@ -41,6 +41,7 @@
 static LONG (WINAPI *pChangeDisplaySettingsExA)(LPCSTR, LPDEVMODEA, HWND, DWORD, LPVOID);
 static BOOL (WINAPI *pIsProcessDPIAware)(void);
 static BOOL (WINAPI *pSetProcessDPIAware)(void);
+static LONG (WINAPI *pGetAutoRotationState)(PAR_STATE);
 
 static BOOL strict;
 static int dpi, real_dpi;
@@ -3004,6 +3005,28 @@ static void test_dpi_aware(void)
     test_GetSystemMetrics();
 }
 
+static void test_GetAutoRotationState(void)
+{
+    AR_STATE state;
+    BOOL ret;
+
+    if (!pGetAutoRotationState)
+    {
+        win_skip("GetAutoRotationState not supported\n");
+        return;
+    }
+
+    SetLastError(0xdeadbeef);
+    ret = pGetAutoRotationState(NULL);
+    ok(!ret, "Expected GetAutoRotationState to fail\n");
+    ok(GetLastError() == ERROR_INVALID_PARAMETER, "Expected ERROR_INVALID_PARAMETER, got %d\n", GetLastError());
+
+    state = 0;
+    ret = pGetAutoRotationState(&state);
+    ok(ret, "Expected GetAutoRotationState to succeed, error %d\n", GetLastError());
+    ok((state & AR_NOSENSOR) != 0, "Expected AR_NOSENSOR, got %d\n", state);
+}
+
 START_TEST(sysparams)
 {
     int argc;
@@ -3018,6 +3041,7 @@ START_TEST(sysparams)
     pChangeDisplaySettingsExA = (void*)GetProcAddress(hdll, "ChangeDisplaySettingsExA");
     pIsProcessDPIAware = (void*)GetProcAddress(hdll, "IsProcessDPIAware");
     pSetProcessDPIAware = (void*)GetProcAddress(hdll, "SetProcessDPIAware");
+    pGetAutoRotationState = (void*)GetProcAddress(hdll, "GetAutoRotationState");
 
     hInstance = GetModuleHandleA( NULL );
     hdc = GetDC(0);
@@ -3039,6 +3063,7 @@ START_TEST(sysparams)
     trace("testing EnumDisplaySettings vs GetDeviceCaps\n");
     test_EnumDisplaySettings( );
     test_GetSysColorBrush( );
+    test_GetAutoRotationState( );
 
     change_counter = 0;
     change_last_param = 0;

@@ -1,0 +1,5 @@
+RESOURCE   = custom.dll
+IMPORTS    = msi kernel32
+
+C_SRCS = \
+	main.c

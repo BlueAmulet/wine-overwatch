@@ -223,7 +223,7 @@ typedef struct _tagASMNAME
 static BOOL enum_gac_assemblies(struct list *assemblies, int depth, LPSTR path)
 {
     WIN32_FIND_DATAA ffd;
-    CHAR buf[MAX_PATH];
+    CHAR buf[MAX_PATH + 37];
     CHAR disp[MAX_PATH];
     ASMNAME *name;
     HANDLE hfind;
@@ -248,7 +248,7 @@ static BOOL enum_gac_assemblies(struct list *assemblies, int depth, LPSTR path)
         else if (depth == 1)
         {
             char culture[MAX_PATH];
-            char dll[MAX_PATH], exe[MAX_PATH];
+            char dll[MAX_PATH + 6], exe[MAX_PATH + 6];
 
             /* Directories with no dll or exe will not be enumerated */
             sprintf(dll, "%s\\%s\\%s.dll", path, ffd.cFileName, parent);

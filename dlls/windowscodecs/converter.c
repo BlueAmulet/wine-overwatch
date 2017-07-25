@@ -53,8 +53,11 @@ enum pixelformat {
     format_24bppRGB,
     format_32bppGrayFloat,
     format_32bppBGR,
+    format_32bppRGB,
     format_32bppBGRA,
+    format_32bppRGBA,
     format_32bppPBGRA,
+    format_32bppPRGBA,
     format_48bppRGB,
     format_64bppRGBA,
     format_32bppCMYK,
@@ -76,7 +79,7 @@ typedef struct FormatConverter {
     const struct pixelformatinfo *dst_format, *src_format;
     WICBitmapDitherType dither;
     double alpha_threshold;
-    WICBitmapPaletteType palette_type;
+    IWICPalette *palette;
     CRITICAL_SECTION lock; /* must be held when initialized */
 } FormatConverter;
 
@@ -858,6 +861,27 @@ static HRESULT copypixels_to_32bppBGRA(struct FormatConverter *This, const WICRe
     }
 }
 
+static HRESULT copypixels_to_32bppRGBA(struct FormatConverter *This, const WICRect *prc,
+    UINT cbStride, UINT cbBufferSize, BYTE *pbBuffer, enum pixelformat source_format)
+{
+    HRESULT hr;
+
+    switch (source_format)
+    {
+    case format_32bppRGB:
+    case format_32bppRGBA:
+    case format_32bppPRGBA:
+        if (prc)
+            return IWICBitmapSource_CopyPixels(This->source, prc, cbStride, cbBufferSize, pbBuffer);
+        return S_OK;
+    default:
+        hr = copypixels_to_32bppBGRA(This, prc, cbStride, cbBufferSize, pbBuffer, source_format);
+        if (SUCCEEDED(hr) && prc)
+              reverse_bgr8(4, pbBuffer, prc->Width, prc->Height, cbStride);
+        return hr;
+    }
+}
+
 static HRESULT copypixels_to_32bppBGR(struct FormatConverter *This, const WICRect *prc,
     UINT cbStride, UINT cbBufferSize, BYTE *pbBuffer, enum pixelformat source_format)
 {
@@ -874,6 +898,22 @@ static HRESULT copypixels_to_32bppBGR(struct FormatConverter *This, const WICRec
     }
 }
 
+static HRESULT copypixels_to_32bppRGB(struct FormatConverter *This, const WICRect *prc,
+    UINT cbStride, UINT cbBufferSize, BYTE *pbBuffer, enum pixelformat source_format)
+{
+    switch (source_format)
+    {
+    case format_32bppRGB:
+    case format_32bppRGBA:
+    case format_32bppPRGBA:
+        if (prc)
+            return IWICBitmapSource_CopyPixels(This->source, prc, cbStride, cbBufferSize, pbBuffer);
+        return S_OK;
+    default:
+        return copypixels_to_32bppRGBA(This, prc, cbStride, cbBufferSize, pbBuffer, source_format);
+    }
+}
+
 static HRESULT copypixels_to_32bppPBGRA(struct FormatConverter *This, const WICRect *prc,
     UINT cbStride, UINT cbBufferSize, BYTE *pbBuffer, enum pixelformat source_format)
 {
@@ -887,6 +927,39 @@ static HRESULT copypixels_to_32bppPBGRA(struct FormatConverter *This, const WICR
         return S_OK;
     default:
         hr = copypixels_to_32bppBGRA(This, prc, cbStride, cbBufferSize, pbBuffer, source_format);
+        if (SUCCEEDED(hr) && prc)
+        {
+            INT x, y;
+
+            for (y=0; y<prc->Height; y++)
+                for (x=0; x<prc->Width; x++)
+                {
+                    BYTE alpha = pbBuffer[cbStride*y+4*x+3];
+                    if (alpha != 255)
+                    {
+                        pbBuffer[cbStride*y+4*x] = pbBuffer[cbStride*y+4*x] * alpha / 255;
+                        pbBuffer[cbStride*y+4*x+1] = pbBuffer[cbStride*y+4*x+1] * alpha / 255;
+                        pbBuffer[cbStride*y+4*x+2] = pbBuffer[cbStride*y+4*x+2] * alpha / 255;
+                    }
+                }
+        }
+        return hr;
+    }
+}
+
+static HRESULT copypixels_to_32bppPRGBA(struct FormatConverter *This, const WICRect *prc,
+    UINT cbStride, UINT cbBufferSize, BYTE *pbBuffer, enum pixelformat source_format)
+{
+    HRESULT hr;
+
+    switch (source_format)
+    {
+    case format_32bppPRGBA:
+        if (prc)
+            return IWICBitmapSource_CopyPixels(This->source, prc, cbStride, cbBufferSize, pbBuffer);
+        return S_OK;
+    default:
+        hr = copypixels_to_32bppRGBA(This, prc, cbStride, cbBufferSize, pbBuffer, source_format);
         if (SUCCEEDED(hr) && prc)
         {
             INT x, y;
@@ -1169,8 +1242,97 @@ static HRESULT copypixels_to_8bppGray(struct FormatConverter *This, const WICRec
             {
                 float gray = (bgr[2] * 0.2126f + bgr[1] * 0.7152f + bgr[0] * 0.0722f) / 255.0f;
 
-                gray = to_sRGB_component(gray) * 255.0f;
+                /* conversion from 32bppGrayFloat to 24bppBGR has already applied sRGB gamma */
+                if (source_format == format_32bppGrayFloat)
+                    gray *= 255.0f;
+                else
+                    gray = to_sRGB_component(gray) * 255.0f;
+
                 dst[x] = (BYTE)floorf(gray + 0.51f);
+                bgr += 3;
+            }
+            src += srcstride;
+            dst += cbStride;
+        }
+    }
+
+    HeapFree(GetProcessHeap(), 0, srcdata);
+    return hr;
+}
+
+static UINT rgb_to_palette_index(BYTE r, BYTE g, BYTE b, WICColor *colors, UINT count)
+{
+    UINT best_diff, best_index, i;
+
+    best_diff = ~0;
+    best_index = 0;
+
+    for (i = 0; i < count; i++)
+    {
+        BYTE pal_r, pal_g, pal_b;
+        DWORD diff_r, diff_g, diff_b, diff;
+
+        pal_r = colors[i] >> 16;
+        pal_g = colors[i] >> 8;
+        pal_b = colors[i];
+
+        diff_r = r - pal_r;
+        diff_g = g - pal_g;
+        diff_b = b - pal_b;
+
+        diff = diff_r * diff_r + diff_g * diff_g + diff_b * diff_b;
+        if (diff == 0) return i;
+
+        if (diff < best_diff)
+        {
+            best_diff = diff;
+            best_index = i;
+        }
+    }
+
+    return best_index;
+}
+
+static HRESULT copypixels_to_8bppIndexed(struct FormatConverter *This, const WICRect *prc,
+    UINT cbStride, UINT cbBufferSize, BYTE *pbBuffer, enum pixelformat source_format)
+{
+    HRESULT hr;
+    BYTE *srcdata;
+    WICColor colors[256];
+    UINT srcstride, srcdatasize, count;
+
+    if (source_format == format_8bppIndexed)
+    {
+        if (prc)
+            return IWICBitmapSource_CopyPixels(This->source, prc, cbStride, cbBufferSize, pbBuffer);
+
+        return S_OK;
+    }
+
+    if (!This->palette) return WINCODEC_ERR_WRONGSTATE;
+
+    hr = IWICPalette_GetColors(This->palette, 256, colors, &count);
+    if (hr != S_OK) return hr;
+
+    srcstride = 3 * prc->Width;
+    srcdatasize = srcstride * prc->Height;
+
+    srcdata = HeapAlloc(GetProcessHeap(), 0, srcdatasize);
+    if (!srcdata) return E_OUTOFMEMORY;
+
+    hr = copypixels_to_24bppBGR(This, prc, srcstride, srcdatasize, srcdata, source_format);
+    if (SUCCEEDED(hr) && prc)
+    {
+        INT x, y;
+        BYTE *src = srcdata, *dst = pbBuffer;
+
+        for (y = 0; y < prc->Height; y++)
+        {
+            BYTE *bgr = src;
+
+            for (x = 0; x < prc->Width; x++)
+            {
+                dst[x] = rgb_to_palette_index(bgr[2], bgr[1], bgr[0], colors, count);
                 bgr += 3;
             }
             src += srcstride;
@@ -1186,7 +1348,7 @@ static const struct pixelformatinfo supported_formats[] = {
     {format_1bppIndexed, &GUID_WICPixelFormat1bppIndexed, NULL},
     {format_2bppIndexed, &GUID_WICPixelFormat2bppIndexed, NULL},
     {format_4bppIndexed, &GUID_WICPixelFormat4bppIndexed, NULL},
-    {format_8bppIndexed, &GUID_WICPixelFormat8bppIndexed, NULL},
+    {format_8bppIndexed, &GUID_WICPixelFormat8bppIndexed, copypixels_to_8bppIndexed},
     {format_BlackWhite, &GUID_WICPixelFormatBlackWhite, NULL},
     {format_2bppGray, &GUID_WICPixelFormat2bppGray, NULL},
     {format_4bppGray, &GUID_WICPixelFormat4bppGray, NULL},
@@ -1199,8 +1361,11 @@ static const struct pixelformatinfo supported_formats[] = {
     {format_24bppRGB, &GUID_WICPixelFormat24bppRGB, copypixels_to_24bppRGB},
     {format_32bppGrayFloat, &GUID_WICPixelFormat32bppGrayFloat, copypixels_to_32bppGrayFloat},
     {format_32bppBGR, &GUID_WICPixelFormat32bppBGR, copypixels_to_32bppBGR},
+    {format_32bppRGB, &GUID_WICPixelFormat32bppRGB, copypixels_to_32bppRGB},
     {format_32bppBGRA, &GUID_WICPixelFormat32bppBGRA, copypixels_to_32bppBGRA},
+    {format_32bppRGBA, &GUID_WICPixelFormat32bppRGBA, copypixels_to_32bppRGBA},
     {format_32bppPBGRA, &GUID_WICPixelFormat32bppPBGRA, copypixels_to_32bppPBGRA},
+    {format_32bppPRGBA, &GUID_WICPixelFormat32bppPRGBA, copypixels_to_32bppPRGBA},
     {format_48bppRGB, &GUID_WICPixelFormat48bppRGB, NULL},
     {format_64bppRGBA, &GUID_WICPixelFormat64bppRGBA, NULL},
     {format_32bppCMYK, &GUID_WICPixelFormat32bppCMYK, NULL},
@@ -1263,6 +1428,7 @@ static ULONG WINAPI FormatConverter_Release(IWICFormatConverter *iface)
         This->lock.DebugInfo->Spare[0] = 0;
         DeleteCriticalSection(&This->lock);
         if (This->source) IWICBitmapSource_Release(This->source);
+        if (This->palette) IWICPalette_Release(This->palette);
         HeapFree(GetProcessHeap(), 0, This);
     }
 
@@ -1311,10 +1477,27 @@ static HRESULT WINAPI FormatConverter_GetResolution(IWICFormatConverter *iface,
 }
 
 static HRESULT WINAPI FormatConverter_CopyPalette(IWICFormatConverter *iface,
-    IWICPalette *pIPalette)
+    IWICPalette *palette)
 {
-    FIXME("(%p,%p): stub\n", iface, pIPalette);
-    return E_NOTIMPL;
+    FormatConverter *This = impl_from_IWICFormatConverter(iface);
+
+    TRACE("(%p,%p)\n", iface, palette);
+
+    if (!palette) return E_INVALIDARG;
+    if (!This->source) return WINCODEC_ERR_WRONGSTATE;
+
+    if (!This->palette)
+    {
+        HRESULT hr;
+        UINT bpp;
+
+        hr = get_pixelformat_bpp(This->dst_format->guid, &bpp);
+        if (hr != S_OK) return hr;
+        if (bpp <= 8) return WINCODEC_ERR_WRONGSTATE;
+        return IWICBitmapSource_CopyPalette(This->source, palette);
+    }
+
+    return IWICPalette_InitializeFromPalette(palette, This->palette);
 }
 
 static HRESULT WINAPI FormatConverter_CopyPixels(IWICFormatConverter *iface,
@@ -1343,23 +1526,59 @@ static HRESULT WINAPI FormatConverter_CopyPixels(IWICFormatConverter *iface,
             pbBuffer, This->src_format->format);
     }
     else
-        return WINCODEC_ERR_NOTINITIALIZED;
+        return WINCODEC_ERR_WRONGSTATE;
 }
 
 static HRESULT WINAPI FormatConverter_Initialize(IWICFormatConverter *iface,
-    IWICBitmapSource *pISource, REFWICPixelFormatGUID dstFormat, WICBitmapDitherType dither,
-    IWICPalette *pIPalette, double alphaThresholdPercent, WICBitmapPaletteType paletteTranslate)
+    IWICBitmapSource *source, REFWICPixelFormatGUID dstFormat, WICBitmapDitherType dither,
+    IWICPalette *palette, double alpha_threshold, WICBitmapPaletteType palette_type)
 {
     FormatConverter *This = impl_from_IWICFormatConverter(iface);
     const struct pixelformatinfo *srcinfo, *dstinfo;
-    static INT fixme=0;
     GUID srcFormat;
-    HRESULT res=S_OK;
+    HRESULT res;
 
-    TRACE("(%p,%p,%s,%u,%p,%0.1f,%u)\n", iface, pISource, debugstr_guid(dstFormat),
-        dither, pIPalette, alphaThresholdPercent, paletteTranslate);
+    TRACE("(%p,%p,%s,%u,%p,%0.3f,%u)\n", iface, source, debugstr_guid(dstFormat),
+        dither, palette, alpha_threshold, palette_type);
 
-    if (pIPalette && !fixme++) FIXME("ignoring palette\n");
+    if (!palette)
+    {
+        UINT bpp;
+        res = get_pixelformat_bpp(dstFormat, &bpp);
+        if (res != S_OK) return res;
+
+        res = PaletteImpl_Create(&palette);
+        if (res != S_OK) return res;
+
+        switch (palette_type)
+        {
+        case WICBitmapPaletteTypeCustom:
+            IWICPalette_Release(palette);
+            palette = NULL;
+            if (bpp <= 8) return E_INVALIDARG;
+            break;
+
+        case WICBitmapPaletteTypeMedianCut:
+        {
+            if (bpp <= 8)
+                res = IWICPalette_InitializeFromBitmap(palette, source, 1 << bpp, FALSE);
+            break;
+        }
+
+        default:
+            if (bpp <= 8)
+                res = IWICPalette_InitializePredefined(palette, palette_type, FALSE);
+            break;
+        }
+
+        if (res != S_OK)
+        {
+            IWICPalette_Release(palette);
+            return res;
+        }
+    }
+    else
+        IWICPalette_AddRef(palette);
 
     EnterCriticalSection(&This->lock);
 
@@ -1369,7 +1588,7 @@ static HRESULT WINAPI FormatConverter_Initialize(IWICFormatConverter *iface,
         goto end;
     }
 
-    res = IWICBitmapSource_GetPixelFormat(pISource, &srcFormat);
+    res = IWICBitmapSource_GetPixelFormat(source, &srcFormat);
     if (FAILED(res)) goto end;
 
     srcinfo = get_formatinfo(&srcFormat);
@@ -1390,13 +1609,13 @@ static HRESULT WINAPI FormatConverter_Initialize(IWICFormatConverter *iface,
 
     if (dstinfo->copy_function)
     {
-        IWICBitmapSource_AddRef(pISource);
+        IWICBitmapSource_AddRef(source);
         This->src_format = srcinfo;
         This->dst_format = dstinfo;
         This->dither = dither;
-        This->alpha_threshold = alphaThresholdPercent;
-        This->palette_type = paletteTranslate;
-        This->source = pISource;
+        This->alpha_threshold = alpha_threshold;
+        This->palette = palette;
+        This->source = source;
     }
     else
     {
@@ -1407,6 +1626,9 @@ static HRESULT WINAPI FormatConverter_Initialize(IWICFormatConverter *iface,
 end:
 
     LeaveCriticalSection(&This->lock);
+
+    if (res != S_OK && palette)
+        IWICPalette_Release(palette);
 
     return res;
 }
@@ -1475,6 +1697,7 @@ HRESULT FormatConverter_CreateInstance(REFIID iid, void** ppv)
     This->IWICFormatConverter_iface.lpVtbl = &FormatConverter_Vtbl;
     This->ref = 1;
     This->source = NULL;
+    This->palette = NULL;
     InitializeCriticalSection(&This->lock);
     This->lock.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": FormatConverter.lock");
 

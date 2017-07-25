@@ -1299,6 +1299,7 @@ static HRESULT shellex_load_object_and_run( HKEY hkey, LPCGUID guid, LPSHELLEXEC
     if ( !dataobj )
     {
         ERR("failed to get data object\n");
+        r = E_FAIL;
         goto end;
     }
 
@@ -1557,6 +1558,26 @@ static void do_error_dialog( UINT_PTR retval, HWND hwnd )
     MessageBoxW(hwnd, msg, NULL, MB_ICONERROR);
 }
 
+static WCHAR *expand_environment( const WCHAR *str )
+{
+    WCHAR *buf;
+    DWORD len;
+
+    len = ExpandEnvironmentStringsW(str, NULL, 0);
+    if (!len) return NULL;
+
+    buf = HeapAlloc(GetProcessHeap(), 0, len * sizeof(WCHAR));
+    if (!buf) return NULL;
+
+    len = ExpandEnvironmentStringsW(str, buf, len);
+    if (!len)
+    {
+        HeapFree(GetProcessHeap(), 0, buf);
+        return NULL;
+    }
+    return buf;
+}
+
 /*************************************************************************
  *	SHELL_execute [Internal]
  */
@@ -1570,7 +1591,7 @@ static BOOL SHELL_execute( LPSHELLEXECUTEINFOW sei, SHELL_ExecuteW32 execfunc )
         SEE_MASK_UNICODE       | SEE_MASK_ASYNCOK      | SEE_MASK_HMONITOR;
 
     WCHAR parametersBuffer[1024], dirBuffer[MAX_PATH], wcmdBuffer[1024];
-    WCHAR *wszApplicationName, *wszParameters, *wszDir, *wcmd;
+    WCHAR *wszApplicationName, *wszParameters, *wszDir, *wcmd = NULL;
     DWORD dwApplicationNameLen = MAX_PATH+2;
     DWORD parametersLen = sizeof(parametersBuffer) / sizeof(WCHAR);
     DWORD wcmdLen = sizeof(wcmdBuffer) / sizeof(WCHAR);
@@ -1674,6 +1695,29 @@ static BOOL SHELL_execute( LPSHELLEXECUTEINFOW sei, SHELL_ExecuteW32 execfunc )
 
         SHGetPathFromIDListW(sei_tmp.lpIDList, wszApplicationName);
         TRACE("-- idlist=%p (%s)\n", sei_tmp.lpIDList, debugstr_w(wszApplicationName));
+    }
+
+    if (sei_tmp.fMask & SEE_MASK_DOENVSUBST)
+    {
+        WCHAR *tmp;
+
+        tmp = expand_environment(sei_tmp.lpFile);
+        if (!tmp)
+        {
+            retval = SE_ERR_OOM;
+            goto end;
+        }
+        HeapFree(GetProcessHeap(), 0, wszApplicationName);
+        sei_tmp.lpFile = wszApplicationName = tmp;
+
+        tmp = expand_environment(sei_tmp.lpDirectory);
+        if (!tmp)
+        {
+            retval = SE_ERR_OOM;
+            goto end;
+        }
+        if (wszDir != dirBuffer) HeapFree(GetProcessHeap(), 0, wszDir);
+        sei_tmp.lpDirectory = wszDir = tmp;
     }
 
     if ( ERROR_SUCCESS == ShellExecute_FromContextMenu( &sei_tmp ) )
@@ -1846,6 +1890,7 @@ static BOOL SHELL_execute( LPSHELLEXECUTEINFOW sei, SHELL_ExecuteW32 execfunc )
         retval = (UINT_PTR)ShellExecuteW(sei_tmp.hwnd, sei_tmp.lpVerb, lpstrTmpFile, NULL, NULL, 0);
     }
 
+end:
     TRACE("retval %lu\n", retval);
 
     HeapFree(GetProcessHeap(), 0, wszApplicationName);

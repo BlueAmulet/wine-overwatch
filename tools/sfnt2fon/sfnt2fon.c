@@ -653,6 +653,7 @@ static char **parse_options( int argc, char **argv )
             option_defchar = atoi( optarg );
             break;
         case 'o':
+            free( option_output );
             option_output = strdup( optarg );
             break;
         case 'q':

@@ -158,6 +158,13 @@ static const WCHAR szValidateProductID[] =
 static const WCHAR szWriteEnvironmentStrings[] =
     {'W','r','i','t','e','E','n','v','i','r','o','n','m','e','n','t','S','t','r','i','n','g','s',0};
 
+struct dummy_thread
+{
+    HANDLE started;
+    HANDLE stopped;
+    HANDLE thread;
+};
+
 static INT ui_actionstart(MSIPACKAGE *package, LPCWSTR action, LPCWSTR description, LPCWSTR template)
 {
     MSIRECORD *row = MSI_CreateRecord(3);
@@ -7892,6 +7899,42 @@ static UINT ACTION_PerformActionSequence(MSIPACKAGE *package, UINT seq)
     return rc;
 }
 
+DWORD WINAPI dummy_thread_proc(void *arg)
+{
+    struct dummy_thread *info = arg;
+    HRESULT hr;
+
+    hr = CoInitializeEx(0, COINIT_MULTITHREADED);
+    if (FAILED(hr)) ERR("CoInitializeEx failed %08x\n", hr);
+
+    SetEvent(info->started);
+    WaitForSingleObject(info->stopped, INFINITE);
+
+    CoUninitialize();
+    return 0;
+}
+
+static void start_dummy_thread(struct dummy_thread *info)
+{
+    if (!(info->started = CreateEventA(NULL, TRUE, FALSE, NULL))) return;
+    if (!(info->stopped = CreateEventA(NULL, TRUE, FALSE, NULL))) return;
+    if (!(info->thread  = CreateThread(NULL, 0, dummy_thread_proc, info, 0, NULL))) return;
+
+    WaitForSingleObject(info->started, INFINITE);
+}
+
+static void stop_dummy_thread(struct dummy_thread *info)
+{
+    if (info->thread)
+    {
+        SetEvent(info->stopped);
+        WaitForSingleObject(info->thread, INFINITE);
+        CloseHandle(info->thread);
+    }
+    if (info->started) CloseHandle(info->started);
+    if (info->stopped) CloseHandle(info->stopped);
+}
+
 /****************************************************
  * TOP level entry points
  *****************************************************/
@@ -7903,6 +7946,7 @@ UINT MSI_InstallPackage( MSIPACKAGE *package, LPCWSTR szPackagePath,
     static const WCHAR szAction[] = {'A','C','T','I','O','N',0};
     static const WCHAR szInstall[] = {'I','N','S','T','A','L','L',0};
     WCHAR *reinstall, *remove, *patch, *productcode;
+    struct dummy_thread thread_info = {NULL, NULL, NULL};
     BOOL ui_exists;
     UINT rc;
 
@@ -7968,6 +8012,8 @@ UINT MSI_InstallPackage( MSIPACKAGE *package, LPCWSTR szPackagePath,
     msi_adjust_privilege_properties( package );
     msi_set_context( package );
 
+    start_dummy_thread(&thread_info);
+
     productcode = msi_dup_property( package->db, szProductCode );
     if (strcmpiW( productcode, package->ProductCode ))
     {
@@ -8015,6 +8061,8 @@ UINT MSI_InstallPackage( MSIPACKAGE *package, LPCWSTR szPackagePath,
 
     /* finish up running custom actions */
     ACTION_FinishCustomActions(package);
+
+    stop_dummy_thread(&thread_info);
 
     if (package->need_rollback && !reinstall)
     {

@@ -148,13 +148,43 @@ HRESULT WINAPI SHRegCloseKey (HKEY hkey)
 	return RegCloseKey( hkey );
 }
 
+static const char session_reg_key[] = "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\SessionInfo\\";
+
+static BOOL WINAPI create_session_key(INIT_ONCE *once, void *param, void **context)
+{
+    static const char desktop_guid[] = "__wine_display_device_guid";
+    ATOM guid_atom;
+    HKEY hkey_session;
+    LPWSTR session_reg_str = param;
+
+    guid_atom = HandleToULong(GetPropA(GetDesktopWindow(), desktop_guid));
+    if (!guid_atom) return FALSE;
+
+    MultiByteToWideChar(CP_ACP, 0, session_reg_key, sizeof(session_reg_key), session_reg_str, sizeof(session_reg_key));
+
+    if (!GlobalGetAtomNameW(guid_atom, session_reg_str + sizeof(session_reg_key) - 1, 39))
+        return FALSE;
+
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, session_reg_str, 0, NULL,
+                        REG_OPTION_VOLATILE, KEY_WRITE, NULL, &hkey_session, NULL))
+        return FALSE;
+
+    RegCloseKey(hkey_session);
+    TRACE("session key %s\n", debugstr_w(session_reg_str));
+    return TRUE;
+}
+
 /*************************************************************************
  * SHCreateSessionKey                   [SHELL32.723]
  *
  */
 HRESULT WINAPI SHCreateSessionKey(REGSAM access, HKEY *hkey)
 {
-    FIXME("stub: %d %p\n", access, hkey);
-    *hkey = NULL;
-    return E_NOTIMPL;
+    static INIT_ONCE init_once = INIT_ONCE_STATIC_INIT;
+    static WCHAR session_reg_str[sizeof(session_reg_key) + 39];
+
+    InitOnceExecuteOnce(&init_once, create_session_key, session_reg_str, NULL);
+
+    TRACE("using session key %s\n", debugstr_w(session_reg_str));
+    return RegOpenKeyExW(HKEY_CURRENT_USER, session_reg_str, 0, access, hkey);
 }
