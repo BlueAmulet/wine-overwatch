@@ -788,6 +788,9 @@ static void wined3d_cs_exec_draw(struct wined3d_cs *cs, const void *data)
             state->load_base_vertex_index = p->base_vertex_idx;
             device_invalidate_state(cs->device, STATE_BASEVERTEXINDEX);
         }
+
+        state->base_vertex_index = op->parameters.indexed ? p->base_vertex_idx : p->start_idx;
+        device_invalidate_state(cs->device, STATE_BASEVERTEXINDEX);
     }
 
     draw_primitive(cs->device, state, &op->parameters);

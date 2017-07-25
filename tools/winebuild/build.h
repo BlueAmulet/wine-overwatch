@@ -298,7 +298,7 @@ extern void output_exports( DLLSPEC *spec );
 extern int load_res32_file( const char *name, DLLSPEC *spec );
 extern void output_resources( DLLSPEC *spec );
 extern void output_bin_resources( DLLSPEC *spec, unsigned int start_rva );
-extern void output_fake_module( DLLSPEC *spec );
+extern void output_fake_module( DLLSPEC *spec, const char *native );
 extern void output_def_file( DLLSPEC *spec, int include_private );
 extern void load_res16_file( const char *name, DLLSPEC *spec );
 extern void output_res16_data( DLLSPEC *spec );
@@ -362,6 +362,7 @@ extern int verbose;
 extern int link_ext_symbols;
 extern int force_pointer_size;
 extern int unwind_tables;
+extern unsigned long image_base;
 
 extern char *input_file_name;
 extern char *spec_file_name;
