@@ -842,7 +842,8 @@ static void shader_glsl_generate_transform_feedback_varyings(const struct wined3
                 continue;
             }
 
-            string_buffer_sprintf(buffer, "shader_in_out.reg[%u]", e->register_idx);
+            string_buffer_sprintf(buffer, "shader_in_out.reg%u", e->register_idx);
+            FIXME("appending variable shader_in_out.reg%u\n", e->register_idx);
             append_transform_feedback_varying(varyings, &count, &strings, &length, buffer);
         }
 
