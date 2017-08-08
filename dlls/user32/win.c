@@ -3994,3 +3994,17 @@ BOOL WINAPI RegisterTouchWindow(HWND hwnd, ULONG flags)
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
 }
+
+BOOL WINAPI GetWindowDisplayAffinity(HWND hwnd, DWORD *affinity)
+{
+    FIXME("(%p, %p) stub\n", hwnd, affinity);
+    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
+    return FALSE;
+}
+
+BOOL WINAPI SetWindowDisplayAffinity(HWND hwnd, DWORD affinity)
+{
+    FIXME("(%p, %08x) stub\n", hwnd, affinity);
+    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
+    return FALSE;
+}
