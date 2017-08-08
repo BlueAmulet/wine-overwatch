@@ -91,6 +91,7 @@ static SIZE_T (WINAPI *pGetLargePageMinimum)(void);
 static BOOL   (WINAPI *pInitializeProcThreadAttributeList)(struct _PROC_THREAD_ATTRIBUTE_LIST*, DWORD, DWORD, SIZE_T*);
 static BOOL   (WINAPI *pUpdateProcThreadAttribute)(struct _PROC_THREAD_ATTRIBUTE_LIST*, DWORD, DWORD_PTR, void *,SIZE_T,void*,SIZE_T*);
 static void   (WINAPI *pDeleteProcThreadAttributeList)(struct _PROC_THREAD_ATTRIBUTE_LIST*);
+static DWORD  (WINAPI *pGetActiveProcessorCount)(WORD);
 
 /* ############################### */
 static char     base[MAX_PATH];
@@ -258,6 +259,7 @@ static BOOL init(void)
     pInitializeProcThreadAttributeList = (void *)GetProcAddress(hkernel32, "InitializeProcThreadAttributeList");
     pUpdateProcThreadAttribute = (void *)GetProcAddress(hkernel32, "UpdateProcThreadAttribute");
     pDeleteProcThreadAttributeList = (void *)GetProcAddress(hkernel32, "DeleteProcThreadAttributeList");
+    pGetActiveProcessorCount = (void *)GetProcAddress(hkernel32, "GetActiveProcessorCount");
 
     return TRUE;
 }
@@ -3085,23 +3087,23 @@ static void test_process_info(void)
         sizeof(buf) /* ProcessHandleTracing */,
         sizeof(ULONG) /* ProcessIoPriority */,
         sizeof(ULONG) /* ProcessExecuteFlags */,
-#if 0 /* FIXME: Add remaining classes */
-        ProcessResourceManagement,
-        sizeof(ULONG) /* ProcessCookie */,
+        0 /* FIXME: sizeof(?) ProcessTlsInformation */,
+        0 /* FIXME: sizeof(?) ProcessCookie */,
         sizeof(SECTION_IMAGE_INFORMATION) /* ProcessImageInformation */,
-        sizeof(PROCESS_CYCLE_TIME_INFORMATION) /* ProcessCycleTime */,
+        0 /* FIXME: sizeof(PROCESS_CYCLE_TIME_INFORMATION) ProcessCycleTime */,
         sizeof(ULONG) /* ProcessPagePriority */,
         40 /* ProcessInstrumentationCallback */,
-        sizeof(PROCESS_STACK_ALLOCATION_INFORMATION) /* ProcessThreadStackAllocation */,
-        sizeof(PROCESS_WS_WATCH_INFORMATION_EX[]) /* ProcessWorkingSetWatchEx */,
+        0 /* FIXME: sizeof(PROCESS_STACK_ALLOCATION_INFORMATION) ProcessThreadStackAllocation */,
+        0 /* FIXME: sizeof(PROCESS_WS_WATCH_INFORMATION_EX[]) ProcessWorkingSetWatchEx */,
         sizeof(buf) /* ProcessImageFileNameWin32 */,
         sizeof(HANDLE) /* ProcessImageFileMapping */,
-        sizeof(PROCESS_AFFINITY_UPDATE_MODE) /* ProcessAffinityUpdateMode */,
-        sizeof(PROCESS_MEMORY_ALLOCATION_MODE) /* ProcessMemoryAllocationMode */,
-        sizeof(USHORT[]) /* ProcessGroupInformation */,
+        0 /* FIXME: sizeof(PROCESS_AFFINITY_UPDATE_MODE) ProcessAffinityUpdateMode */,
+        0 /* FIXME: sizeof(PROCESS_MEMORY_ALLOCATION_MODE) ProcessMemoryAllocationMode */,
+        sizeof(USHORT) /* ProcessGroupInformation */,
         sizeof(ULONG) /* ProcessTokenVirtualizationEnabled */,
         sizeof(ULONG_PTR) /* ProcessConsoleHostProcess */,
-        sizeof(PROCESS_WINDOW_INFORMATION) /* ProcessWindowInformation */,
+        0 /* FIXME: sizeof(PROCESS_WINDOW_INFORMATION) ProcessWindowInformation */,
+#if 0 /* FIXME: Add remaining classes */
         sizeof(PROCESS_HANDLE_SNAPSHOT_INFORMATION) /* ProcessHandleInformation */,
         sizeof(PROCESS_MITIGATION_POLICY_INFORMATION) /* ProcessMitigationPolicy */,
         sizeof(ProcessDynamicFunctionTableInformation) /* ProcessDynamicFunctionTableInformation */,
@@ -3166,11 +3168,16 @@ static void test_process_info(void)
         case ProcessDefaultHardErrorMode:
         case ProcessHandleCount:
         case ProcessImageFileName:
+        case ProcessImageInformation:
+        case ProcessPagePriority:
+        case ProcessImageFileNameWin32:
             ok(status == STATUS_SUCCESS, "for info %u expected STATUS_SUCCESS, got %08x (ret_len %u)\n", i, status, ret_len);
             break;
 
         case ProcessAffinityMask:
         case ProcessBreakOnTermination:
+        case ProcessGroupInformation:
+        case ProcessConsoleHostProcess:
             ok(status == STATUS_ACCESS_DENIED /* before win8 */ || status == STATUS_SUCCESS /* win8 is less strict */,
                "for info %u expected STATUS_SUCCESS, got %08x (ret_len %u)\n", i, status, ret_len);
             break;
@@ -3183,6 +3190,7 @@ static void test_process_info(void)
         case ProcessExecuteFlags:
         case ProcessDebugPort:
         case ProcessDebugFlags:
+        case ProcessCookie:
 todo_wine
             ok(status == STATUS_ACCESS_DENIED, "for info %u expected STATUS_ACCESS_DENIED, got %08x (ret_len %u)\n", i, status, ret_len);
             break;
@@ -3357,6 +3365,26 @@ static void test_ProcThreadAttributeList(void)
     pDeleteProcThreadAttributeList(&list);
 }
 
+static void test_GetActiveProcessorCount(void)
+{
+    DWORD count;
+
+    if (!pGetActiveProcessorCount)
+    {
+        win_skip("GetActiveProcessorCount not available, skipping test\n");
+        return;
+    }
+
+    count = pGetActiveProcessorCount(0);
+    ok(count, "GetActiveProcessorCount failed, error %u\n", GetLastError());
+
+    /* Test would fail on systems with more than 6400 processors */
+    SetLastError(0xdeadbeef);
+    count = pGetActiveProcessorCount(101);
+    ok(count == 0, "Expeced GetActiveProcessorCount to fail\n");
+    ok(GetLastError() == ERROR_INVALID_PARAMETER, "Expected ERROR_INVALID_PARAMETER, got %u\n", GetLastError());
+}
+
 START_TEST(process)
 {
     HANDLE job;
@@ -3431,6 +3459,7 @@ START_TEST(process)
     test_GetNumaProcessorNode();
     test_session_info();
     test_GetLogicalProcessorInformationEx();
+    test_GetActiveProcessorCount();
     test_largepages();
     test_ProcThreadAttributeList();
 

@@ -91,6 +91,7 @@ struct glsl_sample_function
     enum wined3d_data_type data_type;
     BOOL output_single_component;
     unsigned int offset_size;
+    enum wined3d_shader_resource_type emulate_lod;
 };
 
 enum heap_node_op
@@ -2473,6 +2474,13 @@ static void shader_generate_glsl_declarations(const struct wined3d_context *cont
                     sampler_type = "samplerCube";
                 break;
 
+            case WINED3D_SHADER_RESOURCE_TEXTURE_1DARRAY:
+                if (shadow_sampler)
+                    sampler_type = "sampler1DArrayShadow";
+                else
+                    sampler_type = "sampler1DArray";
+                break;
+
             case WINED3D_SHADER_RESOURCE_TEXTURE_2DARRAY:
                 if (shadow_sampler)
                     sampler_type = "sampler2DArrayShadow";
@@ -2903,6 +2911,8 @@ static void shader_glsl_get_register_name(const struct wined3d_shader_register *
             sprintf(register_name, "%s", hwrastout_reg_names[reg->idx[0].offset]);
             break;
 
+        case WINED3DSPR_DEPTHOUT_GREATER_EQUAL:
+        case WINED3DSPR_DEPTHOUT_LESS_EQUAL:
         case WINED3DSPR_DEPTHOUT:
             sprintf(register_name, "gl_FragDepth");
             break;
@@ -3409,6 +3419,7 @@ static void shader_glsl_get_sample_function(const struct wined3d_shader_context 
     enum wined3d_shader_resource_type resource_type = ctx->reg_maps->resource_info[resource_idx].type;
     struct shader_glsl_ctx_priv *priv = ctx->backend_data;
     const struct wined3d_gl_info *gl_info = ctx->gl_info;
+    BOOL legacy_syntax = needs_legacy_glsl_syntax(gl_info);
     BOOL shadow = glsl_is_shadow_sampler(ctx->shader, priv->cur_ps_args, resource_idx, sampler_idx);
     BOOL projected = flags & WINED3D_GLSL_SAMPLE_PROJECTED;
     BOOL texrect = ctx->reg_maps->shader_version.type == WINED3D_SHADER_TYPE_PIXEL
@@ -3421,6 +3432,7 @@ static void shader_glsl_get_sample_function(const struct wined3d_shader_context 
     unsigned int coord_size, deriv_size;
 
     sample_function->data_type = ctx->reg_maps->resource_info[resource_idx].data_type;
+    sample_function->emulate_lod = WINED3D_SHADER_RESOURCE_NONE;
 
     if (resource_type >= ARRAY_SIZE(resource_type_info))
     {
@@ -3432,7 +3444,30 @@ static void shader_glsl_get_sample_function(const struct wined3d_shader_context 
     if (resource_type == WINED3D_SHADER_RESOURCE_TEXTURE_CUBE)
         projected = FALSE;
 
-    if (needs_legacy_glsl_syntax(gl_info))
+    if (shadow && lod)
+    {
+        switch (resource_type)
+        {
+            /* emulate textureLod(sampler2DArrayShadow, ...) using textureGradOffset */
+            case WINED3D_SHADER_RESOURCE_TEXTURE_2DARRAY:
+                sample_function->emulate_lod = resource_type;
+                grad = offset = TRUE;
+                lod = FALSE;
+                break;
+
+            /* emulate textureLod(samplerCubeShadow, ...) using shadowCubeGrad */
+            case WINED3D_SHADER_RESOURCE_TEXTURE_CUBE:
+                sample_function->emulate_lod = resource_type;
+                grad = legacy_syntax = TRUE;
+                lod = FALSE;
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    if (legacy_syntax)
     {
         if (shadow)
             base = "shadow";
@@ -3472,7 +3507,7 @@ static void shader_glsl_get_sample_function(const struct wined3d_shader_context 
     sample_function->offset_size = offset ? deriv_size : 0;
     sample_function->coord_mask = (1u << coord_size) - 1;
     sample_function->deriv_mask = (1u << deriv_size) - 1;
-    sample_function->output_single_component = shadow && !needs_legacy_glsl_syntax(gl_info);
+    sample_function->output_single_component = shadow && !legacy_syntax;
 }
 
 static void shader_glsl_release_sample_function(const struct wined3d_shader_context *ctx,
@@ -3593,6 +3628,7 @@ static void PRINTF_ATTR(9, 10) shader_glsl_gen_sample_code(const struct wined3d_
         const char *dx, const char *dy, const char *bias, const struct wined3d_shader_texel_offset *offset,
         const char *coord_reg_fmt, ...)
 {
+    static const struct wined3d_shader_texel_offset dummy_offset = {0, 0, 0};
     const struct wined3d_shader_version *version = &ins->ctx->reg_maps->shader_version;
     char dst_swizzle[6];
     struct color_fixup_desc fixup;
@@ -3660,6 +3696,26 @@ static void PRINTF_ATTR(9, 10) shader_glsl_gen_sample_code(const struct wined3d_
                         idx >> 1, (idx % 2) ? "zw" : "xy");
                 break;
         }
+    }
+    if (sample_function->emulate_lod)
+    {
+        if (strcmp(bias, "0")) FIXME("Don't know how to emulate lod level %s\n", bias);
+        switch (sample_function->emulate_lod)
+        {
+            case WINED3D_SHADER_RESOURCE_TEXTURE_2DARRAY:
+                if (!dx) dx = "vec2(0.0, 0.0)";
+                if (!dy) dy = "vec2(0.0, 0.0)";
+                break;
+
+            case WINED3D_SHADER_RESOURCE_TEXTURE_CUBE:
+                if (!dx) dx = "vec3(0.0, 0.0, 0.0)";
+                if (!dy) dy = "vec3(0.0, 0.0, 0.0)";
+                break;
+
+            default:
+                break;
+        }
+        if (!offset) offset = &dummy_offset;
     }
     if (dx && dy)
         shader_addline(ins->ctx->buffer, ", %s, %s", dx, dy);
@@ -7256,9 +7312,19 @@ static GLuint shader_glsl_generate_pshader(const struct wined3d_context *context
      * nvidia drivers write a warning if we don't do so. */
     if (gl_info->supported[ARB_TEXTURE_RECTANGLE])
         shader_addline(buffer, "#extension GL_ARB_texture_rectangle : enable\n");
+    if (gl_info->supported[ARB_CONSERVATIVE_DEPTH] && shader->u.ps.depth_compare)
+        shader_addline(buffer, "#extension GL_ARB_conservative_depth : enable\n");
 
     /* Base Declarations */
     shader_generate_glsl_declarations(context, buffer, shader, reg_maps, &priv_ctx);
+
+    if (gl_info->supported[ARB_CONSERVATIVE_DEPTH])
+    {
+        if (shader->u.ps.depth_compare == WINED3DSPR_DEPTHOUT_GREATER_EQUAL)
+            shader_addline(buffer, "layout (depth_greater) out float gl_FragDepth;\n");
+        else if (shader->u.ps.depth_compare == WINED3DSPR_DEPTHOUT_LESS_EQUAL)
+            shader_addline(buffer, "layout (depth_less) out float gl_FragDepth;\n");
+    }
 
     /* Declare uniforms for NP2 texcoord fixup:
      * This is NOT done inside the loop that declares the texture samplers
@@ -9724,7 +9790,7 @@ static void set_glsl_shader_program(const struct wined3d_context *context, const
     GLuint ds_id = 0;
     GLuint gs_id = 0;
     GLuint ps_id = 0;
-    struct list *ps_list, *vs_list;
+    struct list *ps_list = NULL, *vs_list = NULL;
     WORD attribs_map;
     struct wined3d_string_buffer *tmp_name;
 

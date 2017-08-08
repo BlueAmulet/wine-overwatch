@@ -13,3 +13,6 @@ C_SRCS = \
 	record.c \
 	source.c \
 	suminfo.c
+
+RC_DLLS = \
+	custom.dll

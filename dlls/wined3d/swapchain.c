@@ -148,14 +148,18 @@ void CDECL wined3d_swapchain_set_window(struct wined3d_swapchain *swapchain, HWN
 HRESULT CDECL wined3d_swapchain_present(struct wined3d_swapchain *swapchain,
         const RECT *src_rect, const RECT *dst_rect, HWND dst_window_override, DWORD flags)
 {
+    static DWORD notified_flags = 0;
     RECT s, d;
 
     TRACE("swapchain %p, src_rect %s, dst_rect %s, dst_window_override %p, flags %#x.\n",
             swapchain, wine_dbgstr_rect(src_rect), wine_dbgstr_rect(dst_rect),
             dst_window_override, flags);
 
-    if (flags)
-        FIXME("Ignoring flags %#x.\n", flags);
+    if (flags & ~notified_flags)
+    {
+        FIXME("Ignoring flags %#x.\n", flags & ~notified_flags);
+        notified_flags |= flags;
+    }
 
     if (!swapchain->back_buffers)
     {
@@ -478,7 +482,11 @@ static void swapchain_gl_present(struct wined3d_swapchain *swapchain,
         swapchain_blit(swapchain, context, src_rect, dst_rect);
     }
 
+#if !defined(STAGING_CSMT)
     if (swapchain->num_contexts > 1)
+#else  /* STAGING_CSMT */
+    if (swapchain->num_contexts > 1 && !wined3d_settings.cs_multithreaded)
+#endif /* STAGING_CSMT */
         gl_info->gl_ops.gl.p_glFinish();
 
     /* call wglSwapBuffers through the gl table to avoid confusing the Steam overlay */

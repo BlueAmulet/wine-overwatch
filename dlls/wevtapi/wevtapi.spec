@@ -25,7 +25,7 @@
 @ stub EvtIntRetractConfig
 @ stub EvtIntSysprepCleanup
 @ stub EvtIntWriteXmlEventToLocalLogfile
-@ stub EvtNext
+@ stdcall EvtNext(ptr long ptr long long ptr)
 @ stub EvtNextChannelPath
 @ stub EvtNextEventMetadata
 @ stub EvtNextPublisherId

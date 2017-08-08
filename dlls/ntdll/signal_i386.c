@@ -480,6 +480,48 @@ static wine_signal_handler handlers[256];
 
 static BOOL fpux_support;  /* whether the CPU supports extended fpu context */
 
+extern void DECLSPEC_NORETURN __wine_syscall_dispatcher( void );
+extern NTSTATUS WINAPI __syscall_NtGetContextThread( HANDLE handle, CONTEXT *context );
+
+/* convert from straight ASCII to Unicode without depending on the current codepage */
+static inline void ascii_to_unicode( WCHAR *dst, const char *src, size_t len )
+{
+    while (len--) *dst++ = (unsigned char)*src++;
+}
+
+static void* WINAPI __wine_fakedll_dispatcher( const char *module, ULONG ord )
+{
+    UNICODE_STRING name;
+    NTSTATUS status;
+    HMODULE base;
+    WCHAR *moduleW;
+    void *proc = NULL;
+    DWORD len = strlen(module);
+
+    TRACE( "(%s, %u)\n", debugstr_a(module), ord );
+
+    if (!(moduleW = RtlAllocateHeap( GetProcessHeap(), 0, (len + 1) * sizeof(WCHAR) )))
+        return NULL;
+
+    ascii_to_unicode( moduleW, module, len );
+    moduleW[ len ] = 0;
+    RtlInitUnicodeString( &name, moduleW );
+
+    status = LdrGetDllHandle( NULL, 0, &name, &base );
+    if (status == STATUS_DLL_NOT_FOUND)
+        status = LdrLoadDll( NULL, 0, &name, &base );
+    if (status == STATUS_SUCCESS)
+        status = LdrAddRefDll( LDR_ADDREF_DLL_PIN, base );
+    if (status == STATUS_SUCCESS)
+        status = LdrGetProcedureAddress( base, NULL, ord, &proc );
+
+    if (status)
+        FIXME( "No procedure address found for %s.#%u, status %x\n", debugstr_a(module), ord, status );
+
+    RtlFreeHeap( GetProcessHeap(), 0, moduleW );
+    return proc;
+}
+
 enum i386_trap_code
 {
     TRAP_x86_UNKNOWN    = -1,  /* Unknown fault (TRAP_sig not defined) */
@@ -1017,7 +1059,7 @@ static inline void *init_handler( const ucontext_t *sigcontext, WORD *fs, WORD *
          * SS is still non-system segment. This is why both CS and SS
          * are checked.
          */
-        return teb->WOW32Reserved;
+        return teb->SystemReserved1[0];
     }
     return (void *)(ESP_sig(sigcontext) & ~3);
 }
@@ -1274,12 +1316,16 @@ __ASM_GLOBAL_FUNC( set_full_cpu_context,
                    "movl 0xc4(%ecx),%eax\n\t" /* Esp */
                    "leal -4*4(%eax),%eax\n\t"
                    "movl 0xc0(%ecx),%edx\n\t" /* EFlags */
+                   ".byte 0x36\n\t"
                    "movl %edx,3*4(%eax)\n\t"
                    "movl 0xbc(%ecx),%edx\n\t" /* SegCs */
+                   ".byte 0x36\n\t"
                    "movl %edx,2*4(%eax)\n\t"
                    "movl 0xb8(%ecx),%edx\n\t" /* Eip */
+                   ".byte 0x36\n\t"
                    "movl %edx,1*4(%eax)\n\t"
                    "movl 0xb0(%ecx),%edx\n\t" /* Eax */
+                   ".byte 0x36\n\t"
                    "movl %edx,0*4(%eax)\n\t"
                    "pushl 0x98(%ecx)\n\t"     /* SegDs */
                    "movl 0xa8(%ecx),%edx\n\t" /* Edx */
@@ -1553,7 +1599,7 @@ NTSTATUS CDECL DECLSPEC_HIDDEN __regs_NtGetContextThread( DWORD edi, DWORD esi, 
         {
             context->Ebp    = ebp;
             context->Esp    = (DWORD)&retaddr;
-            context->Eip    = *(&edi - 1);
+            context->Eip    = (DWORD)__syscall_NtGetContextThread + 18;
             context->SegCs  = wine_get_cs();
             context->SegSs  = wine_get_ss();
             context->EFlags = eflags;
@@ -1589,7 +1635,7 @@ NTSTATUS CDECL DECLSPEC_HIDDEN __regs_NtGetContextThread( DWORD edi, DWORD esi, 
                context->Ebp, context->Esp, context->Eip, context->SegCs, context->SegSs, context->EFlags );
     if (context->ContextFlags & (CONTEXT_SEGMENTS & ~CONTEXT_i386))
         TRACE( "%p: ds=%04x es=%04x fs=%04x gs=%04x\n", handle,
-               context->SegCs, context->SegDs, context->SegEs, context->SegFs );
+               context->SegDs, context->SegEs, context->SegFs, context->SegGs );
     if (context->ContextFlags & (CONTEXT_DEBUG_REGISTERS & ~CONTEXT_i386))
         TRACE( "%p: dr0=%08x dr1=%08x dr2=%08x dr3=%08x dr6=%08x dr7=%08x\n", handle,
                context->Dr0, context->Dr1, context->Dr2, context->Dr3, context->Dr6, context->Dr7 );
@@ -1699,6 +1745,14 @@ static inline BOOL handle_interrupt( unsigned int interrupt, EXCEPTION_RECORD *r
         rec->ExceptionInformation[1] = context->Ecx;
         rec->ExceptionInformation[2] = context->Edx;
         return TRUE;
+    case 0x2e:
+        context->Eip += 2;
+        rec->ExceptionCode = EXCEPTION_WINE_SYSCALL;
+        rec->ExceptionAddress = (void *)context->Eip;
+        rec->NumberParameters = 2;
+        rec->ExceptionInformation[0] = context->Eax;
+        rec->ExceptionInformation[1] = context->Edx;
+        return TRUE;
     default:
         return FALSE;
     }
@@ -1802,13 +1856,13 @@ static BOOL check_atl_thunk( EXCEPTION_RECORD *rec, CONTEXT *context )
     union atl_thunk thunk_copy;
     SIZE_T thunk_len;
 
-    thunk_len = virtual_uninterrupted_read_memory( thunk, &thunk_copy, sizeof(*thunk) );
+    thunk_len = wine_uninterrupted_read_memory( thunk, &thunk_copy, sizeof(*thunk) );
     if (!thunk_len) return FALSE;
 
     if (thunk_len >= sizeof(thunk_copy.t1) && thunk_copy.t1.movl == 0x042444c7 &&
                                               thunk_copy.t1.jmp == 0xe9)
     {
-        if (virtual_uninterrupted_write_memory( (DWORD *)context->Esp + 1,
+        if (wine_uninterrupted_write_memory( (DWORD *)context->Esp + 1,
             &thunk_copy.t1.this, sizeof(DWORD) ) == sizeof(DWORD))
         {
             context->Eip = (DWORD_PTR)(&thunk->t1.func + 1) + thunk_copy.t1.func;
@@ -1852,11 +1906,11 @@ static BOOL check_atl_thunk( EXCEPTION_RECORD *rec, CONTEXT *context )
                                                    thunk_copy.t5.inst2 == 0x0460)
     {
         DWORD func, stack[2];
-        if (virtual_uninterrupted_read_memory( (DWORD *)context->Esp,
+        if (wine_uninterrupted_read_memory( (DWORD *)context->Esp,
             stack, sizeof(stack) ) == sizeof(stack) &&
-            virtual_uninterrupted_read_memory( (DWORD *)stack[1] + 1,
+            wine_uninterrupted_read_memory( (DWORD *)stack[1] + 1,
             &func, sizeof(DWORD) ) == sizeof(DWORD) &&
-            virtual_uninterrupted_write_memory( (DWORD *)context->Esp + 1,
+            wine_uninterrupted_write_memory( (DWORD *)context->Esp + 1,
             &stack[0], sizeof(stack[0]) ) == sizeof(stack[0]))
         {
             context->Ecx = stack[0];
@@ -1891,7 +1945,6 @@ static EXCEPTION_RECORD *setup_exception_record( ucontext_t *sigcontext, void *s
         DWORD             ebp;
         DWORD             eip;
     } *stack = stack_ptr;
-    DWORD exception_code = 0;
 
     /* stack sanity checks */
 
@@ -1927,8 +1980,7 @@ static EXCEPTION_RECORD *setup_exception_record( ucontext_t *sigcontext, void *s
     else if ((char *)(stack - 1) < (char *)NtCurrentTeb()->Tib.StackLimit)
     {
         /* stack access below stack limit, may be recoverable */
-        if (virtual_handle_stack_fault( stack - 1 )) exception_code = EXCEPTION_STACK_OVERFLOW;
-        else
+        if (!virtual_handle_stack_fault( stack - 1 ))
         {
             UINT diff = (char *)NtCurrentTeb()->Tib.StackLimit - (char *)(stack - 1);
             WINE_ERR( "stack overflow %u bytes in thread %04x eip %08x esp %08x stack %p-%p-%p\n",
@@ -1950,7 +2002,7 @@ static EXCEPTION_RECORD *setup_exception_record( ucontext_t *sigcontext, void *s
     stack->context_ptr  = &stack->context;
 
     stack->rec.ExceptionRecord  = NULL;
-    stack->rec.ExceptionCode    = exception_code;
+    stack->rec.ExceptionCode    = STATUS_SUCCESS;
     stack->rec.ExceptionFlags   = EXCEPTION_CONTINUABLE;
     stack->rec.ExceptionAddress = (LPVOID)EIP_sig(sigcontext);
     stack->rec.NumberParameters = 0;
@@ -2082,6 +2134,11 @@ static void WINAPI raise_segv_exception( EXCEPTION_RECORD *rec, CONTEXT *context
             }
         }
         break;
+    case EXCEPTION_WINE_SYSCALL:
+        FIXME("unimplemented syscall handler for 0x%lx, stack 0x%lx\n",
+              rec->ExceptionInformation[0], rec->ExceptionInformation[1]);
+        context->Eax = STATUS_INVALID_SYSTEM_SERVICE;
+        goto done;
     }
     status = NtRaiseException( rec, context, TRUE );
     raise_status( status, rec );
@@ -2183,6 +2240,31 @@ static void usr2_handler( int signal, siginfo_t *siginfo, void *sigcontext )
 
 
 /**********************************************************************
+ *    segv_handler_early
+ *
+ * Handler for SIGSEGV and related errors. Used only during the initialization
+ * of the process to handle virtual faults.
+ */
+static void segv_handler_early( int signal, siginfo_t *siginfo, void *sigcontext )
+{
+    WORD fs, gs;
+    ucontext_t *context = sigcontext;
+    init_handler( sigcontext, &fs, &gs );
+
+    switch(get_trap_code(context))
+    {
+    case TRAP_x86_PAGEFLT:  /* Page fault */
+        if (!virtual_handle_fault( siginfo->si_addr, (get_error_code(context) >> 1) & 0x09, TRUE ))
+            return;
+        /* fall-through */
+    default:
+        WINE_ERR( "Got unexpected trap %d during process initialization\n", get_trap_code(context) );
+        abort_thread(1);
+        break;
+    }
+}
+
+/**********************************************************************
  *		segv_handler
  *
  * Handler for SIGSEGV and related errors.
@@ -2219,7 +2301,6 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
     }
 
     rec = setup_exception_record( context, stack, fs, gs, raise_segv_exception );
-    if (rec->ExceptionCode == EXCEPTION_STACK_OVERFLOW) return;
 
     switch(get_trap_code(context))
     {
@@ -2488,6 +2569,8 @@ NTSTATUS signal_alloc_thread( TEB **teb )
         *teb = addr;
         (*teb)->Tib.Self = &(*teb)->Tib;
         (*teb)->Tib.ExceptionList = (void *)~0UL;
+        (*teb)->WOW32Reserved = __wine_syscall_dispatcher;
+        (*teb)->Spare3 = __wine_fakedll_dispatcher;
         thread_data = (struct x86_thread_data *)(*teb)->SystemReserved2;
         if (!(thread_data->fs = wine_ldt_alloc_fs()))
         {
@@ -2607,6 +2690,34 @@ void signal_init_process(void)
     exit(1);
 }
 
+/**********************************************************************
+ *    signal_init_early
+ */
+void signal_init_early(void)
+{
+    struct sigaction sig_act;
+
+    sig_act.sa_mask = server_block_set;
+    sig_act.sa_flags = SA_SIGINFO | SA_RESTART;
+#ifdef SA_ONSTACK
+    sig_act.sa_flags |= SA_ONSTACK;
+#endif
+#ifdef __ANDROID__
+    sig_act.sa_flags |= SA_RESTORER;
+    sig_act.sa_restorer = rt_sigreturn;
+#endif
+    sig_act.sa_sigaction = segv_handler_early;
+    if (sigaction( SIGSEGV, &sig_act, NULL ) == -1) goto error;
+    if (sigaction( SIGILL, &sig_act, NULL ) == -1) goto error;
+#ifdef SIGBUS
+    if (sigaction( SIGBUS, &sig_act, NULL ) == -1) goto error;
+#endif
+    return;
+
+error:
+    perror("sigaction");
+    exit(1);
+}
 
 #ifdef __HAVE_VM86
 /**********************************************************************
@@ -2893,7 +3004,7 @@ __ASM_GLOBAL_FUNC(call_thread_func_wrapper,
                   __ASM_CFI(".cfi_rel_offset %ebp,0\n\t")
                   "movl %esp,%ebp\n\t"
                   __ASM_CFI(".cfi_def_cfa_register %ebp\n\t")
-                  "subl $4,%esp\n\t"
+                  "subl $20,%esp\n\t"
                   "pushl 12(%ebp)\n\t"
                   "call *8(%ebp)\n\t"
                   "leal -4(%ebp),%esp\n\t"

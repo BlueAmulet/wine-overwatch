@@ -1,5 +1,6 @@
 IDL_SRCS = \
 	access.idl \
+	activation.idl \
 	activaut.idl \
 	activdbg.idl \
 	activscp.idl \
@@ -151,6 +152,7 @@ IDL_SRCS = \
 	shtypes.idl \
 	srcrst.idl \
 	stdole2.idl \
+	stdole32.idl \
 	strmif.idl \
 	structuredquerycondition.idl \
 	taskschd.idl \
@@ -207,6 +209,7 @@ HEADER_SRCS = \
 	advpub.h \
 	af_irda.h \
 	amaudio.h \
+	apiset.h \
 	appcompatapi.h \
 	appmgmt.h \
 	atlbase.h \
@@ -239,7 +242,9 @@ HEADER_SRCS = \
 	cpl.h \
 	cryptdlg.h \
 	cryptuiapi.h \
+	cuda.h \
 	custcntl.h \
+	cuviddec.h \
 	cvconst.h \
 	d2dbasetypes.h \
 	d2derr.h \
@@ -365,6 +370,7 @@ HEADER_SRCS = \
 	dxfile.h \
 	dxgiformat.h \
 	dxgitype.h \
+	dxva.h \
 	errorrep.h \
 	errors.h \
 	evcode.h \
@@ -534,10 +540,14 @@ HEADER_SRCS = \
 	ntddstor.h \
 	ntdef.h \
 	ntdsapi.h \
+	ntifs.h \
 	ntquery.h \
 	ntsecapi.h \
 	ntsecpkg.h \
 	ntstatus.h \
+	nvapi.h \
+	nvcuvid.h \
+	nvencodeapi.h \
 	objbase.h \
 	objsel.h \
 	odbcinst.h \
@@ -595,6 +605,7 @@ HEADER_SRCS = \
 	sfc.h \
 	shdispid.h \
 	shellapi.h \
+	shellscalingapi.h \
 	shlguid.h \
 	shlobj.h \
 	shlwapi.h \
@@ -635,6 +646,7 @@ HEADER_SRCS = \
 	verrsrc.h \
 	vfw.h \
 	vfwmsgs.h \
+	virtdisk.h \
 	vsstyle.h \
 	vssym32.h \
 	vswriter.h \

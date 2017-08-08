@@ -53,6 +53,7 @@
 #include "windef.h"
 #include "winbase.h"
 #include "winuser.h"
+#include "wingdi.h"
 #include "winnls.h"
 
 #include "wine/test.h"
@@ -79,6 +80,7 @@ static struct {
 static UINT (WINAPI *pSendInput) (UINT, INPUT*, size_t);
 static int (WINAPI *pGetMouseMovePointsEx) (UINT, LPMOUSEMOVEPOINT, LPMOUSEMOVEPOINT, int, DWORD);
 static UINT (WINAPI *pGetRawInputDeviceList) (PRAWINPUTDEVICELIST, PUINT, UINT);
+static int  (WINAPI *pGetWindowRgnBox)(HWND, LPRECT);
 
 #define MAXKEYEVENTS 12
 #define MAXKEYMESSAGES MAXKEYEVENTS /* assuming a key event generates one
@@ -163,6 +165,7 @@ static void init_function_pointers(void)
     GET_PROC(SendInput)
     GET_PROC(GetMouseMovePointsEx)
     GET_PROC(GetRawInputDeviceList)
+    GET_PROC(GetWindowRgnBox)
 
 #undef GET_PROC
 }
@@ -1275,6 +1278,19 @@ static LRESULT CALLBACK hook_proc2( int code, WPARAM wparam, LPARAM lparam )
     return CallNextHookEx( 0, code, wparam, lparam );
 }
 
+static LRESULT CALLBACK hook_proc3( int code, WPARAM wparam, LPARAM lparam )
+{
+    POINT pt;
+
+    if (code == HC_ACTION)
+    {
+        /* MSLLHOOKSTRUCT does not seem to be reliable and contains different data on each run. */
+        GetCursorPos(&pt);
+        ok(pt.x == pt_old.x && pt.y == pt_old.y, "GetCursorPos: (%d,%d)\n", pt.x, pt.y);
+    }
+    return CallNextHookEx( 0, code, wparam, lparam );
+}
+
 static void test_mouse_ll_hook(void)
 {
     HWND hwnd;
@@ -1348,6 +1364,62 @@ static void test_mouse_ll_hook(void)
     ok(pt.x == pt_new.x && pt.y == pt_new.y, "Position changed: (%d,%d)\n", pt.x, pt.y);
 
     UnhookWindowsHookEx(hook2);
+    hook1 = SetWindowsHookExA(WH_MOUSE_LL, hook_proc3, GetModuleHandleA(0), 0);
+
+    SetRect(&rc, 150, 150, 150, 150);
+    ClipCursor(&rc);
+    clipped = TRUE;
+
+    SetCursorPos(140, 140);
+    GetCursorPos(&pt_old);
+    ok(pt_old.x == 150 && pt_old.y == 150, "Wrong new pos: (%d,%d)\n", pt_old.x, pt_old.y);
+    SetCursorPos(160, 160);
+    GetCursorPos(&pt_old);
+    todo_wine
+    ok(pt_old.x == 149 && pt_old.y == 149, "Wrong new pos: (%d,%d)\n", pt_old.x, pt_old.y);
+    mouse_event(MOUSEEVENTF_MOVE, -STEP, -STEP, 0, 0);
+    GetCursorPos(&pt_old);
+    ok(pt_old.x == 150 && pt_old.y == 150, "Wrong new pos: (%d,%d)\n", pt_old.x, pt_old.y);
+    mouse_event(MOUSEEVENTF_MOVE, +STEP, +STEP, 0, 0);
+    GetCursorPos(&pt_old);
+    todo_wine
+    ok(pt_old.x == 149 && pt_old.y == 149, "Wrong new pos: (%d,%d)\n", pt_old.x, pt_old.y);
+    mouse_event(MOUSEEVENTF_MOVE, 0, 0, 0, 0);
+    GetCursorPos(&pt_old);
+    ok(pt_old.x == 150 && pt_old.y == 150, "Wrong new pos: (%d,%d)\n", pt_old.x, pt_old.y);
+    mouse_event(MOUSEEVENTF_MOVE, 0, 0, 0, 0);
+    GetCursorPos(&pt_old);
+    todo_wine
+    ok(pt_old.x == 149 && pt_old.y == 149, "Wrong new pos: (%d,%d)\n", pt_old.x, pt_old.y);
+
+    clipped = FALSE;
+    ClipCursor(NULL);
+
+    SetCursorPos(140, 140);
+    SetRect(&rc, 150, 150, 150, 150);
+    ClipCursor(&rc);
+    GetCursorPos(&pt_old);
+    ok(pt_old.x == 150 && pt_old.y == 150, "Wrong new pos: (%d,%d)\n", pt_old.x, pt_old.y);
+    ClipCursor(NULL);
+
+    SetCursorPos(160, 160);
+    SetRect(&rc, 150, 150, 150, 150);
+    ClipCursor(&rc);
+    GetCursorPos(&pt_old);
+    todo_wine
+    ok(pt_old.x == 149 && pt_old.y == 149, "Wrong new pos: (%d,%d)\n", pt_old.x, pt_old.y);
+    ClipCursor(NULL);
+
+    SetCursorPos(150, 150);
+    SetRect(&rc, 150, 150, 150, 150);
+    ClipCursor(&rc);
+    GetCursorPos(&pt_old);
+    todo_wine
+    ok(pt_old.x == 149 && pt_old.y == 149, "Wrong new pos: (%d,%d)\n", pt_old.x, pt_old.y);
+    ClipCursor(NULL);
+
+    UnhookWindowsHookEx(hook1);
+
 done:
     DestroyWindow(hwnd);
     SetCursorPos(pt_org.x, pt_org.y);
@@ -1927,7 +1999,12 @@ static void test_Input_mouse(void)
     struct thread_data thread_data;
     HANDLE thread;
     DWORD thread_id;
+    WNDCLASSA wclass;
     POINT pt, pt_org;
+    int region_type;
+    HRGN hregion;
+    RECT region;
+    BOOL ret;
     MSG msg;
 
     GetCursorPos(&pt_org);
@@ -2021,8 +2098,8 @@ static void test_Input_mouse(void)
         }
     }
     ok(hittest_no && hittest_no<50, "expected WM_NCHITTEST message\n");
-    todo_wine ok(got_button_down, "expected WM_LBUTTONDOWN message\n");
-    todo_wine ok(got_button_up, "expected WM_LBUTTONUP message\n");
+    ok(got_button_down, "expected WM_LBUTTONDOWN message\n");
+    ok(got_button_up, "expected WM_LBUTTONUP message\n");
     DestroyWindow(static_win);
 
     /* click on HTTRANSPARENT top-level window that belongs to other thread */
@@ -2131,6 +2208,223 @@ static void test_Input_mouse(void)
     ok(got_button_up, "expected WM_LBUTTONUP message\n");
     DestroyWindow(hwnd);
     ok(ReleaseCapture(), "ReleaseCapture failed\n");
+
+    wclass.style         = 0;
+    wclass.lpfnWndProc   = WndProc;
+    wclass.cbClsExtra    = 0;
+    wclass.cbWndExtra    = 0;
+    wclass.hInstance     = GetModuleHandleA(NULL);
+    wclass.hIcon         = LoadIconA(0, (LPCSTR)IDI_APPLICATION);
+    wclass.hCursor       = LoadCursorA(NULL, (LPCSTR)IDC_ARROW);
+    wclass.hbrBackground = CreateSolidBrush(RGB(128, 128, 128));
+    wclass.lpszMenuName  = NULL;
+    wclass.lpszClassName = "InputLayeredTestClass";
+    RegisterClassA( &wclass );
+
+    /* click through layered window with alpha channel / color key */
+    hwnd = CreateWindowA(wclass.lpszClassName, "InputLayeredTest",
+            WS_VISIBLE | WS_POPUP, 100, 100, 100, 100, button_win, NULL, NULL, NULL);
+    ok(hwnd != NULL, "CreateWindowEx failed\n");
+
+    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+    SetWindowLongA(hwnd, GWL_EXSTYLE, GetWindowLongA(hwnd, GWL_EXSTYLE) | WS_EX_LAYERED);
+    ret = SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
+    ok(ret, "SetLayeredWindowAttributes failed\n");
+    while (wait_for_message(&msg)) DispatchMessageA(&msg);
+    Sleep(100);
+
+    if (pGetWindowRgnBox)
+    {
+        region_type = pGetWindowRgnBox(hwnd, &region);
+        ok(region_type == ERROR, "expected ERROR, got %d\n", region_type);
+    }
+
+    got_button_down = got_button_up = FALSE;
+    simulate_click(TRUE, 150, 150);
+    while (wait_for_message(&msg))
+    {
+        DispatchMessageA(&msg);
+
+        if (msg.message == WM_LBUTTONDOWN)
+        {
+            ok(msg.hwnd == hwnd, "msg.hwnd = %p\n", msg.hwnd);
+            got_button_down = TRUE;
+        }
+        else if (msg.message == WM_LBUTTONUP)
+        {
+            ok(msg.hwnd == hwnd, "msg.hwnd = %p\n", msg.hwnd);
+            got_button_up = TRUE;
+            break;
+        }
+    }
+    ok(got_button_down, "expected WM_LBUTTONDOWN message\n");
+    ok(got_button_up, "expected WM_LBUTTONUP message\n");
+
+    ret = SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
+    ok(ret, "SetLayeredWindowAttributes failed\n");
+    while (wait_for_message(&msg)) DispatchMessageA(&msg);
+    Sleep(100);
+
+    if (pGetWindowRgnBox)
+    {
+        region_type = pGetWindowRgnBox(hwnd, &region);
+        ok(region_type == ERROR, "expected ERROR, got %d\n", region_type);
+    }
+
+    got_button_down = got_button_up = FALSE;
+    simulate_click(TRUE, 150, 150);
+    while (wait_for_message(&msg))
+    {
+        DispatchMessageA(&msg);
+
+        if (msg.message == WM_LBUTTONDOWN)
+        {
+            ok(msg.hwnd == button_win, "msg.hwnd = %p\n", msg.hwnd);
+            got_button_down = TRUE;
+        }
+        else if (msg.message == WM_LBUTTONUP)
+        {
+            ok(msg.hwnd == button_win, "msg.hwnd = %p\n", msg.hwnd);
+            got_button_up = TRUE;
+            break;
+        }
+    }
+    ok(got_button_down || broken(!got_button_down), "expected WM_LBUTTONDOWN message\n");
+    ok(got_button_up, "expected WM_LBUTTONUP message\n");
+
+    ret = SetLayeredWindowAttributes(hwnd, RGB(0, 255, 0), 255, LWA_ALPHA | LWA_COLORKEY);
+    ok(ret, "SetLayeredWindowAttributes failed\n");
+    while (wait_for_message(&msg)) DispatchMessageA(&msg);
+    Sleep(100);
+
+    if (pGetWindowRgnBox)
+    {
+        region_type = pGetWindowRgnBox(hwnd, &region);
+        ok(region_type == ERROR, "expected ERROR, got %d\n", region_type);
+    }
+
+    got_button_down = got_button_up = FALSE;
+    simulate_click(TRUE, 150, 150);
+    while (wait_for_message(&msg))
+    {
+        DispatchMessageA(&msg);
+
+        if (msg.message == WM_LBUTTONDOWN)
+        {
+            ok(msg.hwnd == hwnd, "msg.hwnd = %p\n", msg.hwnd);
+            got_button_down = TRUE;
+        }
+        else if (msg.message == WM_LBUTTONUP)
+        {
+            ok(msg.hwnd == hwnd, "msg.hwnd = %p\n", msg.hwnd);
+            got_button_up = TRUE;
+            break;
+        }
+    }
+    ok(got_button_down, "expected WM_LBUTTONDOWN message\n");
+    ok(got_button_up, "expected WM_LBUTTONUP message\n");
+
+    ret = SetLayeredWindowAttributes(hwnd, RGB(128, 128, 128), 0, LWA_COLORKEY);
+    ok(ret, "SetLayeredWindowAttributes failed\n");
+    while (wait_for_message(&msg)) DispatchMessageA(&msg);
+    Sleep(100);
+
+    if (pGetWindowRgnBox)
+    {
+        region_type = pGetWindowRgnBox(hwnd, &region);
+        ok(region_type == ERROR, "expected ERROR, got %d\n", region_type);
+    }
+
+    got_button_down = got_button_up = FALSE;
+    simulate_click(TRUE, 150, 150);
+    while (wait_for_message(&msg))
+    {
+        DispatchMessageA(&msg);
+
+        if (msg.message == WM_LBUTTONDOWN)
+        {
+            todo_wine
+            ok(msg.hwnd == button_win, "msg.hwnd = %p\n", msg.hwnd);
+            got_button_down = TRUE;
+        }
+        else if (msg.message == WM_LBUTTONUP)
+        {
+            todo_wine
+            ok(msg.hwnd == button_win, "msg.hwnd = %p\n", msg.hwnd);
+            got_button_up = TRUE;
+            break;
+        }
+    }
+    ok(got_button_down, "expected WM_LBUTTONDOWN message\n");
+    ok(got_button_up, "expected WM_LBUTTONUP message\n");
+
+    SetWindowLongA(hwnd, GWL_EXSTYLE, GetWindowLongA(hwnd, GWL_EXSTYLE) & ~WS_EX_LAYERED);
+    while (wait_for_message(&msg)) DispatchMessageA(&msg);
+    Sleep(100);
+
+    if (pGetWindowRgnBox)
+    {
+        region_type = pGetWindowRgnBox(hwnd, &region);
+        ok(region_type == ERROR, "expected ERROR, got %d\n", region_type);
+    }
+
+    got_button_down = got_button_up = FALSE;
+    simulate_click(TRUE, 150, 150);
+    while (wait_for_message(&msg))
+    {
+        DispatchMessageA(&msg);
+
+        if (msg.message == WM_LBUTTONDOWN)
+        {
+            ok(msg.hwnd == hwnd, "msg.hwnd = %p\n", msg.hwnd);
+            got_button_down = TRUE;
+        }
+        else if (msg.message == WM_LBUTTONUP)
+        {
+            ok(msg.hwnd == hwnd, "msg.hwnd = %p\n", msg.hwnd);
+            got_button_up = TRUE;
+            break;
+        }
+    }
+    ok(got_button_down, "expected WM_LBUTTONDOWN message\n");
+    ok(got_button_up, "expected WM_LBUTTONUP message\n");
+
+    hregion = CreateRectRgn(0, 0, 10, 10);
+    ok(hregion != NULL, "CreateRectRgn failed\n");
+    ret = SetWindowRgn(hwnd, hregion, TRUE);
+    ok(ret, "SetWindowRgn failed\n");
+    DeleteObject(hregion);
+    while (wait_for_message(&msg)) DispatchMessageA(&msg);
+    Sleep(1000);
+
+    if (pGetWindowRgnBox)
+    {
+        region_type = pGetWindowRgnBox(hwnd, &region);
+        ok(region_type == SIMPLEREGION, "expected SIMPLEREGION, got %d\n", region_type);
+    }
+
+    got_button_down = got_button_up = FALSE;
+    simulate_click(TRUE, 150, 150);
+    while (wait_for_message(&msg))
+    {
+        DispatchMessageA(&msg);
+
+        if (msg.message == WM_LBUTTONDOWN)
+        {
+            ok(msg.hwnd == button_win, "msg.hwnd = %p\n", msg.hwnd);
+            got_button_down = TRUE;
+        }
+        else if (msg.message == WM_LBUTTONUP)
+        {
+            ok(msg.hwnd == button_win, "msg.hwnd = %p\n", msg.hwnd);
+            got_button_up = TRUE;
+            break;
+        }
+    }
+    ok(got_button_down, "expected WM_LBUTTONDOWN message\n");
+    ok(got_button_up, "expected WM_LBUTTONUP message\n");
+
+    DestroyWindow(hwnd);
     SetCursorPos(pt_org.x, pt_org.y);
 
     CloseHandle(thread_data.start_event);

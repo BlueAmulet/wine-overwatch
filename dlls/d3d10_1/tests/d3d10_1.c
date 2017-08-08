@@ -226,8 +226,18 @@ static void test_create_device(void)
     hr = D3D10CreateDeviceAndSwapChain1(NULL, D3D10_DRIVER_TYPE_HARDWARE, NULL, 0,
             supported_feature_level, D3D10_1_SDK_VERSION, &swapchain_desc, &swapchain, &device);
     todo_wine ok(hr == DXGI_ERROR_INVALID_CALL, "D3D10CreateDeviceAndSwapChain1 returned %#x.\n", hr);
-    ok(!swapchain, "Got unexpected swapchain pointer %p.\n", swapchain);
-    ok(!device, "Got unexpected device pointer %p.\n", device);
+    if (SUCCEEDED(hr))
+    {
+        refcount = IDXGISwapChain_Release(swapchain);
+        ok(!refcount, "Swapchain has %u references left.\n", refcount);
+        refcount = ID3D10Device1_Release(device);
+        ok(!refcount, "Device has %u references left.\n", refcount);
+    }
+    else
+    {
+        ok(!swapchain, "Got unexpected swapchain pointer %p.\n", swapchain);
+        ok(!device, "Got unexpected device pointer %p.\n", device);
+    }
 
     swapchain = (IDXGISwapChain *)0xdeadbeef;
     device = (ID3D10Device1 *)0xdeadbeef;

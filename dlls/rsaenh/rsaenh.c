@@ -1096,7 +1096,7 @@ static void store_key_permissions(HCRYPTKEY hCryptKey, HKEY hKey, DWORD dwKeySpe
  */
 static BOOL create_container_key(KEYCONTAINER *pKeyContainer, REGSAM sam, HKEY *phKey)
 {
-    CHAR szRSABase[MAX_PATH];
+    CHAR szRSABase[MAX_PATH + 25];
     HKEY hRootKey;
 
     sprintf(szRSABase, RSAENH_REGKEY, pKeyContainer->szName);

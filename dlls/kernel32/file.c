@@ -1064,13 +1064,20 @@ BOOL WINAPI SetEndOfFile( HANDLE hFile )
     return FALSE;
 }
 
+
 /**************************************************************************
  *           SetFileCompletionNotificationModes   (KERNEL32.@)
  */
-BOOL WINAPI SetFileCompletionNotificationModes( HANDLE handle, UCHAR flags )
+BOOL WINAPI SetFileCompletionNotificationModes( HANDLE file, UCHAR flags )
 {
-    FIXME("%p %x - stub\n", handle, flags);
-    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
+    FILE_IO_COMPLETION_NOTIFICATION_INFORMATION info;
+    IO_STATUS_BLOCK io;
+    NTSTATUS status;
+
+    info.Flags = flags;
+    status = NtSetInformationFile( file, &io, &info, sizeof(info), FileIoCompletionNotificationInformation );
+    if (status == STATUS_SUCCESS) return TRUE;
+    SetLastError( RtlNtStatusToDosError(status) );
     return FALSE;
 }
 
@@ -1945,6 +1952,7 @@ HANDLE WINAPI FindFirstFileExW( LPCWSTR filename, FINDEX_INFO_LEVELS level,
     WCHAR *mask;
     BOOL has_wildcard = FALSE;
     FIND_FIRST_INFO *info = NULL;
+    UNICODE_STRING mask_str;
     UNICODE_STRING nt_name;
     OBJECT_ATTRIBUTES attr;
     IO_STATUS_BLOCK io;
@@ -1975,6 +1983,8 @@ HANDLE WINAPI FindFirstFileExW( LPCWSTR filename, FINDEX_INFO_LEVELS level,
         SetLastError( ERROR_PATH_NOT_FOUND );
         return INVALID_HANDLE_VALUE;
     }
+
+    RtlInitUnicodeString( &mask_str, NULL );
 
     if (!mask && (device = RtlIsDosDeviceName_U( filename )))
     {
@@ -2010,8 +2020,27 @@ HANDLE WINAPI FindFirstFileExW( LPCWSTR filename, FINDEX_INFO_LEVELS level,
     }
     else
     {
+        static const WCHAR invalidW[] = { '<', '>', '\"', 0 };
+        static const WCHAR wildcardW[] = { '*', 0 };
+        DWORD mask_len = strlenW( mask );
+
+        /* strip invalid characters from mask */
+        while (mask_len && strchrW( invalidW, mask[mask_len - 1] ))
+            mask_len--;
+
+        if (!mask_len)
+        {
+            has_wildcard = TRUE;
+            RtlInitUnicodeString( &mask_str, wildcardW );
+        }
+        else
+        {
+            has_wildcard = strpbrkW( mask, wildcardsW ) != NULL;
+            RtlInitUnicodeString( &mask_str, mask );
+            mask_str.Length = mask_len * sizeof(WCHAR);
+        }
+
         nt_name.Length = (mask - nt_name.Buffer) * sizeof(WCHAR);
-        has_wildcard = strpbrkW( mask, wildcardsW ) != NULL;
         size = has_wildcard ? 8192 : max_entry_size;
     }
 
@@ -2073,9 +2102,6 @@ HANDLE WINAPI FindFirstFileExW( LPCWSTR filename, FINDEX_INFO_LEVELS level,
     }
     else
     {
-        UNICODE_STRING mask_str;
-
-        RtlInitUnicodeString( &mask_str, mask );
         status = NtQueryDirectoryFile( info->handle, 0, NULL, NULL, &io, info->data, info->data_size,
                                        FileBothDirectoryInformation, FALSE, &mask_str, TRUE );
         if (status)

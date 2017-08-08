@@ -39,8 +39,128 @@
 #include "shellfolder.h"
 
 #include "shresdef.h"
+#include "shlwapi.h"
+#include "aclui.h"
+#include "aclapi.h"
+
+/* Small hack: We need to remove DECLSPEC_HIDDEN from the aclui export. */
+const GUID IID_ISecurityInformation = {0x965fc360, 0x16ff, 0x11d0, {0x91, 0xcb, 0x0, 0xaa, 0x0, 0xbb, 0xb7, 0x23}};
 
 WINE_DEFAULT_DEBUG_CHANNEL(shell);
+
+/* According to https://blogs.msdn.microsoft.com/oldnewthing/20070726-00/?p=25833 */
+static const SI_ACCESS access_rights_files[] =
+{
+    /* General access rights */
+    {
+        &GUID_NULL,
+        FILE_ALL_ACCESS, MAKEINTRESOURCEW(IDS_SECURITY_ALL_ACCESS),
+        SI_ACCESS_GENERAL
+    },
+    {
+        &GUID_NULL,
+        FILE_GENERIC_READ | FILE_GENERIC_WRITE | FILE_GENERIC_EXECUTE | DELETE,
+        MAKEINTRESOURCEW(IDS_SECURITY_MODIFY),
+        SI_ACCESS_GENERAL
+    },
+    {
+        &GUID_NULL,
+        FILE_GENERIC_READ | FILE_GENERIC_EXECUTE,
+        MAKEINTRESOURCEW(IDS_SECURITY_READ_EXEC),
+        SI_ACCESS_GENERAL
+    },
+    {
+        &GUID_NULL,
+        FILE_GENERIC_READ,
+        MAKEINTRESOURCEW(IDS_SECURITY_READ),
+        SI_ACCESS_GENERAL
+    },
+    {
+        &GUID_NULL,
+        FILE_GENERIC_WRITE & ~READ_CONTROL,
+        MAKEINTRESOURCEW(IDS_SECURITY_WRITE),
+        SI_ACCESS_GENERAL
+    },
+
+    /* Advanced permissions */
+    { &GUID_NULL, FILE_ALL_ACCESS,       MAKEINTRESOURCEW(IDS_SECURITY_ALL_ACCESS),    SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, FILE_EXECUTE,          MAKEINTRESOURCEW(IDS_SECURITY_EXECUTE),       SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, FILE_READ_DATA,        MAKEINTRESOURCEW(IDS_SECURITY_READ_DATA),     SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, FILE_READ_ATTRIBUTES,  MAKEINTRESOURCEW(IDS_SECURITY_READ_ATTR),     SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, FILE_READ_EA,          MAKEINTRESOURCEW(IDS_SECURITY_READ_EX_ATTR),  SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, FILE_WRITE_DATA,       MAKEINTRESOURCEW(IDS_SECURITY_WRITE_DATA),    SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, FILE_APPEND_DATA,      MAKEINTRESOURCEW(IDS_SECURITY_APPEND_DATA),   SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, FILE_WRITE_ATTRIBUTES, MAKEINTRESOURCEW(IDS_SECURITY_WRITE_ATTR),    SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, FILE_WRITE_EA,         MAKEINTRESOURCEW(IDS_SECURITY_WRITE_EX_ATTR), SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, DELETE,                MAKEINTRESOURCEW(IDS_SECURITY_DELETE),        SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, READ_CONTROL,          MAKEINTRESOURCEW(IDS_SECURITY_READ_PERM),     SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, WRITE_DAC,             MAKEINTRESOURCEW(IDS_SECURITY_CHANGE_PERM),   SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, WRITE_OWNER,           MAKEINTRESOURCEW(IDS_SECURITY_CHANGE_OWNER),  SI_ACCESS_SPECIFIC },
+};
+
+static const SI_ACCESS access_rights_directories[] =
+{
+    /* General access rights */
+    {
+        &GUID_NULL,
+        FILE_ALL_ACCESS,
+        MAKEINTRESOURCEW(IDS_SECURITY_ALL_ACCESS),
+        SI_ACCESS_GENERAL
+    },
+    {
+        &GUID_NULL,
+        FILE_GENERIC_READ | FILE_GENERIC_WRITE | FILE_GENERIC_EXECUTE | DELETE,
+        MAKEINTRESOURCEW(IDS_SECURITY_MODIFY),
+        SI_ACCESS_GENERAL
+    },
+    {
+        &GUID_NULL,
+        FILE_GENERIC_READ | FILE_GENERIC_EXECUTE,
+        MAKEINTRESOURCEW(IDS_SECURITY_DIR_LIST),
+        SI_ACCESS_GENERAL
+    },
+    {
+        &GUID_NULL,
+        FILE_GENERIC_READ,
+        MAKEINTRESOURCEW(IDS_SECURITY_READ),
+        SI_ACCESS_GENERAL
+    },
+    {
+        &GUID_NULL,
+        FILE_GENERIC_WRITE & ~READ_CONTROL,
+        MAKEINTRESOURCEW(IDS_SECURITY_WRITE),
+        SI_ACCESS_GENERAL
+    },
+
+    /* Advanced permissions */
+    { &GUID_NULL, FILE_ALL_ACCESS,       MAKEINTRESOURCEW(IDS_SECURITY_ALL_ACCESS),    SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, FILE_TRAVERSE,         MAKEINTRESOURCEW(IDS_SECURITY_TRAVERSE),      SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, FILE_LIST_DIRECTORY,   MAKEINTRESOURCEW(IDS_SECURITY_LIST_FOLDER),   SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, FILE_READ_ATTRIBUTES,  MAKEINTRESOURCEW(IDS_SECURITY_READ_ATTR),     SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, FILE_READ_EA,          MAKEINTRESOURCEW(IDS_SECURITY_READ_EX_ATTR),  SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, FILE_ADD_FILE,         MAKEINTRESOURCEW(IDS_SECURITY_CREATE_FILES),  SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, FILE_ADD_SUBDIRECTORY, MAKEINTRESOURCEW(IDS_SEUCRITY_CREATE_FOLDER), SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, FILE_WRITE_ATTRIBUTES, MAKEINTRESOURCEW(IDS_SECURITY_WRITE_ATTR),    SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, FILE_WRITE_EA,         MAKEINTRESOURCEW(IDS_SECURITY_WRITE_EX_ATTR), SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, FILE_DELETE_CHILD,     MAKEINTRESOURCEW(IDS_SECURITY_DELETE_CHILD),  SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, DELETE,                MAKEINTRESOURCEW(IDS_SECURITY_DELETE),        SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, READ_CONTROL,          MAKEINTRESOURCEW(IDS_SECURITY_READ_PERM),     SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, WRITE_DAC,             MAKEINTRESOURCEW(IDS_SECURITY_CHANGE_PERM),   SI_ACCESS_SPECIFIC },
+    { &GUID_NULL, WRITE_OWNER,           MAKEINTRESOURCEW(IDS_SECURITY_CHANGE_OWNER),  SI_ACCESS_SPECIFIC },
+};
+
+struct FileSecurity
+{
+    ISecurityInformation ISecurityInformation_iface;
+    LONG ref;
+    WCHAR *path;
+    BOOL directory;
+};
+
+static inline struct FileSecurity *impl_from_ISecurityInformation(ISecurityInformation *iface)
+{
+    return CONTAINING_RECORD(iface, struct FileSecurity, ISecurityInformation_iface);
+}
 
 typedef struct
 {
@@ -58,6 +178,8 @@ typedef struct
     /* background menu data */
     BOOL desktop;
 } ContextMenu;
+
+static BOOL DoPaste(ContextMenu *This);
 
 static inline ContextMenu *impl_from_IContextMenu3(IContextMenu3 *iface)
 {
@@ -123,6 +245,30 @@ static ULONG WINAPI ContextMenu_Release(IContextMenu3 *iface)
     return ref;
 }
 
+static BOOL CheckClipboard(void)
+{
+    IDataObject *pda;
+    BOOL ret = FALSE;
+
+    if (SUCCEEDED(OleGetClipboard(&pda)))
+    {
+        STGMEDIUM medium;
+        FORMATETC formatetc;
+
+        /* Set the FORMATETC structure*/
+        InitFormatEtc(formatetc, RegisterClipboardFormatW(CFSTR_SHELLIDLISTW), TYMED_HGLOBAL);
+
+        /* Get the pidls from IDataObject */
+        if (SUCCEEDED(IDataObject_GetData(pda, &formatetc, &medium)))
+        {
+            ReleaseStgMedium(&medium);
+            ret = TRUE;
+        }
+        IDataObject_Release(pda);
+    }
+    return ret;
+}
+
 static HRESULT WINAPI ItemMenu_QueryContextMenu(
 	IContextMenu3 *iface,
 	HMENU hmenu,
@@ -133,6 +279,7 @@ static HRESULT WINAPI ItemMenu_QueryContextMenu(
 {
     ContextMenu *This = impl_from_IContextMenu3(iface);
     INT uIDMax;
+    DWORD attr = SFGAO_CANRENAME;
 
     TRACE("(%p)->(%p %d 0x%x 0x%x 0x%x )\n", This, hmenu, indexMenu, idCmdFirst, idCmdLast, uFlags);
 
@@ -169,6 +316,9 @@ static HRESULT WINAPI ItemMenu_QueryContextMenu(
 
         SetMenuDefaultItem(hmenu, 0, MF_BYPOSITION);
 
+        if (This->apidl && This->cidl == 1)
+            IShellFolder_GetAttributesOf(This->parent, 1, (LPCITEMIDLIST*)This->apidl, &attr);
+
         if(uFlags & ~CMF_CANRENAME)
             RemoveMenu(hmenu, FCIDM_SHVIEW_RENAME, MF_BYCOMMAND);
         else
@@ -179,15 +329,13 @@ static HRESULT WINAPI ItemMenu_QueryContextMenu(
             if (!This->apidl || This->cidl > 1)
                 enable |= MFS_DISABLED;
             else
-            {
-                DWORD attr = SFGAO_CANRENAME;
-
-                IShellFolder_GetAttributesOf(This->parent, 1, (LPCITEMIDLIST*)This->apidl, &attr);
                 enable |= (attr & SFGAO_CANRENAME) ? MFS_ENABLED : MFS_DISABLED;
-            }
 
             EnableMenuItem(hmenu, FCIDM_SHVIEW_RENAME, enable);
         }
+
+        if ((attr & (SFGAO_FILESYSTEM|SFGAO_FOLDER)) != (SFGAO_FILESYSTEM|SFGAO_FOLDER) || !CheckClipboard())
+            RemoveMenu(hmenu, FCIDM_SHVIEW_INSERT + idCmdFirst, MF_BYCOMMAND);
 
         return MAKE_HRESULT(SEVERITY_SUCCESS, 0, uIDMax-idCmdFirst);
     }
@@ -247,8 +395,66 @@ static void DoDelete(ContextMenu *This)
     IShellFolder_QueryInterface(This->parent, &IID_ISFHelper, (void**)&helper);
     if (helper)
     {
-        ISFHelper_DeleteItems(helper, This->cidl, (LPCITEMIDLIST*)This->apidl);
+        ISFHelper_DeleteItems(helper, This->cidl, (LPCITEMIDLIST *)This->apidl, TRUE);
         ISFHelper_Release(helper);
+    }
+}
+
+/**************************************************************************
+ * SetDropEffect
+ *
+ * Set the drop effect in a IDataObject object
+ */
+static void SetDropEffect(IDataObject *dataobject, DWORD value)
+{
+    FORMATETC formatetc;
+    STGMEDIUM medium;
+    DWORD *effect;
+
+    InitFormatEtc(formatetc, RegisterClipboardFormatW(CFSTR_PREFERREDDROPEFFECTW), TYMED_HGLOBAL);
+
+    medium.tymed = TYMED_HGLOBAL;
+    medium.pUnkForRelease = NULL;
+    medium.u.hGlobal = GlobalAlloc(GHND|GMEM_SHARE, sizeof(DWORD));
+    if (!medium.u.hGlobal) return;
+
+    effect = GlobalLock(medium.u.hGlobal);
+    if (!effect)
+    {
+        ReleaseStgMedium(&medium);
+        return;
+    }
+    *effect = value;
+    GlobalUnlock(effect);
+
+    IDataObject_SetData(dataobject, &formatetc, &medium, FALSE);
+    ReleaseStgMedium(&medium);
+}
+
+/**************************************************************************
+ * GetDropEffect
+ *
+ * Get the drop effect from a IDataObject object
+ */
+static void GetDropEffect(IDataObject *dataobject, DWORD *value)
+{
+    FORMATETC formatetc;
+    STGMEDIUM medium;
+    DWORD *effect;
+
+    *value = DROPEFFECT_NONE;
+
+    InitFormatEtc(formatetc, RegisterClipboardFormatW(CFSTR_PREFERREDDROPEFFECTW), TYMED_HGLOBAL);
+
+    if (SUCCEEDED(IDataObject_GetData(dataobject, &formatetc, &medium)))
+    {
+        effect = GlobalLock(medium.u.hGlobal);
+        if (effect)
+        {
+            *value = *effect;
+            GlobalUnlock(effect);
+        }
+        ReleaseStgMedium(&medium);
     }
 }
 
@@ -265,6 +471,7 @@ static void DoCopyOrCut(ContextMenu *This, HWND hwnd, BOOL cut)
 
     if (SUCCEEDED(IShellFolder_GetUIObjectOf(This->parent, hwnd, This->cidl, (LPCITEMIDLIST*)This->apidl, &IID_IDataObject, 0, (void**)&dataobject)))
     {
+        SetDropEffect(dataobject, cut ? DROPEFFECT_MOVE : DROPEFFECT_COPY);
         OleSetClipboard(dataobject);
         IDataObject_Release(dataobject);
     }
@@ -283,6 +490,581 @@ static BOOL CALLBACK Properties_AddPropSheetCallback(HPROPSHEETPAGE hpage, LPARA
 
 	return TRUE;
 }
+
+static BOOL format_date(FILETIME *time, WCHAR *buffer, DWORD size)
+{
+    FILETIME ft;
+    SYSTEMTIME st;
+    int ret;
+
+    if (!FileTimeToLocalFileTime(time, &ft))
+        return FALSE;
+
+    if (!FileTimeToSystemTime(&ft, &st))
+        return FALSE;
+
+    ret = GetDateFormatW(LOCALE_USER_DEFAULT, DATE_LONGDATE, &st, NULL, buffer, size);
+    if (ret)
+    {
+        buffer[ret - 1] = ' ';
+        ret = GetTimeFormatW(LOCALE_USER_DEFAULT, 0, &st, NULL, buffer + ret , size - ret);
+    }
+    return ret != 0;
+}
+
+static BOOL get_program_description(WCHAR *path, WCHAR *buffer, DWORD size)
+{
+    static const WCHAR translationW[] = {
+        '\\','V','a','r','F','i','l','e','I','n','f','o',
+        '\\','T','r','a','n','s','l','a','t','i','o','n',0
+    };
+    static const WCHAR fileDescFmtW[] = {
+        '\\','S','t','r','i','n','g','F','i','l','e','I','n','f','o',
+        '\\','%','0','4','x','%','0','4','x',
+        '\\','F','i','l','e','D','e','s','c','r','i','p','t','i','o','n',0
+    };
+    WCHAR fileDescW[41], *desc;
+    DWORD versize, *lang;
+    UINT dlen, llen, i;
+    BOOL ret = FALSE;
+    PVOID data;
+
+    versize = GetFileVersionInfoSizeW(path, NULL);
+    if (!versize) return FALSE;
+
+    data = HeapAlloc(GetProcessHeap(), 0, versize);
+    if (!data) return FALSE;
+
+    if (!GetFileVersionInfoW(path, 0, versize, data))
+        goto out;
+
+    if (!VerQueryValueW(data, translationW, (LPVOID *)&lang, &llen))
+        goto out;
+
+    for (i = 0; i < llen / sizeof(DWORD); i++)
+    {
+        sprintfW(fileDescW, fileDescFmtW, LOWORD(lang[i]), HIWORD(lang[i]));
+        if (VerQueryValueW(data, fileDescW, (LPVOID *)&desc, &dlen))
+        {
+            if (dlen > size - 1) dlen = size - 1;
+            memcpy(buffer, desc, dlen * sizeof(WCHAR));
+            buffer[dlen] = 0;
+            ret = TRUE;
+            break;
+        }
+    }
+
+out:
+    HeapFree(GetProcessHeap(), 0, data);
+    return ret;
+}
+
+struct file_properties_info
+{
+    LONG refcount;
+    WCHAR path[MAX_PATH];
+    WCHAR dir[MAX_PATH];
+    WCHAR *filename;
+    DWORD attrib;
+};
+
+static void init_file_properties_dlg(HWND hwndDlg, struct file_properties_info *props)
+{
+    WCHAR buffer[MAX_PATH], buffer2[MAX_PATH];
+    WIN32_FILE_ATTRIBUTE_DATA exinfo;
+    SHFILEINFOW shinfo;
+
+    SetDlgItemTextW(hwndDlg, IDC_FPROP_PATH, props->filename);
+    SetDlgItemTextW(hwndDlg, IDC_FPROP_LOCATION, props->dir);
+
+    if (SHGetFileInfoW(props->path, 0, &shinfo, sizeof(shinfo), SHGFI_TYPENAME|SHGFI_ICON))
+    {
+        if (shinfo.hIcon) SendDlgItemMessageW(hwndDlg, IDC_FPROP_ICON, STM_SETICON, (WPARAM)shinfo.hIcon, 0);
+        if (shinfo.szTypeName[0]) SetDlgItemTextW(hwndDlg, IDC_FPROP_TYPE, shinfo.szTypeName);
+    }
+
+    if (!GetFileAttributesExW(props->path, GetFileExInfoStandard, &exinfo))
+        return;
+
+    if (format_date(&exinfo.ftCreationTime, buffer, sizeof(buffer) / sizeof(buffer[0])))
+        SetDlgItemTextW(hwndDlg, IDC_FPROP_CREATED, buffer);
+
+    if (exinfo.dwFileAttributes & FILE_ATTRIBUTE_READONLY)
+        SendDlgItemMessageW(hwndDlg, IDC_FPROP_READONLY, BM_SETCHECK, BST_CHECKED, 0);
+    if (exinfo.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)
+        SendDlgItemMessageW(hwndDlg, IDC_FPROP_HIDDEN, BM_SETCHECK, BST_CHECKED, 0);
+    if (exinfo.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE)
+        SendDlgItemMessageW(hwndDlg, IDC_FPROP_ARCHIVE, BM_SETCHECK, BST_CHECKED, 0);
+
+    if (exinfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+    {
+        static const WCHAR unknownW[] = {'(','u','n','k','n','o','w','n',')',0};
+        SetDlgItemTextW(hwndDlg, IDC_FPROP_SIZE, unknownW);
+
+        /* TODO: Implement counting for directories */
+        return;
+    }
+
+    /* Information about files only */
+    StrFormatByteSizeW(((LONGLONG)exinfo.nFileSizeHigh << 32) | exinfo.nFileSizeLow,
+                       buffer, sizeof(buffer) / sizeof(buffer[0]));
+    SetDlgItemTextW(hwndDlg, IDC_FPROP_SIZE, buffer);
+
+    if (format_date(&exinfo.ftLastWriteTime, buffer, sizeof(buffer) / sizeof(buffer[0])))
+        SetDlgItemTextW(hwndDlg, IDC_FPROP_MODIFIED, buffer);
+    if (format_date(&exinfo.ftLastAccessTime, buffer, sizeof(buffer) / sizeof(buffer[0])))
+        SetDlgItemTextW(hwndDlg, IDC_FPROP_ACCESSED, buffer);
+
+    if (FindExecutableW(props->path, NULL, buffer) <= (HINSTANCE)32)
+        return;
+
+    /* Information about executables */
+    if (SHGetFileInfoW(buffer, 0, &shinfo, sizeof(shinfo), SHGFI_ICON | SHGFI_SMALLICON) && shinfo.hIcon)
+        SendDlgItemMessageW(hwndDlg, IDC_FPROP_PROG_ICON, STM_SETICON, (WPARAM)shinfo.hIcon, 0);
+
+    if (get_program_description(buffer, buffer2, sizeof(buffer2) / sizeof(buffer2[0])))
+        SetDlgItemTextW(hwndDlg, IDC_FPROP_PROG_NAME, buffer2);
+    else
+    {
+        WCHAR *p = strrchrW(buffer, '\\');
+        SetDlgItemTextW(hwndDlg, IDC_FPROP_PROG_NAME, p ? ++p : buffer);
+    }
+}
+
+static INT_PTR CALLBACK file_properties_proc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+    switch (uMsg)
+    {
+        case WM_INITDIALOG:
+        {
+            LPPROPSHEETPAGEW ppsp = (LPPROPSHEETPAGEW)lParam;
+            SetWindowLongPtrW(hwndDlg, DWLP_USER, (LONG_PTR)ppsp->lParam);
+            init_file_properties_dlg(hwndDlg, (struct file_properties_info *)ppsp->lParam);
+            break;
+        }
+
+        case WM_COMMAND:
+            if (LOWORD(wParam) == IDC_FPROP_PROG_CHANGE)
+            {
+                /* TODO: Implement file association dialog */
+                MessageBoxA(hwndDlg, "Not implemented yet.", "Error", MB_OK | MB_ICONEXCLAMATION);
+            }
+            else if (LOWORD(wParam) == IDC_FPROP_READONLY ||
+                     LOWORD(wParam) == IDC_FPROP_HIDDEN ||
+                     LOWORD(wParam) == IDC_FPROP_ARCHIVE)
+            {
+                SendMessageW(GetParent(hwndDlg), PSM_CHANGED, (WPARAM)hwndDlg, 0);
+            }
+            else if (LOWORD(wParam) == IDC_FPROP_PATH && HIWORD(wParam) == EN_CHANGE)
+            {
+                SendMessageW(GetParent(hwndDlg), PSM_CHANGED, (WPARAM)hwndDlg, 0);
+            }
+            break;
+
+        case WM_NOTIFY:
+            {
+                LPPSHNOTIFY lppsn = (LPPSHNOTIFY)lParam;
+                if (lppsn->hdr.code == PSN_APPLY)
+                {
+                    struct file_properties_info *props = (struct file_properties_info *)GetWindowLongPtrW(hwndDlg, DWLP_USER);
+                    WCHAR newname[MAX_PATH], newpath[MAX_PATH];
+                    DWORD attributes;
+
+                    attributes = GetFileAttributesW(props->path);
+                    if (attributes != INVALID_FILE_ATTRIBUTES)
+                    {
+                        attributes &= ~(FILE_ATTRIBUTE_READONLY|FILE_ATTRIBUTE_HIDDEN|FILE_ATTRIBUTE_ARCHIVE);
+
+                        if (SendDlgItemMessageW(hwndDlg, IDC_FPROP_READONLY, BM_GETCHECK, 0, 0) == BST_CHECKED)
+                            attributes |= FILE_ATTRIBUTE_READONLY;
+                        if (SendDlgItemMessageW(hwndDlg, IDC_FPROP_HIDDEN, BM_GETCHECK, 0, 0) == BST_CHECKED)
+                            attributes |= FILE_ATTRIBUTE_HIDDEN;
+                        if (SendDlgItemMessageW(hwndDlg, IDC_FPROP_ARCHIVE, BM_GETCHECK, 0, 0) == BST_CHECKED)
+                            attributes |= FILE_ATTRIBUTE_ARCHIVE;
+
+                        if (!SetFileAttributesW(props->path, attributes))
+                            ERR("failed to update file attributes of %s\n", debugstr_w(props->path));
+                    }
+
+                    /* Update filename it it was changed */
+                    if (GetDlgItemTextW(hwndDlg, IDC_FPROP_PATH, newname, sizeof(newname)/sizeof(newname[0])) &&
+                        strcmpW(props->filename, newname) &&
+                        strlenW(props->dir) + strlenW(newname) + 2 < sizeof(newpath) / sizeof(newpath[0]))
+                    {
+                        static const WCHAR slash[] = {'\\', 0};
+                        strcpyW(newpath, props->dir);
+                        strcatW(newpath, slash);
+                        strcatW(newpath, newname);
+
+                        if (!MoveFileW(props->path, newpath))
+                            ERR("failed to move file %s to %s\n", debugstr_w(props->path), debugstr_w(newpath));
+                        else
+                        {
+                            WCHAR *p;
+                            strcpyW(props->path, newpath);
+                            strcpyW(props->dir, newpath);
+                            if ((p = strrchrW(props->dir, '\\')))
+                            {
+                                *p = 0;
+                                props->filename = p + 1;
+                            }
+                            else
+                                props->filename = props->dir;
+                            SetDlgItemTextW(hwndDlg, IDC_FPROP_LOCATION, props->dir);
+                        }
+                    }
+
+                    return TRUE;
+                }
+            }
+            break;
+
+        default:
+            break;
+    }
+    return FALSE;
+}
+
+static UINT CALLBACK file_properties_callback(HWND hwnd, UINT uMsg, LPPROPSHEETPAGEW ppsp)
+{
+    struct file_properties_info *props = (struct file_properties_info *)ppsp->lParam;
+    if (uMsg == PSPCB_RELEASE)
+    {
+        if (!InterlockedDecrement(&props->refcount))
+            HeapFree(GetProcessHeap(), 0, props);
+    }
+    return 1;
+}
+
+static void init_file_properties_pages(IDataObject *pDo, LPFNADDPROPSHEETPAGE lpfnAddPage, LPARAM lParam)
+{
+    static WCHAR title[] = {'G','e','n','e','r','a','l',0};
+    struct file_properties_info *props;
+    HPROPSHEETPAGE general_page;
+    PROPSHEETPAGEW propsheet;
+    FORMATETC format;
+    STGMEDIUM stgm;
+    HRESULT hr;
+    WCHAR *p;
+
+    props = HeapAlloc(GetProcessHeap(), 0, sizeof(*props));
+    if (!props) return;
+
+    format.cfFormat = CF_HDROP;
+    format.ptd      = NULL;
+    format.dwAspect = DVASPECT_CONTENT;
+    format.lindex   = -1;
+    format.tymed    = TYMED_HGLOBAL;
+
+    hr = IDataObject_GetData(pDo, &format, &stgm);
+    if (FAILED(hr)) goto error;
+
+    if (!DragQueryFileW((HDROP)stgm.DUMMYUNIONNAME.hGlobal, 0,
+                        props->path, sizeof(props->path) / sizeof(props->path[0])))
+    {
+        ReleaseStgMedium(&stgm);
+        goto error;
+    }
+
+    ReleaseStgMedium(&stgm);
+
+    props->refcount = 1;
+    props->attrib = GetFileAttributesW(props->path);
+    if (props->attrib == INVALID_FILE_ATTRIBUTES)
+        goto error;
+
+    strcpyW(props->dir, props->path);
+    if ((p = strrchrW(props->dir, '\\')))
+    {
+        *p = 0;
+        props->filename = p + 1;
+    }
+    else
+        props->filename = props->dir;
+
+    memset(&propsheet, 0, sizeof(propsheet));
+    propsheet.dwSize        = sizeof(propsheet);
+    propsheet.dwFlags       = PSP_DEFAULT | PSP_USETITLE | PSP_USECALLBACK;
+    propsheet.hInstance     = shell32_hInstance;
+    if (props->attrib & FILE_ATTRIBUTE_DIRECTORY)
+        propsheet.u.pszTemplate = (LPWSTR)MAKEINTRESOURCE(IDD_FOLDER_PROPERTIES);
+    else
+        propsheet.u.pszTemplate = (LPWSTR)MAKEINTRESOURCE(IDD_FILE_PROPERTIES);
+    propsheet.pfnDlgProc    = file_properties_proc;
+    propsheet.pfnCallback   = file_properties_callback;
+    propsheet.lParam        = (LPARAM)props;
+    propsheet.pszTitle      = title;
+
+    general_page = CreatePropertySheetPageW(&propsheet);
+    if (general_page) lpfnAddPage(general_page, lParam);
+    return;
+
+error:
+    HeapFree(GetProcessHeap(), 0, props);
+}
+
+static HRESULT WINAPI filesecurity_QueryInterface(ISecurityInformation *iface, REFIID riid, void **ppv)
+{
+    struct FileSecurity *This = impl_from_ISecurityInformation(iface);
+
+    if (IsEqualGUID(&IID_IUnknown, riid))
+    {
+        TRACE("(%p)->(IID_IUnknown %p)\n", This, ppv);
+        *ppv = &This->ISecurityInformation_iface;
+    }
+    else if (IsEqualGUID(&IID_ISecurityInformation, riid))
+    {
+        TRACE("(%p)->(IID_ISecurityInformation %p)\n", This, ppv);
+        *ppv = &This->ISecurityInformation_iface;
+    }
+    else
+    {
+        *ppv = NULL;
+        WARN("Unsupported interface %s\n", debugstr_guid(riid));
+        return E_NOINTERFACE;
+    }
+
+    IUnknown_AddRef((IUnknown *)*ppv);
+    return S_OK;
+}
+
+static ULONG WINAPI filesecurity_AddRef(ISecurityInformation *iface)
+{
+    struct FileSecurity *This = impl_from_ISecurityInformation(iface);
+
+    TRACE("(%p)\n", This);
+
+    return InterlockedIncrement(&This->ref);
+}
+
+static ULONG WINAPI filesecurity_Release(ISecurityInformation *iface)
+{
+    struct FileSecurity *This = impl_from_ISecurityInformation(iface);
+    ULONG ref;
+
+    TRACE("(%p)\n", This);
+
+    ref = InterlockedDecrement(&This->ref);
+    if (!ref)
+    {
+        HeapFree(GetProcessHeap(), 0, This->path);
+        HeapFree(GetProcessHeap(), 0, This);
+    }
+
+    return ref;
+}
+
+static HRESULT WINAPI filesecurity_GetObjectInformation(ISecurityInformation *iface, SI_OBJECT_INFO *info)
+{
+    struct FileSecurity *This = impl_from_ISecurityInformation(iface);
+
+    TRACE("(%p, %p)\n", This, info);
+
+    info->dwFlags = SI_ADVANCED;
+    info->hInstance = shell32_hInstance;
+    info->pszServerName = NULL;
+    info->pszObjectName = This->path;
+    info->pszPageTitle = NULL;
+    memcpy(&info->guidObjectType, &GUID_NULL, sizeof(GUID));
+
+    return S_OK;
+}
+
+static HRESULT WINAPI filesecurity_GetSecurity(ISecurityInformation *iface, SECURITY_INFORMATION info, PSECURITY_DESCRIPTOR *sd, BOOL default_sd)
+{
+    struct FileSecurity *This = impl_from_ISecurityInformation(iface);
+
+    TRACE("(%p, %u, %p, %u)\n", This, info, sd, default_sd);
+
+    if (default_sd)
+        FIXME("Returning a default sd is not implemented\n");
+
+    if (GetNamedSecurityInfoW(This->path, SE_FILE_OBJECT, info, NULL, NULL, NULL, NULL, sd) != ERROR_SUCCESS)
+        return E_FAIL;
+
+    return S_OK;
+}
+
+static HRESULT WINAPI filesecurity_SetSecurity(ISecurityInformation *iface, SECURITY_INFORMATION info, PSECURITY_DESCRIPTOR sd)
+{
+    struct FileSecurity *This = impl_from_ISecurityInformation(iface);
+    BOOL present, defaulted;
+    PSID owner, group;
+    ACL *dacl, *sacl;
+
+    TRACE("(%p, %u, %p)\n", This, info, sd);
+
+    if (!GetSecurityDescriptorOwner(sd, &owner, &defaulted))
+        return E_FAIL;
+
+    if (!GetSecurityDescriptorGroup(sd, &group, &defaulted))
+        return E_FAIL;
+
+    if (!GetSecurityDescriptorDacl(sd, &present, &dacl, &defaulted))
+        return E_FAIL;
+    if (!present) dacl = NULL;
+
+    if (!GetSecurityDescriptorSacl(sd, &present, &sacl, &defaulted))
+        return E_FAIL;
+    if (!present) sacl = NULL;
+
+    if (SetNamedSecurityInfoW(This->path, SE_FILE_OBJECT, info, owner, group, dacl, sacl) != ERROR_SUCCESS)
+        return E_FAIL;
+
+    return S_OK;
+}
+
+static HRESULT WINAPI filesecurity_GetAccessRights(ISecurityInformation *iface, const GUID* type, DWORD flags, SI_ACCESS **access,
+                                                   ULONG *count, ULONG *default_access )
+{
+    struct FileSecurity *This = impl_from_ISecurityInformation(iface);
+
+    TRACE("(%p, %s, %x, %p, %p, %p)\n", This, debugstr_guid(type), flags, access, count, default_access);
+
+    if (This->directory)
+    {
+        *access = (SI_ACCESS *)access_rights_directories;
+        *count = sizeof(access_rights_directories) / sizeof(access_rights_directories[0]);
+    }
+    else
+    {
+        *access = (SI_ACCESS *)access_rights_files;
+        *count = sizeof(access_rights_files) / sizeof(access_rights_files[0]);
+    }
+
+    *default_access = 0;
+    return S_OK;
+}
+
+static HRESULT WINAPI filesecurity_MapGeneric(ISecurityInformation *iface, const GUID *type, UCHAR *ace_flags, ACCESS_MASK *mask)
+{
+    static GENERIC_MAPPING file_access_map =
+    {
+        FILE_GENERIC_READ,
+        FILE_GENERIC_WRITE,
+        FILE_GENERIC_EXECUTE,
+        FILE_ALL_ACCESS
+    };
+    struct FileSecurity *This = impl_from_ISecurityInformation(iface);
+
+    FIXME("(%p, %s, %p, %p): semi-stub!\n", This, debugstr_guid(type), ace_flags, mask);
+
+    MapGenericMask((DWORD*)mask, &file_access_map);
+    return S_OK;
+}
+
+static HRESULT WINAPI filesecurity_GetInheritTypes(ISecurityInformation *iface, PSI_INHERIT_TYPE *types, ULONG *count)
+{
+    struct FileSecurity *This = impl_from_ISecurityInformation(iface);
+
+    FIXME("(%p, %p, %p): stub!\n", This, types, count);
+
+    *types = NULL;
+    *count = 0;
+
+    return S_OK;
+}
+
+static HRESULT WINAPI filesecurity_PropertySheetPageCallback(ISecurityInformation *iface, HWND hwnd, UINT msg, SI_PAGE_TYPE page)
+{
+    struct FileSecurity *This = impl_from_ISecurityInformation(iface);
+
+    TRACE("(%p, %p, %u, %u)\n", This, hwnd, msg, page);
+    return S_OK;
+}
+
+static const struct ISecurityInformationVtbl filesecurity_vtbl =
+{
+    /* IUnknown */
+    filesecurity_QueryInterface,
+    filesecurity_AddRef,
+    filesecurity_Release,
+    /* ISecurityInformation */
+    filesecurity_GetObjectInformation,
+    filesecurity_GetSecurity,
+    filesecurity_SetSecurity,
+    filesecurity_GetAccessRights,
+    filesecurity_MapGeneric,
+    filesecurity_GetInheritTypes,
+    filesecurity_PropertySheetPageCallback,
+};
+
+static ISecurityInformation *create_filesecurity_information(WCHAR *path, BOOL directory)
+{
+    struct FileSecurity *security;
+    DWORD len;
+
+    security = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*security));
+    if (!security) return NULL;
+
+    security->ISecurityInformation_iface.lpVtbl = &filesecurity_vtbl;
+    security->ref = 1;
+    security->directory = directory;
+
+    len = (strlenW(path) + 1) * sizeof(WCHAR);
+    security->path = HeapAlloc(GetProcessHeap(), 0, len);
+    if (!security->path) goto error;
+
+    memcpy(security->path, path, len);
+    return &security->ISecurityInformation_iface;
+
+error:
+    HeapFree(GetProcessHeap(), 0, security);
+    return NULL;
+}
+
+static void init_security_properties_pages(IDataObject *pDo, LPFNADDPROPSHEETPAGE lpfnAddPage, LPARAM lParam)
+{
+    ISecurityInformation *security;
+    HPROPSHEETPAGE security_page;
+    FORMATETC format;
+    STGMEDIUM stgm;
+    DWORD attrib;
+    WCHAR *path;
+    UINT len;
+
+    format.cfFormat = CF_HDROP;
+    format.ptd      = NULL;
+    format.dwAspect = DVASPECT_CONTENT;
+    format.lindex   = -1;
+    format.tymed    = TYMED_HGLOBAL;
+
+    if (FAILED(IDataObject_GetData(pDo, &format, &stgm)))
+        return;
+
+    if (!(len = DragQueryFileW((HDROP)stgm.DUMMYUNIONNAME.hGlobal, 0, NULL, 0)))
+    {
+        ReleaseStgMedium(&stgm);
+        return;
+    }
+
+    if (!(path = HeapAlloc(GetProcessHeap(), 0, (len + 1) * sizeof(WCHAR))))
+    {
+        ReleaseStgMedium(&stgm);
+        return;
+    }
+
+    len = DragQueryFileW((HDROP)stgm.DUMMYUNIONNAME.hGlobal, 0, path, len + 1);
+    ReleaseStgMedium(&stgm);
+    if (!len) goto done;
+
+    attrib = GetFileAttributesW(path);
+    if (attrib == INVALID_FILE_ATTRIBUTES)
+        goto done;
+
+    if (!(security = create_filesecurity_information(path, attrib & FILE_ATTRIBUTE_DIRECTORY)))
+        goto done;
+
+    security_page = CreateSecurityPage(security);
+    IUnknown_Release((IUnknown *)security);
+    if (!security_page) goto done;
+
+    lpfnAddPage(security_page, lParam);
+
+done:
+    HeapFree(GetProcessHeap(), 0, path);
+}
+
 
 #define MAX_PROP_PAGES 99
 
@@ -363,22 +1145,25 @@ static void DoOpenProperties(ContextMenu *This, HWND hwnd)
 	    IShellFolder_Release(lpDesktopSF);
 	}
 
-	if (SUCCEEDED(ret))
-	{
-	    hpsxa = SHCreatePropSheetExtArrayEx(HKEY_CLASSES_ROOT, wszFiletype, MAX_PROP_PAGES - psh.nPages, lpDo);
-	    if (hpsxa != NULL)
-	    {
-		SHAddFromPropSheetExtArray(hpsxa, Properties_AddPropSheetCallback, (LPARAM)&psh);
-		SHDestroyPropSheetExtArray(hpsxa);
-	    }
-	    hpsxa = SHCreatePropSheetExtArrayEx(HKEY_CLASSES_ROOT, wszFiletypeAll, MAX_PROP_PAGES - psh.nPages, lpDo);
-	    if (hpsxa != NULL)
-	    {
-		SHAddFromPropSheetExtArray(hpsxa, Properties_AddPropSheetCallback, (LPARAM)&psh);
-		SHDestroyPropSheetExtArray(hpsxa);
-	    }
-	    IDataObject_Release(lpDo);
-	}
+    if (SUCCEEDED(ret))
+    {
+        init_file_properties_pages(lpDo, Properties_AddPropSheetCallback, (LPARAM)&psh);
+        init_security_properties_pages(lpDo, Properties_AddPropSheetCallback, (LPARAM)&psh);
+
+        hpsxa = SHCreatePropSheetExtArrayEx(HKEY_CLASSES_ROOT, wszFiletype, MAX_PROP_PAGES - psh.nPages, lpDo);
+        if (hpsxa != NULL)
+        {
+            SHAddFromPropSheetExtArray(hpsxa, Properties_AddPropSheetCallback, (LPARAM)&psh);
+            SHDestroyPropSheetExtArray(hpsxa);
+        }
+        hpsxa = SHCreatePropSheetExtArrayEx(HKEY_CLASSES_ROOT, wszFiletypeAll, MAX_PROP_PAGES - psh.nPages, lpDo);
+        if (hpsxa != NULL)
+        {
+            SHAddFromPropSheetExtArray(hpsxa, Properties_AddPropSheetCallback, (LPARAM)&psh);
+            SHDestroyPropSheetExtArray(hpsxa);
+        }
+        IDataObject_Release(lpDo);
+    }
 
 	if (psh.nPages)
 	    PropertySheetW(&psh);
@@ -447,6 +1232,10 @@ static HRESULT WINAPI ItemMenu_InvokeCommand(
             TRACE("Verb FCIDM_SHVIEW_CUT\n");
             DoCopyOrCut(This, lpcmi->hwnd, TRUE);
             break;
+        case FCIDM_SHVIEW_INSERT:
+            TRACE("Verb FCIDM_SHVIEW_INSERT\n");
+            DoPaste(This);
+            break;
         case FCIDM_SHVIEW_PROPERTIES:
             TRACE("Verb FCIDM_SHVIEW_PROPERTIES\n");
             DoOpenProperties(This, lpcmi->hwnd);
@@ -463,6 +1252,12 @@ static HRESULT WINAPI ItemMenu_InvokeCommand(
             DoDelete(This);
         else if (strcmp(lpcmi->lpVerb,"properties")==0)
             DoOpenProperties(This, lpcmi->hwnd);
+        else if (strcmp(lpcmi->lpVerb,"cut")==0)
+            DoCopyOrCut(This, lpcmi->hwnd, TRUE);
+        else if (strcmp(lpcmi->lpVerb,"copy")==0)
+            DoCopyOrCut(This, lpcmi->hwnd, FALSE);
+        else if (strcmp(lpcmi->lpVerb,"paste")==0)
+            DoPaste(This);
         else {
             FIXME("Unhandled string verb %s\n",debugstr_a(lpcmi->lpVerb));
             return E_FAIL;
@@ -510,6 +1305,10 @@ static HRESULT WINAPI ItemMenu_GetCommandString(
                 strcpy(lpszName, "copy");
                 hr = S_OK;
                 break;
+            case FCIDM_SHVIEW_INSERT:
+                strcpy(lpszName, "paste");
+                hr = S_OK;
+                break;
             case FCIDM_SHVIEW_CREATELINK:
                 strcpy(lpszName, "link");
                 hr = S_OK;
@@ -548,6 +1347,10 @@ static HRESULT WINAPI ItemMenu_GetCommandString(
                 break;
             case FCIDM_SHVIEW_COPY:
                 MultiByteToWideChar(CP_ACP, 0, "copy", -1, (LPWSTR)lpszName, uMaxNameLen);
+                hr = S_OK;
+                break;
+            case FCIDM_SHVIEW_INSERT:
+                MultiByteToWideChar(CP_ACP, 0, "paste", -1, (LPWSTR)lpszName, uMaxNameLen);
                 hr = S_OK;
                 break;
             case FCIDM_SHVIEW_CREATELINK:
@@ -739,6 +1542,13 @@ static BOOL DoPaste(ContextMenu *This)
 
 	    apidl = _ILCopyCidaToaPidl(&pidl, lpcida);
 
+            /*
+             * In case source is a file we need to remove the last component
+             * to obtain a IShellFolder of the parent.
+             */
+            if (_ILIsValue(pidl))
+                ILRemoveLastID(pidl);
+
 	    /* bind to the source shellfolder */
 	    SHGetDesktopFolder(&psfDesktop);
 	    if(psfDesktop)
@@ -750,17 +1560,40 @@ static BOOL DoPaste(ContextMenu *This)
 	    if (psfFrom)
 	    {
 	      /* get source and destination shellfolder */
-	      ISFHelper *psfhlpdst, *psfhlpsrc;
-	      IShellFolder_QueryInterface(This->parent, &IID_ISFHelper, (void**)&psfhlpdst);
+            ISFHelper *psfhlpdst = NULL, *psfhlpsrc = NULL;
+
+            /* when using an item context menu we first need to bind to the selected folder */
+            if (This->apidl)
+            {
+                IShellFolder *folder;
+
+                if (SUCCEEDED(IShellFolder_BindToObject(This->parent, This->apidl[0], NULL, &IID_IShellFolder, (LPVOID*)&folder)))
+                {
+                    IShellFolder_QueryInterface(folder, &IID_ISFHelper, (void**)&psfhlpdst);
+                    IShellFolder_Release(folder);
+                }
+            }
+            else
+                IShellFolder_QueryInterface(This->parent, &IID_ISFHelper, (void**)&psfhlpdst);
+
 	      IShellFolder_QueryInterface(psfFrom, &IID_ISFHelper, (void**)&psfhlpsrc);
 
 	      /* do the copy/move */
 	      if (psfhlpdst && psfhlpsrc)
 	      {
-	        ISFHelper_CopyItems(psfhlpdst, psfFrom, lpcida->cidl, (LPCITEMIDLIST*)apidl);
-		/* FIXME handle move
-		ISFHelper_DeleteItems(psfhlpsrc, lpcida->cidl, apidl);
-		*/
+                DWORD dropEffect;
+                GetDropEffect(pda, &dropEffect);
+
+                if (SUCCEEDED(ISFHelper_CopyItems(psfhlpdst, psfFrom, lpcida->cidl, (LPCITEMIDLIST*)apidl)))
+                {
+                    if (dropEffect == DROPEFFECT_MOVE)
+                    {
+                        if (SUCCEEDED(ISFHelper_DeleteItems(psfhlpsrc, lpcida->cidl, (LPCITEMIDLIST*)apidl, FALSE)))
+                            bSuccess = TRUE;
+                    }
+                    else
+                        bSuccess = TRUE;
+                }
 	      }
 	      if(psfhlpdst) ISFHelper_Release(psfhlpdst);
 	      if(psfhlpsrc) ISFHelper_Release(psfhlpsrc);

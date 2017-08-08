@@ -476,6 +476,7 @@ struct ws2_async_io
 {
     async_callback_t *callback; /* must be the first field */
     struct ws2_async_io *next;
+    DWORD                size;
 };
 
 struct ws2_async_shutdown
@@ -551,17 +552,30 @@ static struct ws2_async_io *alloc_async_io( DWORD size, async_callback_t callbac
 {
     /* first free remaining previous fileinfos */
 
-    struct ws2_async_io *io = InterlockedExchangePointer( (void **)&async_io_freelist, NULL );
+    struct ws2_async_io *old_io = InterlockedExchangePointer( (void **)&async_io_freelist, NULL );
+    struct ws2_async_io *io = NULL;
 
-    while (io)
+    while (old_io)
     {
-        struct ws2_async_io *next = io->next;
-        HeapFree( GetProcessHeap(), 0, io );
-        io = next;
+        if (!io && old_io->size >= size && old_io->size <= max(4096, 4 * size))
+        {
+            io     = old_io;
+            size   = old_io->size;
+            old_io = old_io->next;
+        }
+        else
+        {
+            struct ws2_async_io *next = old_io->next;
+            HeapFree( GetProcessHeap(), 0, old_io );
+            old_io = next;
+        }
     }
 
-    io = HeapAlloc( GetProcessHeap(), 0, size );
-    if (io) io->callback = callback;
+    if (io || (io = HeapAlloc( GetProcessHeap(), 0, size )))
+    {
+        io->callback = callback;
+        io->size = size;
+    }
     return io;
 }
 
@@ -640,7 +654,7 @@ static int ws_protocol_info(SOCKET s, int unicode, WSAPROTOCOL_INFOW *buffer, in
 int WSAIOCTL_GetInterfaceCount(void);
 int WSAIOCTL_GetInterfaceName(int intNumber, char *intName);
 
-static void WS_AddCompletion( SOCKET sock, ULONG_PTR CompletionValue, NTSTATUS CompletionStatus, ULONG Information );
+static void WS_AddCompletion( SOCKET sock, ULONG_PTR CompletionValue, NTSTATUS CompletionStatus, ULONG Information, BOOL force );
 
 #define MAP_OPTION(opt) { WS_##opt, opt }
 
@@ -1124,6 +1138,21 @@ static NTSTATUS _is_blocking(SOCKET s, BOOL *ret)
     }
     SERVER_END_REQ;
     return status;
+}
+
+static DWORD _get_connect_time(SOCKET s)
+{
+    NTSTATUS status;
+    DWORD connect_time = ~0u;
+    SERVER_START_REQ( get_socket_info )
+    {
+        req->handle  = wine_server_obj_handle( SOCKET2HANDLE(s) );
+        status = wine_server_call( req );
+        if (!status)
+            connect_time = reply->connect_time / -10000000;
+    }
+    SERVER_END_REQ;
+    return connect_time;
 }
 
 static unsigned int _get_sock_mask(SOCKET s)
@@ -1661,13 +1690,24 @@ int WINAPI WSAStartup(WORD wVersionRequested, LPWSADATA lpWSAData)
  */
 INT WINAPI WSACleanup(void)
 {
-    if (num_startup) {
-        num_startup--;
-        TRACE("pending cleanups: %d\n", num_startup);
-        return 0;
+    if (!num_startup)
+    {
+        SetLastError(WSANOTINITIALISED);
+        return SOCKET_ERROR;
     }
-    SetLastError(WSANOTINITIALISED);
-    return SOCKET_ERROR;
+
+    if (!--num_startup)
+    {
+        wine_server_close_fds_by_type( FD_TYPE_SOCKET );
+        SERVER_START_REQ(socket_cleanup)
+        {
+            wine_server_call( req );
+        }
+        SERVER_END_REQ;
+    }
+
+    TRACE("pending cleanups: %d\n", num_startup);
+    return 0;
 }
 
 
@@ -2358,7 +2398,20 @@ static int WS2_recv( int fd, struct ws2_async *wsa, int flags )
 
     while ((n = recvmsg(fd, &hdr, flags)) == -1)
     {
-        if (errno != EINTR)
+        if (errno == EFAULT)
+        {
+            unsigned int i;
+            for (i = wsa->first_iovec; i < wsa->n_iovecs; i++)
+            {
+                struct iovec *iov = &wsa->iovec[i];
+                if (wine_uninterrupted_write_memory( iov->iov_base, NULL, iov->iov_len ) < iov->iov_len)
+                {
+                    errno = EFAULT;
+                    return -1;
+                }
+            }
+        }
+        else if (errno != EINTR)
             return -1;
     }
 
@@ -2457,7 +2510,7 @@ static NTSTATUS WS2_async_accept_recv( void *user, IO_STATUS_BLOCK *iosb, NTSTAT
         return status;
 
     if (wsa->cvalue)
-        WS_AddCompletion( HANDLE2SOCKET(wsa->listen_socket), wsa->cvalue, iosb->u.Status, iosb->Information );
+        WS_AddCompletion( HANDLE2SOCKET(wsa->listen_socket), wsa->cvalue, iosb->u.Status, iosb->Information, TRUE );
 
     release_async_io( &wsa->io );
     return status;
@@ -3016,7 +3069,27 @@ static NTSTATUS WS2_transmitfile_base( int fd, struct ws2_transmitfile_async *ws
             return wsaErrStatus();
     }
 
-    return status;
+    if (status != STATUS_SUCCESS)
+        return status;
+
+    if (wsa->flags & TF_REUSE_SOCKET)
+    {
+        SERVER_START_REQ( reuse_socket )
+        {
+            req->handle = wine_server_obj_handle( wsa->write.hSocket );
+            status = wine_server_call( req );
+        }
+        SERVER_END_REQ;
+        if (status != STATUS_SUCCESS)
+            return status;
+    }
+    if (wsa->flags & TF_DISCONNECT)
+    {
+        /* we can't use WS_closesocket because it modifies the last error */
+        NtClose( SOCKET2HANDLE(wsa->write.hSocket) );
+    }
+
+    return STATUS_SUCCESS;
 }
 
 /***********************************************************************
@@ -3052,6 +3125,7 @@ static BOOL WINAPI WS2_TransmitFile( SOCKET s, HANDLE h, DWORD file_bytes, DWORD
                                      LPOVERLAPPED overlapped, LPTRANSMIT_FILE_BUFFERS buffers,
                                      DWORD flags )
 {
+    DWORD unsupported_flags = flags & ~(TF_DISCONNECT|TF_REUSE_SOCKET);
     union generic_unix_sockaddr uaddr;
     socklen_t uaddrlen = sizeof(uaddr);
     struct ws2_transmitfile_async *wsa;
@@ -3073,8 +3147,8 @@ static BOOL WINAPI WS2_TransmitFile( SOCKET s, HANDLE h, DWORD file_bytes, DWORD
         WSASetLastError( WSAENOTCONN );
         return FALSE;
     }
-    if (flags)
-        FIXME("Flags are not currently supported (0x%x).\n", flags);
+    if (unsupported_flags)
+        FIXME("Flags are not currently supported (0x%x).\n", unsupported_flags);
 
     if (h && GetFileType( h ) != FILE_TYPE_DISK)
     {
@@ -3805,6 +3879,14 @@ INT WINAPI WS_getsockopt(SOCKET s, INT level,
                 SetLastError(wsaErrno());
                 ret = SOCKET_ERROR;
             }
+        #ifdef __linux__
+            else if (optname == SO_RCVBUF || optname == SO_SNDBUF)
+            {
+                /* For SO_RCVBUF / SO_SNDBUF, the Linux kernel always sets twice the value.
+                 * Divide by two to ensure applications do not get confused by the result. */
+                *(int *)optval /= 2;
+            }
+        #endif
             release_sock_fd( s, fd );
             return ret;
         case WS_SO_ACCEPTCONN:
@@ -3924,7 +4006,6 @@ INT WINAPI WS_getsockopt(SOCKET s, INT level,
 
         case WS_SO_CONNECT_TIME:
         {
-            static int pretendtime = 0;
             struct WS_sockaddr addr;
             int len = sizeof(addr);
 
@@ -3936,10 +4017,7 @@ INT WINAPI WS_getsockopt(SOCKET s, INT level,
             if (WS_getpeername(s, &addr, &len) == SOCKET_ERROR)
                 *(DWORD *)optval = ~0u;
             else
-            {
-                if (!pretendtime) FIXME("WS_SO_CONNECT_TIME - faking results\n");
-                *(DWORD *)optval = pretendtime++;
-            }
+                *(DWORD *)optval = _get_connect_time(s);
             *optlen = sizeof(DWORD);
             return ret;
         }
@@ -5062,7 +5140,7 @@ INT WINAPI WSAIoctl(SOCKET s, DWORD code, LPVOID in_buff, DWORD in_size, LPVOID 
         overlapped->Internal = status;
         overlapped->InternalHigh = total;
         if (overlapped->hEvent) NtSetEvent( overlapped->hEvent, NULL );
-        if (cvalue) WS_AddCompletion( HANDLE2SOCKET(s), cvalue, status, total );
+        if (cvalue) WS_AddCompletion( HANDLE2SOCKET(s), cvalue, status, total, FALSE );
     }
 
     if (!status)
@@ -5457,7 +5535,7 @@ int WINAPI WSAPoll(WSAPOLLFD *wfds, ULONG count, int timeout)
 
 /* helper to send completion messages for client-only i/o operation case */
 static void WS_AddCompletion( SOCKET sock, ULONG_PTR CompletionValue, NTSTATUS CompletionStatus,
-                              ULONG Information )
+                              ULONG Information, BOOL force )
 {
     SERVER_START_REQ( add_fd_completion )
     {
@@ -5465,6 +5543,7 @@ static void WS_AddCompletion( SOCKET sock, ULONG_PTR CompletionValue, NTSTATUS C
         req->cvalue      = CompletionValue;
         req->status      = CompletionStatus;
         req->information = Information;
+        req->force       = force;
         wine_server_call( req );
     }
     SERVER_END_REQ;
@@ -5609,7 +5688,7 @@ static int WS2_sendto( SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount,
         if (lpNumberOfBytesSent) *lpNumberOfBytesSent = n;
         if (!wsa->completion_func)
         {
-            if (cvalue) WS_AddCompletion( s, cvalue, STATUS_SUCCESS, n );
+            if (cvalue) WS_AddCompletion( s, cvalue, STATUS_SUCCESS, n, FALSE );
             if (lpOverlapped->hEvent) SetEvent( lpOverlapped->hEvent );
             HeapFree( GetProcessHeap(), 0, wsa );
         }
@@ -5877,6 +5956,22 @@ int WINAPI WS_setsockopt(SOCKET s, int level, int optname,
             convert_sockopt(&level, &optname);
             break;
 #endif
+
+        case WS_SO_RANDOMIZE_PORT:
+            FIXME("Ignoring WS_SO_RANDOMIZE_PORT\n");
+            return 0;
+
+        case WS_SO_PORT_SCALABILITY:
+            FIXME("Ignoring WS_SO_PORT_SCALABILITY\n");
+            return 0;
+
+        case WS_SO_REUSE_UNICASTPORT:
+            FIXME("Ignoring WS_SO_REUSE_UNICASTPORT\n");
+            return 0;
+
+        case WS_SO_REUSE_MULTICASTPORT:
+            FIXME("Ignoring WS_SO_REUSE_MULTICASTPORT\n");
+            return 0;
 
         default:
             TRACE("Unknown SOL_SOCKET optname: 0x%08x\n", optname);
@@ -7931,7 +8026,7 @@ static int WS2_recv_base( SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount,
             iosb->Information = n;
             if (!wsa->completion_func)
             {
-                if (cvalue) WS_AddCompletion( s, cvalue, STATUS_SUCCESS, n );
+                if (cvalue) WS_AddCompletion( s, cvalue, STATUS_SUCCESS, n, FALSE );
                 if (lpOverlapped->hEvent) SetEvent( lpOverlapped->hEvent );
                 HeapFree( GetProcessHeap(), 0, wsa );
             }

@@ -22,6 +22,8 @@
 
 #include "windef.h"
 #include "winbase.h"
+#include "virtdisk.h"
+
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(virtdisk);
@@ -43,4 +45,21 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, void *reserved)
     }
 
     return TRUE;
+}
+
+DWORD WINAPI GetStorageDependencyInformation(HANDLE obj, GET_STORAGE_DEPENDENCY_FLAG flags, ULONG size, STORAGE_DEPENDENCY_INFO *info, ULONG *used)
+{
+    FIXME("(%p, 0x%x, %u, %p, %p): stub\n", obj, flags, size, info, used);
+
+    if (used) *used = sizeof(STORAGE_DEPENDENCY_INFO);
+
+    if (!info || !size)
+        return ERROR_SUCCESS;
+
+    if (size < sizeof(STORAGE_DEPENDENCY_INFO))
+        return ERROR_INSUFFICIENT_BUFFER;
+
+    info->NumberEntries = 0;
+
+    return ERROR_SUCCESS;
 }

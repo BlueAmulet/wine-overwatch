@@ -1185,7 +1185,7 @@ static void test_GetTempPath(void)
 static void test_GetLongPathNameA(void)
 {
     DWORD length, explength, hostsize;
-    char tempfile[MAX_PATH];
+    char tempfile[MAX_PATH], *name;
     char longpath[MAX_PATH];
     char unc_prefix[MAX_PATH];
     char unc_short[MAX_PATH], unc_long[MAX_PATH];
@@ -1196,7 +1196,15 @@ static void test_GetLongPathNameA(void)
         return;
 
     GetTempPathA(MAX_PATH, tempfile);
-    lstrcatA(tempfile, "longfilename.longext");
+    name = tempfile + strlen(tempfile);
+
+    strcpy(name, "*");
+    SetLastError(0xdeadbeef);
+    length = pGetLongPathNameA(tempfile, temppath, MAX_PATH);
+    ok(!length, "GetLongPathNameA should fail\n");
+    ok(GetLastError() == ERROR_INVALID_NAME, "wrong error %d\n", GetLastError());
+
+    strcpy(name, "longfilename.longext");
 
     file = CreateFileA(tempfile, GENERIC_READ|GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     CloseHandle(file);
@@ -1400,6 +1408,7 @@ static void test_GetShortPathNameW(void)
     static const WCHAR name[] = { 't', 'e', 's', 't', 0 };
     static const WCHAR backSlash[] = { '\\', 0 };
     static const WCHAR a_bcdeW[] = {'a','.','b','c','d','e',0};
+    static const WCHAR wildW[] = { '*',0 };
     WCHAR path[MAX_PATH], tmppath[MAX_PATH], *ptr;
     WCHAR short_path[MAX_PATH];
     DWORD length;
@@ -1462,6 +1471,13 @@ static void test_GetShortPathNameW(void)
     length = GetShortPathNameW( path, short_path, sizeof(short_path)/sizeof(*short_path) );
     ok( length, "GetShortPathNameW failed: %u.\n", GetLastError() );
 
+    lstrcpyW(ptr, wildW);
+    SetLastError(0xdeadbeef);
+    length = GetShortPathNameW( path, short_path, sizeof(short_path)/sizeof(*short_path) );
+    ok(!length, "GetShortPathNameW should fail\n");
+    ok(GetLastError() == ERROR_INVALID_NAME, "wrong error %d\n", GetLastError());
+
+    lstrcpyW(ptr, a_bcdeW);
     ret = DeleteFileW( path );
     ok( ret, "Cannot delete file.\n" );
     *ptr = 0;
@@ -1805,10 +1821,11 @@ static void test_SearchPathA(void)
     static const CHAR testdeprelA[] = "./testdep.dll";
     static const CHAR kernel32A[] = "kernel32.dll";
     static const CHAR fileA[] = "";
-    CHAR pathA[MAX_PATH], buffA[MAX_PATH], path2A[MAX_PATH];
-    CHAR *ptrA = NULL;
+    CHAR pathA[MAX_PATH], buffA[MAX_PATH], path2A[MAX_PATH], path3A[MAX_PATH], curdirA[MAX_PATH];
+    CHAR tmpdirA[MAX_PATH], *ptrA = NULL;
     ULONG_PTR cookie;
     HANDLE handle;
+    BOOL bret;
     DWORD ret;
 
     if (!pSearchPathA)
@@ -1882,6 +1899,28 @@ static void test_SearchPathA(void)
     ret = pDeactivateActCtx(0, cookie);
     ok(ret, "failed to deactivate context, %u\n", GetLastError());
     pReleaseActCtx(handle);
+
+    /* test the search path priority of the working directory */
+    GetTempPathA(sizeof(tmpdirA), tmpdirA);
+    ret = GetCurrentDirectoryA(MAX_PATH, curdirA);
+    ok(ret, "failed to obtain working directory.\n");
+    sprintf(pathA, "%s\\%s", tmpdirA, kernel32A);
+    ret = pSearchPathA(NULL, kernel32A, NULL, sizeof(path2A)/sizeof(CHAR), path2A, NULL);
+    ok(ret && ret == strlen(path2A), "got %d\n", ret);
+    bret = CopyFileA(path2A, pathA, FALSE);
+    ok(bret != 0, "failed to copy test executable to temp directory, %u\n", GetLastError());
+    sprintf(path3A, "%s%s%s", curdirA, curdirA[strlen(curdirA)-1] != '\\' ? "\\" : "", kernel32A);
+    bret = CopyFileA(path2A, path3A, FALSE);
+    ok(bret != 0, "failed to copy test executable to launch directory, %u\n", GetLastError());
+    bret = SetCurrentDirectoryA(tmpdirA);
+    ok(bret, "failed to change working directory\n");
+    ret = pSearchPathA(NULL, kernel32A, ".exe", sizeof(buffA), buffA, NULL);
+    ok(ret && ret == strlen(buffA), "got %d\n", ret);
+    ok(strcmp(buffA, path3A) == 0, "expected %s, got %s\n", path3A, buffA);
+    bret = SetCurrentDirectoryA(curdirA);
+    ok(bret, "failed to reset working directory\n");
+    DeleteFileA(path3A);
+    DeleteFileA(pathA);
 }
 
 static void test_SearchPathW(void)

@@ -38,9 +38,7 @@
 #include "winnls.h"
 #include "fileapi.h"
 
-#ifdef WINE_NO_UNICODE_MACROS
 #undef DeleteFile  /* needed for FILE_DISPOSITION_INFO */
-#endif
 
 static HANDLE (WINAPI *pFindFirstFileExA)(LPCSTR,FINDEX_INFO_LEVELS,LPVOID,FINDEX_SEARCH_OPS,LPVOID,DWORD);
 static BOOL (WINAPI *pReplaceFileA)(LPCSTR, LPCSTR, LPCSTR, DWORD, LPVOID, LPVOID);
@@ -60,8 +58,10 @@ static NTSTATUS (WINAPI *pNtCreateFile)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES
 static BOOL (WINAPI *pRtlDosPathNameToNtPathName_U)(LPCWSTR, PUNICODE_STRING, PWSTR*, CURDIR*);
 static NTSTATUS (WINAPI *pRtlAnsiStringToUnicodeString)(PUNICODE_STRING, PCANSI_STRING, BOOLEAN);
 static BOOL (WINAPI *pSetFileInformationByHandle)(HANDLE, FILE_INFO_BY_HANDLE_CLASS, void*, DWORD);
+static void (WINAPI *pRtlInitAnsiString)(PANSI_STRING,PCSZ);
+static void (WINAPI *pRtlFreeUnicodeString)(PUNICODE_STRING);
 
-static const char filename[] = "testfile.xxx";
+static char filename[MAX_PATH];
 static const char sillytext[] =
 "en larvig liten text dx \033 gx hej 84 hej 4484 ! \001\033 bla bl\na.. bla bla."
 "1234 43 4kljf lf &%%%&&&&&& 34 4 34   3############# 33 3 3 3 # 3## 3"
@@ -90,6 +90,8 @@ static void InitFunctionPointers(void)
     pNtCreateFile = (void *)GetProcAddress(hntdll, "NtCreateFile");
     pRtlDosPathNameToNtPathName_U = (void *)GetProcAddress(hntdll, "RtlDosPathNameToNtPathName_U");
     pRtlAnsiStringToUnicodeString = (void *)GetProcAddress(hntdll, "RtlAnsiStringToUnicodeString");
+    pRtlInitAnsiString = (void *)GetProcAddress(hntdll, "RtlInitAnsiString");
+    pRtlFreeUnicodeString = (void *)GetProcAddress(hntdll, "RtlFreeUnicodeString");
 
     pFindFirstFileExA=(void*)GetProcAddress(hkernel32, "FindFirstFileExA");
     pReplaceFileA=(void*)GetProcAddress(hkernel32, "ReplaceFileA");
@@ -268,7 +270,8 @@ static void get_nt_pathW( const char *name, UNICODE_STRING *nameW )
     ANSI_STRING str;
     NTSTATUS status;
     BOOLEAN ret;
-    RtlInitAnsiString( &str, name );
+
+    pRtlInitAnsiString( &str, name );
 
     status = pRtlAnsiStringToUnicodeString( &strW, &str, TRUE );
     ok( !status, "RtlAnsiStringToUnicodeString failed with %08x\n", status );
@@ -276,7 +279,7 @@ static void get_nt_pathW( const char *name, UNICODE_STRING *nameW )
     ret = pRtlDosPathNameToNtPathName_U( strW.Buffer, nameW, NULL, NULL );
     ok( ret, "RtlDosPathNameToNtPathName_U failed\n" );
 
-    RtlFreeUnicodeString( &strW );
+    pRtlFreeUnicodeString( &strW );
 }
 
 static void test__lcreat( void )
@@ -352,30 +355,30 @@ static void test__lcreat( void )
     attr.SecurityDescriptor = NULL;
     attr.SecurityQualityOfService = NULL;
 
-    status = NtCreateFile( &file, GENERIC_READ | GENERIC_WRITE | DELETE, &attr, &io, NULL, 0,
+    status = pNtCreateFile( &file, GENERIC_READ | GENERIC_WRITE | DELETE, &attr, &io, NULL, 0,
                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                            FILE_OPEN, FILE_DELETE_ON_CLOSE | FILE_NON_DIRECTORY_FILE, NULL, 0 );
     ok( status == STATUS_ACCESS_DENIED, "expected STATUS_ACCESS_DENIED, got %08x\n", status );
     ok( GetFileAttributesA( filename ) != INVALID_FILE_ATTRIBUTES, "file was deleted\n" );
 
-    status = NtCreateFile( &file, DELETE, &attr, &io, NULL, 0,
+    status = pNtCreateFile( &file, DELETE, &attr, &io, NULL, 0,
                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                            FILE_OPEN, FILE_DELETE_ON_CLOSE | FILE_NON_DIRECTORY_FILE, NULL, 0 );
     ok( status == STATUS_CANNOT_DELETE, "expected STATUS_CANNOT_DELETE, got %08x\n", status );
 
-    status = NtCreateFile( &file, DELETE, &attr, &io, NULL, 0,
+    status = pNtCreateFile( &file, DELETE, &attr, &io, NULL, 0,
                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                            FILE_OPEN, FILE_DELETE_ON_CLOSE | FILE_DIRECTORY_FILE, NULL, 0 );
     ok( status == STATUS_NOT_A_DIRECTORY, "expected STATUS_NOT_A_DIRECTORY, got %08x\n", status );
 
-    status = NtCreateFile( &file, DELETE, &attr, &io, NULL, 0,
+    status = pNtCreateFile( &file, DELETE, &attr, &io, NULL, 0,
                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                            FILE_OPEN_IF, FILE_DELETE_ON_CLOSE | FILE_NON_DIRECTORY_FILE, NULL, 0 );
     todo_wine
     ok( status == STATUS_CANNOT_DELETE, "expected STATUS_CANNOT_DELETE, got %08x\n", status );
     if (!status) CloseHandle( file );
 
-    RtlFreeUnicodeString( &filenameW );
+    pRtlFreeUnicodeString( &filenameW );
 
     todo_wine
     ok( GetFileAttributesA( filename ) != INVALID_FILE_ATTRIBUTES, "file was deleted\n" );
@@ -452,10 +455,15 @@ static void test__lcreat( void )
       if (INVALID_HANDLE_VALUE==find)
         ok (0, "file \"%s\" not found\n", filename);
       else {
+        const char *name = strrchr(filename, '\\');
+
+        if (name) name++;
+        else name = filename;
+
         ret = FindClose(find);
         ok ( 0 != ret, "FindClose complains (%d)\n", GetLastError ());
-        ok (!strcmp (filename, search_results.cFileName),
-            "found unexpected name \"%s\"\n", search_results.cFileName);
+        ok (!strcmp (name, search_results.cFileName),
+            "expected \"%s\", got \"%s\"\n", name, search_results.cFileName);
         search_results.dwFileAttributes &= ~FILE_ATTRIBUTE_NOT_CONTENT_INDEXED;
         search_results.dwFileAttributes &= ~FILE_ATTRIBUTE_COMPRESSED;
         ok (FILE_ATTRIBUTE_ARCHIVE==search_results.dwFileAttributes,
@@ -695,9 +703,6 @@ static void test_CopyFileA(void)
 
     ret = GetTempFileNameA(temp_path, prefix, 0, source);
     ok(ret != 0, "GetTempFileNameA error %d\n", GetLastError());
-
-    ret = MoveFileA(source, source);
-    todo_wine ok(ret, "MoveFileA: failed, error %d\n", GetLastError());
 
     /* copying a file to itself must fail */
     retok = CopyFileA(source, source, FALSE);
@@ -1148,23 +1153,17 @@ static void test_CopyFileEx(void)
     ok(hfile != INVALID_HANDLE_VALUE, "failed to open destination file, error %d\n", GetLastError());
     SetLastError(0xdeadbeef);
     retok = CopyFileExA(source, dest, copy_progress_cb, hfile, NULL, 0);
-    todo_wine
     ok(!retok, "CopyFileExA unexpectedly succeeded\n");
-    todo_wine
     ok(GetLastError() == ERROR_REQUEST_ABORTED, "expected ERROR_REQUEST_ABORTED, got %d\n", GetLastError());
     ok(GetFileAttributesA(dest) != INVALID_FILE_ATTRIBUTES, "file was deleted\n");
 
     hfile = CreateFileA(dest, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                         NULL, OPEN_EXISTING, 0, 0);
-    todo_wine
     ok(hfile != INVALID_HANDLE_VALUE, "failed to open destination file, error %d\n", GetLastError());
     SetLastError(0xdeadbeef);
     retok = CopyFileExA(source, dest, copy_progress_cb, hfile, NULL, 0);
-    todo_wine
     ok(!retok, "CopyFileExA unexpectedly succeeded\n");
-    todo_wine
     ok(GetLastError() == ERROR_REQUEST_ABORTED, "expected ERROR_REQUEST_ABORTED, got %d\n", GetLastError());
-    todo_wine
     ok(GetFileAttributesA(dest) == INVALID_FILE_ATTRIBUTES, "file was not deleted\n");
 
     ret = DeleteFileA(source);
@@ -1886,6 +1885,9 @@ static void test_MoveFileA(void)
     ret = GetTempFileNameA(tempdir, prefix, 0, dest);
     ok(ret != 0, "GetTempFileNameA error %d\n", GetLastError());
 
+    ret = MoveFileA(source, source);
+    ok(ret, "MoveFileA: failed, error %d\n", GetLastError());
+
     ret = MoveFileA(source, dest);
     ok(!ret && GetLastError() == ERROR_ALREADY_EXISTS,
        "MoveFileA: unexpected error %d\n", GetLastError());
@@ -1904,12 +1906,10 @@ static void test_MoveFileA(void)
     ok(hmapfile != NULL, "CreateFileMapping: error %d\n", GetLastError());
 
     ret = MoveFileA(source, dest);
-    todo_wine {
-        ok(!ret, "MoveFileA: expected failure\n");
-        ok(GetLastError() == ERROR_SHARING_VIOLATION ||
-           broken(GetLastError() == ERROR_ACCESS_DENIED), /* Win9x and WinMe */
-           "MoveFileA: expected ERROR_SHARING_VIOLATION, got %d\n", GetLastError());
-    }
+    ok(!ret, "MoveFileA: expected failure\n");
+    ok(GetLastError() == ERROR_SHARING_VIOLATION ||
+       broken(GetLastError() == ERROR_ACCESS_DENIED), /* Win9x and WinMe */
+       "MoveFileA: expected ERROR_SHARING_VIOLATION, got %d\n", GetLastError());
 
     CloseHandle(hmapfile);
     CloseHandle(hfile);
@@ -1924,12 +1924,10 @@ static void test_MoveFileA(void)
     ok(hmapfile != NULL, "CreateFileMapping: error %d\n", GetLastError());
 
     ret = MoveFileA(source, dest);
-    todo_wine {
-        ok(!ret, "MoveFileA: expected failure\n");
-        ok(GetLastError() == ERROR_SHARING_VIOLATION ||
-           broken(GetLastError() == ERROR_ACCESS_DENIED), /* Win9x and WinMe */
-           "MoveFileA: expected ERROR_SHARING_VIOLATION, got %d\n", GetLastError());
-    }
+    ok(!ret, "MoveFileA: expected failure\n");
+    ok(GetLastError() == ERROR_SHARING_VIOLATION ||
+       broken(GetLastError() == ERROR_ACCESS_DENIED), /* Win9x and WinMe */
+       "MoveFileA: expected ERROR_SHARING_VIOLATION, got %d\n", GetLastError());
 
     CloseHandle(hmapfile);
     CloseHandle(hfile);
@@ -2520,11 +2518,85 @@ static char get_windows_drive(void)
     return windowsdir[0];
 }
 
+struct
+{
+    const char *path;
+    BOOL expected;
+}
+static const invalid_char_tests[] =
+{
+    { "./test-dir",                     TRUE },
+    { "./test-dir/",                    FALSE },
+    { ".\\test-dir",                    TRUE },
+    { ".\\test-dir\\",                  FALSE },
+    { "/>test-dir",                     FALSE },
+    { "<\"test->dir",                   FALSE },
+    { "<test->dir",                     FALSE },
+    { "><test->dir",                    FALSE },
+    { ">>test-dir",                     FALSE },
+    { ">test->dir",                     FALSE },
+    { ">test-dir",                      FALSE },
+    { "\"test-dir\"",                   FALSE },
+    { "\"test-file\"",                  FALSE },
+    { "test-/>dir",                     FALSE },
+    { "test-dir/",                      FALSE },
+    { "test-dir//",                     FALSE },
+    { "test-dir/:",                     FALSE },
+    { "test-dir/<",                     TRUE },
+    { "test-dir/>",                     TRUE },
+    { "test-dir/\"",                    TRUE },
+    { "test-dir/\\",                    FALSE },
+    { "test-dir/|",                     FALSE },
+    { "test-dir<",                      TRUE },
+    { "test-dir</",                     FALSE },
+    { "test-dir<<",                     TRUE },
+    { "test-dir<<<><><>\"\"\"\"<<<>",   TRUE },
+    { "test-dir<>",                     TRUE },
+    { "test-dir<\"",                    TRUE },
+    { "test-dir>",                      TRUE },
+    { "test-dir>/",                     FALSE },
+    { "test-dir><",                     TRUE },
+    { "test-dir>>",                     TRUE },
+    { "test-dir>\"",                    TRUE },
+    { "test-dir\"",                     TRUE },
+    { "test-dir\"/",                    FALSE },
+    { "test-dir\"<",                    TRUE },
+    { "test-dir\">",                    TRUE },
+    { "test-dir\"\"",                   TRUE },
+    { "test-dir\"\"\"\"\"",             TRUE },
+    { "test-dir\\",                     FALSE },
+    { "test-dir\\/",                    FALSE },
+    { "test-dir\\<",                    TRUE },
+    { "test-dir\\>",                    TRUE },
+    { "test-dir\\\"",                   TRUE },
+    { "test-dir\\\\",                   FALSE },
+    { "test-file/",                     FALSE },
+    { "test-file/<",                    FALSE },
+    { "test-file/>",                    FALSE },
+    { "test-file/\"",                   FALSE },
+    { "test-file<",                     TRUE },
+    { "test-file<<",                    TRUE },
+    { "test-file<>",                    TRUE },
+    { "test-file<\"",                   TRUE },
+    { "test-file>",                     TRUE },
+    { "test-file><",                    TRUE },
+    { "test-file>>",                    TRUE },
+    { "test-file>\"",                   TRUE },
+    { "test-file\"",                    TRUE },
+    { "test-file\"<",                   TRUE },
+    { "test-file\">",                   TRUE },
+    { "test-file\"\"",                  TRUE },
+    { "test-file\\",                    FALSE },
+    { "test-file\\<",                   FALSE },
+    { "test-file\\>",                   FALSE },
+    { "test-file\\\"",                  FALSE },
+};
+
 static void test_FindFirstFileA(void)
 {
     HANDLE handle;
     WIN32_FIND_DATAA data;
-    int err;
+    int err, i;
     char buffer[5] = "C:\\";
     char buffer2[100];
     char nonexistent[MAX_PATH];
@@ -2692,6 +2764,30 @@ static void test_FindFirstFileA(void)
     err = GetLastError();
     ok ( handle == INVALID_HANDLE_VALUE, "FindFirstFile on %s should fail\n", buffer2 );
     ok ( err == ERROR_PATH_NOT_FOUND, "Bad Error number %d\n", err );
+
+    /* try FindFirstFileA with invalid characters */
+    CreateDirectoryA("test-dir", NULL);
+    _lclose(_lcreat("test-file", 0));
+
+    for (i = 0; i < sizeof(invalid_char_tests) / sizeof(invalid_char_tests[0]); i++)
+    {
+        handle = FindFirstFileA(invalid_char_tests[i].path, &data);
+        if (invalid_char_tests[i].expected)
+        {
+            ok(handle != INVALID_HANDLE_VALUE, "FindFirstFileA on %s should succeed\n",
+               invalid_char_tests[i].path);
+        }
+        else
+        {
+            ok(handle == INVALID_HANDLE_VALUE, "FindFirstFileA on %s should fail\n",
+               invalid_char_tests[i].path);
+        }
+        if (handle != INVALID_HANDLE_VALUE)
+            FindClose(handle);
+    }
+
+    DeleteFileA("test-file");
+    RemoveDirectoryA("test-dir");
 }
 
 static void test_FindNextFileA(void)
@@ -4737,7 +4833,7 @@ static void test_SetFileInformationByHandle(void)
 {
     FILE_ATTRIBUTE_TAG_INFO fileattrinfo = { 0 };
     FILE_REMOTE_PROTOCOL_INFO protinfo = { 0 };
-    FILE_STANDARD_INFO stdinfo = { };
+    FILE_STANDARD_INFO stdinfo = { {{0}},{{0}},0,FALSE,FALSE };
     FILE_COMPRESSION_INFO compressinfo;
     FILE_DISPOSITION_INFO dispinfo;
     char tempFileName[MAX_PATH];
@@ -4822,7 +4918,17 @@ static void test_GetFileAttributesExW(void)
 
 START_TEST(file)
 {
+    char temp_path[MAX_PATH];
+    DWORD ret;
+
     InitFunctionPointers();
+
+    ret = GetTempPathA(MAX_PATH, temp_path);
+    ok(ret != 0, "GetTempPath error %u\n", GetLastError());
+    ret = GetTempFileNameA(temp_path, "tmp", 0, filename);
+    ok(ret != 0, "GetTempFileName error %u\n", GetLastError());
+    ret = DeleteFileA(filename);
+    ok(ret != 0, "DeleteFile error %u\n", GetLastError());
 
     test__hread(  );
     test__hwrite(  );
