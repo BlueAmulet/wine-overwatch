@@ -261,9 +261,10 @@ static inline enum complex_fixup get_complex_fixup(struct color_fixup_desc fixup
 /* Device caps */
 #define MAX_STREAMS                 16
 #define MAX_TEXTURES                8
-#define MAX_FRAGMENT_SAMPLERS       16
-#define MAX_VERTEX_SAMPLERS         4
-#define MAX_COMBINED_SAMPLERS       (MAX_FRAGMENT_SAMPLERS + MAX_VERTEX_SAMPLERS)
+#define MAX_FRAGMENT_SAMPLERS       32
+#define MAX_GEOMETRY_SAMPLERS       16
+#define MAX_VERTEX_SAMPLERS         32
+#define MAX_COMBINED_SAMPLERS       (MAX_FRAGMENT_SAMPLERS + MAX_GEOMETRY_SAMPLERS + MAX_VERTEX_SAMPLERS)
 #define MAX_ACTIVE_LIGHTS           8
 #define MAX_CLIP_DISTANCES          WINED3DMAXUSERCLIPPLANES
 #define MAX_CONSTANT_BUFFERS        15
@@ -441,6 +442,7 @@ enum wined3d_shader_resource_type
 #define WINED3D_SHADER_CONST_FFP_LIGHTS      0x00080000
 #define WINED3D_SHADER_CONST_FFP_PS          0x00100000
 #define WINED3D_SHADER_CONST_FFP_COLOR_KEY   0x00200000
+#define WINED3D_SHADER_CONST_BASE_VERTEX     0x00400000
 
 enum wined3d_shader_register_type
 {
@@ -1361,6 +1363,7 @@ struct vs_compile_args
     BYTE padding : 1;
     WORD swizzle_map;   /* MAX_ATTRIBS, 16 */
     unsigned int next_shader_input_count;
+    enum wined3d_shader_interpolation_mode interpolation_mode[MAX_REG_INPUT];
 };
 
 struct ds_compile_args
@@ -1371,11 +1374,13 @@ struct ds_compile_args
     unsigned int next_shader_type : 3;
     unsigned int render_offscreen : 1;
     unsigned int padding : 12;
+    enum wined3d_shader_interpolation_mode interpolation_mode[MAX_REG_INPUT];
 };
 
 struct gs_compile_args
 {
     unsigned int output_count;
+    enum wined3d_shader_interpolation_mode interpolation_mode[MAX_REG_INPUT];
 };
 
 struct wined3d_context;
@@ -3704,8 +3709,14 @@ static inline struct wined3d_surface *wined3d_rendertarget_view_get_surface(
 {
     struct wined3d_texture *texture;
 
-    if (!view || view->resource->type != WINED3D_RTYPE_TEXTURE_2D)
+    if (!view || (view->resource->type != WINED3D_RTYPE_TEXTURE_2D &&
+            view->resource->type != WINED3D_RTYPE_TEXTURE_3D &&
+            view->resource->type != WINED3D_RTYPE_TEXTURE_1D))
+    {
+        if (view)
+            DPRINTF("wined3d_rendertarget_view_get_surface: view->resource->type %d != WINED3D_RTYPE_TEXTURE_2D\n", view->resource->type);
         return NULL;
+    }
 
     texture = texture_from_resource(view->resource);
 
@@ -3978,6 +3989,7 @@ struct wined3d_pixel_shader
     /* Pixel shader input semantics */
     DWORD input_reg_map[MAX_REG_INPUT];
     DWORD input_reg_used; /* MAX_REG_INPUT, 32 */
+    enum wined3d_shader_interpolation_mode interpolation_mode[MAX_REG_INPUT];
     unsigned int declared_in_count;
 
     /* Some information about the shader behavior */
@@ -4310,6 +4322,11 @@ static inline BOOL use_vs(const struct wined3d_state *state)
 static inline BOOL use_ps(const struct wined3d_state *state)
 {
     return !!state->shader[WINED3D_SHADER_TYPE_PIXEL];
+}
+
+static inline BOOL use_gs(const struct wined3d_state *state)
+{
+    return !!state->shader[WINED3D_SHADER_TYPE_GEOMETRY];
 }
 
 static inline void context_apply_state(struct wined3d_context *context,
