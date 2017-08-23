@@ -2,9 +2,9 @@
 101 stub -noname ClusterSplOpen
 102 stub -noname ClusterSplClose
 103 stub -noname ClusterSplIsAlive
-104 stub PerfClose
-105 stub PerfCollect
-106 stub PerfOpen
+104 stdcall PerfClose()
+105 stdcall PerfCollect(wstr ptr ptr ptr)
+106 stdcall PerfOpen(wstr)
 201 stdcall GetDefaultPrinterA(ptr ptr)
 202 stdcall SetDefaultPrinterA(str)
 203 stdcall GetDefaultPrinterW(ptr ptr)

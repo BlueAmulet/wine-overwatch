@@ -2980,7 +2980,7 @@ static void test_unicode_import(void)
     err = RegQueryValueExA(hkey, "Wine44i", NULL, &type, (BYTE *)&buffer, &size);
     ok(err == ERROR_SUCCESS, "RegQueryValueExA failed: %d\n", err);
     ok(type == REG_EXPAND_SZ, "got wrong type %u, expected %u\n", type, REG_EXPAND_SZ);
-    todo_wine ok(size == 6 || broken(size == 5) /* WinXP */, "got wrong size %u, expected 6\n", size);
+    ok(size == 6 || broken(size == 5) /* WinXP */, "got wrong size %u, expected 6\n", size);
     ok(memcmp(buffer, "%PATH", size) == 0, "got wrong data\n");
     /* Wine44j */
     size = sizeof(buffer);
@@ -2988,7 +2988,7 @@ static void test_unicode_import(void)
     err = RegQueryValueExA(hkey, "Wine44j", NULL, &type, (BYTE *)&buffer, &size);
     ok(err == ERROR_SUCCESS, "RegQueryValueExA failed: %d\n", err);
     ok(type == REG_EXPAND_SZ, "got wrong type %u, expected %u\n", type, REG_EXPAND_SZ);
-    todo_wine ok(size == 6 || broken(size == 5) /* WinXP */, "got wrong size %u, expected 6\n", size);
+    ok(size == 6 || broken(size == 5) /* WinXP */, "got wrong size %u, expected 6\n", size);
     ok(memcmp(buffer, "%PATH", size) == 0, "got wrong data\n");
     /* Wine44k */
     verify_reg_nonexist(hkey, "Wine44k");
@@ -3622,7 +3622,7 @@ static void test_unicode_import(void)
     ok(err == ERROR_SUCCESS || broken(err == ERROR_FILE_NOT_FOUND) /* WinXP */,
        "got %u, expected 0\n", err);
     if (err == ERROR_SUCCESS)
-        verify_reg(hkey, "Wine62d", REG_MULTI_SZ, "Line", 5, TODO_REG_SIZE);
+        verify_reg(hkey, "Wine62d", REG_MULTI_SZ, "Line", 5, 0);
 
     test_import_wstr("\xef\xbb\xbfWindows Registry Editor Version 5.00\n\n"
                      "[HKEY_CURRENT_USER\\" KEY_BASE "]\n"
@@ -3721,8 +3721,8 @@ static void test_unicode_import(void)
                      "\"Wine66e\"=hex(7):4c,00,69,00,6e,00,65,00,00,00,00,00\n"
                      "\"Wine66f\"=hex(7):4c,00,69,00,6e,00,65,00,00,00,00,00,\n\n", &r);
     ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    verify_reg(hkey, "Wine66a", REG_MULTI_SZ, "Line", 5, TODO_REG_SIZE);
-    verify_reg(hkey, "Wine66b", REG_MULTI_SZ, "Line", 5, TODO_REG_SIZE);
+    verify_reg(hkey, "Wine66a", REG_MULTI_SZ, "Line", 5, 0);
+    verify_reg(hkey, "Wine66b", REG_MULTI_SZ, "Line", 5, 0);
     verify_reg(hkey, "Wine66c", REG_MULTI_SZ, "Line", 5, 0);
     verify_reg(hkey, "Wine66d", REG_MULTI_SZ, "Line", 5, 0);
     verify_reg(hkey, "Wine66e", REG_MULTI_SZ, "Line\0", 6, 0);

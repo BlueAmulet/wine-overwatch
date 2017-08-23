@@ -395,8 +395,12 @@ static void *map_dll( const IMAGE_NT_HEADERS *nt_descr )
     assert( size <= page_size );
 
     /* module address must be aligned on 64K boundary */
-    addr = (BYTE *)((nt_descr->OptionalHeader.ImageBase + 0xffff) & ~0xffff);
-    if (wine_anon_mmap( addr, page_size, PROT_READ|PROT_WRITE, MAP_FIXED ) != addr) return NULL;
+    addr = *(BYTE **)&nt_descr->OptionalHeader.DataDirectory[15];
+    if (!addr || ((ULONG_PTR)addr & 0xffff) || mprotect( addr, page_size, PROT_READ | PROT_WRITE ))
+    {
+        addr = (BYTE *)((nt_descr->OptionalHeader.ImageBase + 0xffff) & ~0xffff);
+        if (wine_anon_mmap( addr, page_size, PROT_READ|PROT_WRITE, MAP_FIXED ) != addr) return NULL;
+    }
 
     dos    = (IMAGE_DOS_HEADER *)addr;
     nt     = (IMAGE_NT_HEADERS *)(dos + 1);
@@ -435,13 +439,18 @@ static void *map_dll( const IMAGE_NT_HEADERS *nt_descr )
     nt->OptionalHeader.SizeOfImage                 = data_end;
     nt->OptionalHeader.ImageBase                   = (ULONG_PTR)addr;
 
+    /* Clear DataDirectory[15] */
+
+    nt->OptionalHeader.DataDirectory[15].VirtualAddress = 0;
+    nt->OptionalHeader.DataDirectory[15].Size = 0;
+
     /* Build the code section */
 
     memcpy( sec->Name, ".text", sizeof(".text") );
     sec->SizeOfRawData = data_start - code_start;
     sec->Misc.VirtualSize = sec->SizeOfRawData;
     sec->VirtualAddress   = code_start;
-    sec->PointerToRawData = code_start;
+    sec->PointerToRawData = 0x200; /* file alignment */
     sec->Characteristics  = (IMAGE_SCN_CNT_CODE | IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ);
     sec++;
 
@@ -691,6 +700,7 @@ struct apple_stack_info
  * Callback for wine_mmap_enum_reserved_areas to allocate space for
  * the secondary thread's stack.
  */
+#ifndef _WIN64
 static int apple_alloc_thread_stack( void *base, size_t size, void *arg )
 {
     struct apple_stack_info *info = arg;
@@ -707,6 +717,7 @@ static int apple_alloc_thread_stack( void *base, size_t size, void *arg )
                                   info->desired_size, PROT_READ|PROT_WRITE, MAP_FIXED );
     return (info->stack != (void *)-1);
 }
+#endif
 
 /***********************************************************************
  *           apple_create_wine_thread
@@ -724,6 +735,7 @@ static void apple_create_wine_thread( void *init_func )
 
     if (!pthread_attr_init( &attr ))
     {
+#ifndef _WIN64
         struct apple_stack_info info;
 
         /* Try to put the new thread's stack in the reserved area.  If this
@@ -735,6 +747,7 @@ static void apple_create_wine_thread( void *init_func )
             wine_mmap_remove_reserved_area( info.stack, info.desired_size, 0 );
             pthread_attr_setstackaddr( &attr, (char*)info.stack + info.desired_size );
         }
+#endif
 
         if (!pthread_attr_setdetachstate( &attr, PTHREAD_CREATE_JOINABLE ) &&
             !pthread_create( &thread, &attr, init_func, NULL ))
@@ -1055,6 +1068,42 @@ void *wine_dlopen( const char *filename, int flag, char *error, size_t errorsize
         error[len - 1] = 0;
     }
     return NULL;
+#endif
+}
+
+/***********************************************************************
+ *      wine_dladdr
+ */
+int wine_dladdr( void *addr, void *info, char *error, size_t errorsize )
+{
+#ifdef HAVE_DLADDR
+    int ret;
+    const char *s;
+    dlerror(); dlerror();
+    ret = dladdr( addr, (Dl_info *)info );
+    s = dlerror();
+    if (error && errorsize)
+    {
+        if (s)
+        {
+            size_t len = strlen(s);
+            if (len >= errorsize) len = errorsize - 1;
+            memcpy( error, s, len );
+            error[len] = 0;
+        }
+        else error[0] = 0;
+    }
+    dlerror();
+    return ret;
+#else
+    if (error)
+    {
+        static const char msg[] = "dladdr interface not detected by configure";
+        size_t len = min( errorsize, sizeof(msg) );
+        memcpy( error, msg, len );
+        error[len - 1] = 0;
+    }
+    return 0;
 #endif
 }
 

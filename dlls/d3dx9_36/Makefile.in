@@ -1,6 +1,7 @@
 MODULE    = d3dx9_36.dll
 IMPORTLIB = d3dx9
-IMPORTS   = d3d9 d3dcompiler dxguid d3dxof ole32 gdi32 user32
+IMPORTS   = d3d9 d3dcompiler dxguid d3dxof ole32 gdi32 user32 wined3d
+EXTRADEFS = -D_D3DX9_VER=36
 
 C_SRCS = \
 	animation.c \

@@ -36,48 +36,44 @@
 #ifdef HAVE_UNISTD_H
 # include <unistd.h>
 #endif
+#ifdef HAVE_DLADDR
+# include <dlfcn.h>
+#endif
+#ifdef HAVE_LINK_H
+# include <link.h>
+#endif
 #include <pthread.h>
 
 #include "wine/library.h"
 #include "main.h"
 
 #ifdef __APPLE__
+#include <mach-o/dyld.h>
 
-#ifndef __clang__
-__asm__(".zerofill WINE_DOS, WINE_DOS, ___wine_dos, 0x40000000");
-__asm__(".zerofill WINE_SHAREDHEAP, WINE_SHAREDHEAP, ___wine_shared_heap, 0x03000000");
-extern char __wine_dos[0x40000000], __wine_shared_heap[0x03000000];
-#else
-__asm__(".zerofill WINE_DOS, WINE_DOS");
-__asm__(".zerofill WINE_SHAREDHEAP, WINE_SHAREDHEAP");
-static char __wine_dos[0x40000000] __attribute__((section("WINE_DOS, WINE_DOS")));
-static char __wine_shared_heap[0x03000000] __attribute__((section("WINE_SHAREDHEAP, WINE_SHAREDHEAP")));
-#endif
-
-static const struct wine_preload_info wine_main_preload_info[] =
+static const char *get_macho_library_path( const char *libname )
 {
-    { __wine_dos,         sizeof(__wine_dos) },          /* DOS area + PE exe */
-    { __wine_shared_heap, sizeof(__wine_shared_heap) },  /* shared user data + shared heap */
-    { 0, 0 }  /* end of list */
-};
+    unsigned int path_len, libname_len = strlen( libname );
+    uint32_t i, count = _dyld_image_count();
 
-static inline void reserve_area( void *addr, size_t size )
-{
-    wine_anon_mmap( addr, size, PROT_NONE, MAP_FIXED | MAP_NORESERVE );
-    wine_mmap_add_reserved_area( addr, size );
+    for (i = 0; i < count; i++)
+    {
+        const char *path = _dyld_get_image_name( i );
+        if (!path) continue;
+
+        path_len = strlen( path );
+        if (path_len < libname_len + 1) continue;
+        if (path[path_len - libname_len - 1] != '/') continue;
+        if (strcmp( path + path_len - libname_len, libname )) continue;
+
+        return path;
+    }
+    return NULL;
 }
 
-#else  /* __APPLE__ */
+#endif /* __APPLE__ */
 
 /* the preloader will set this variable */
 const struct wine_preload_info *wine_main_preload_info = NULL;
-
-static inline void reserve_area( void *addr, size_t size )
-{
-    wine_mmap_add_reserved_area( addr, size );
-}
-
-#endif  /* __APPLE__ */
 
 /***********************************************************************
  *           check_command_line
@@ -89,7 +85,9 @@ static void check_command_line( int argc, char *argv[] )
     static const char usage[] =
         "Usage: wine PROGRAM [ARGUMENTS...]   Run the specified program\n"
         "       wine --help                   Display this help and exit\n"
-        "       wine --version                Output version information and exit";
+        "       wine --version                Output version information and exit\n"
+        "       wine --patches                Output patch information and exit\n"
+        "       wine --check-libs             Checks if shared libs are installed";
 
     if (argc <= 1)
     {
@@ -105,6 +103,90 @@ static void check_command_line( int argc, char *argv[] )
     {
         printf( "%s\n", wine_get_build_id() );
         exit(0);
+    }
+    if (!strcmp( argv[1], "--patches" ))
+    {
+        const struct
+        {
+            const char *author;
+            const char *subject;
+            int revision;
+        }
+        *next, *cur = wine_get_patches();
+
+        if (!cur)
+        {
+            fprintf( stderr, "Patchlist not available.\n" );
+            exit(1);
+        }
+
+        while (cur->author)
+        {
+            next = cur + 1;
+            while (next->author)
+            {
+                if (strcmp( cur->author, next->author )) break;
+                next++;
+            }
+
+            printf( "%s (%d):\n", cur->author, (int)(next - cur) );
+            while (cur < next)
+            {
+                printf( "      %s", cur->subject );
+                if (cur->revision != 1)
+                    printf( " [rev %d]", cur->revision );
+                printf( "\n" );
+                cur++;
+            }
+            printf( "\n" );
+        }
+
+        exit(0);
+    }
+    if (!strcmp( argv[1], "--check-libs" ))
+    {
+        void* lib_handle;
+        int ret = 0;
+        const char **wine_libs = wine_get_libs();
+
+        for(; *wine_libs; wine_libs++)
+        {
+            lib_handle = wine_dlopen( *wine_libs, RTLD_NOW, NULL, 0 );
+            if (lib_handle)
+            {
+            #ifdef HAVE_DLADDR
+                Dl_info libinfo;
+                void* symbol;
+
+            #ifdef HAVE_LINK_H
+                struct link_map *lm = (struct link_map *)lib_handle;
+                symbol = (void *)lm->l_addr;
+            #else
+                symbol = wine_dlsym( lib_handle, "_init", NULL, 0 );
+            #endif
+                if (symbol && wine_dladdr( symbol, &libinfo, NULL, 0 ))
+                {
+                    printf( "%s: %s\n", *wine_libs, libinfo.dli_fname );
+                }
+                else
+            #endif
+                {
+                    const char *path = NULL;
+                #ifdef __APPLE__
+                    path = get_macho_library_path( *wine_libs );
+                #endif
+                    printf( "%s: %s\n", *wine_libs, path ? path : "found");
+                }
+                wine_dlclose( lib_handle, NULL, 0 );
+            }
+            else
+            {
+                printf( "%s: missing\n", *wine_libs );
+                ret = 1;
+            }
+        }
+
+        exit(ret);
     }
 }
 
@@ -202,6 +284,13 @@ static int pre_exec(void)
     return 1;  /* we have a preloader on x86-64 */
 }
 
+#elif defined(__APPLE__) && (defined(__i386__) || defined(__x86_64__))
+
+static int pre_exec(void)
+{
+    return 1;  /* we have a preloader */
+}
+
 #elif (defined(__FreeBSD__) || defined (__FreeBSD_kernel__) || defined(__DragonFly__))
 
 static int pre_exec(void)
@@ -247,12 +336,10 @@ int main( int argc, char *argv[] )
         }
     }
 
-#ifndef __APPLE__
     if (wine_main_preload_info)
-#endif
     {
         for (i = 0; wine_main_preload_info[i].size; i++)
-            reserve_area( wine_main_preload_info[i].addr, wine_main_preload_info[i].size );
+            wine_mmap_add_reserved_area( wine_main_preload_info[i].addr, wine_main_preload_info[i].size );
     }
 
     wine_init( argc, argv, error, sizeof(error) );

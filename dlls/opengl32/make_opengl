@@ -239,6 +239,11 @@ sub GenerateThunk($$$$)
     return "" if $name eq "glDebugEntry";
     return "" if $name eq "glGetIntegerv";
     return "" if $name eq "glGetString";
+
+    return "" if $name eq "glDebugMessageCallback";
+    return "" if $name eq "glDebugMessageCallbackAMD";
+    return "" if $name eq "glDebugMessageCallbackARB";
+
     return "" if $func_ref->[2] && $func_ref->[2]->[0] =~ /WGL_/;
 
     # If for opengl_norm.c, generate a nice heading otherwise Patrik won't be happy :-)

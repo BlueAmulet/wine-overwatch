@@ -1228,7 +1228,7 @@ static WCHAR *build_paths_list(LPCWSTR wszBasePath, int cidl, const LPCITEMIDLIS
  * deletes items in folder
  */
 static HRESULT WINAPI
-ISFHelper_fnDeleteItems (ISFHelper * iface, UINT cidl, LPCITEMIDLIST * apidl)
+ISFHelper_fnDeleteItems (ISFHelper *iface, UINT cidl, LPCITEMIDLIST *apidl, BOOL confirm)
 {
     IGenericSFImpl *This = impl_from_ISFHelper(iface);
     UINT i;
@@ -1253,6 +1253,7 @@ ISFHelper_fnDeleteItems (ISFHelper * iface, UINT cidl, LPCITEMIDLIST * apidl)
     op.wFunc = FO_DELETE;
     op.pFrom = wszPathsList;
     op.fFlags = FOF_ALLOWUNDO;
+    if (!confirm) op.fFlags |= FOF_NOCONFIRMATION;
     if (SHFileOperationW(&op))
     {
         WARN("SHFileOperation failed\n");
@@ -1315,7 +1316,7 @@ ISFHelper_fnCopyItems (ISFHelper * iface, IShellFolder * pSFFrom, UINT cidl,
 
         if (SUCCEEDED (IPersistFolder2_GetCurFolder (ppf2, &pidl))) {
             SHGetPathFromIDListW (pidl, wszSrcPathRoot);
-            ZeroMemory(wszDstPath, MAX_PATH+1);
+            ZeroMemory(wszDstPath, sizeof(wszDstPath));
             if (This->sPathTarget)
                 lstrcpynW(wszDstPath, This->sPathTarget, MAX_PATH);
             PathAddBackslashW(wszSrcPathRoot);

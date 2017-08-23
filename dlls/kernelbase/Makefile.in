@@ -1,4 +1,6 @@
-MODULE = kernelbase.dll
+MODULE    = kernelbase.dll
+IMPORTLIB = kernelbase
+IMPORTS   = shlwapi
 
 C_SRCS = \
 	main.c

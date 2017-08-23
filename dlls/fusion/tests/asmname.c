@@ -358,7 +358,7 @@ static void test_assembly_name_props_line(IAssemblyName *name,
         to_widechar(expect, vals[i].val);
 
         size = MAX_PATH;
-        ZeroMemory(str, MAX_PATH);
+        ZeroMemory(str, sizeof(str));
         hr = IAssemblyName_GetProperty(name, i, str, &size);
         to_multibyte(val, str);
 

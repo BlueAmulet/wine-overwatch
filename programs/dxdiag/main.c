@@ -36,6 +36,7 @@ struct command_line_info
     WCHAR outfile[MAX_PATH];
     enum output_type output_type;
     BOOL whql_check;
+    BOOL dont_skip;
 };
 
 static void usage(void)
@@ -110,9 +111,11 @@ static BOOL process_command_line(const WCHAR *cmdline, struct command_line_info 
     static const WCHAR whql_colonW[] = {'w','h','q','l',':',0};
     static const WCHAR offW[] = {'o','f','f',0};
     static const WCHAR onW[] = {'o','n',0};
+    static const WCHAR dontskipW[] = {'d','o','n','t','s','k','i','p'};
 
     info->whql_check = FALSE;
     info->output_type = OUTPUT_NONE;
+    info->dont_skip = FALSE;
 
     while (*cmdline)
     {
@@ -132,6 +135,14 @@ static BOOL process_command_line(const WCHAR *cmdline, struct command_line_info 
 
         switch (*cmdline)
         {
+        case 'd':
+        case 'D':
+            if (strncmpiW(cmdline, dontskipW, sizeof(dontskipW)/sizeof(WCHAR)))
+                return FALSE;
+
+            info->dont_skip = TRUE;
+            cmdline += sizeof(dontskipW)/sizeof(WCHAR);
+            break;
         case 'T':
         case 't':
             info->output_type = OUTPUT_TEXT;
@@ -152,12 +163,12 @@ static BOOL process_command_line(const WCHAR *cmdline, struct command_line_info 
             if (!strncmpiW(cmdline, offW, 3))
             {
                 info->whql_check = FALSE;
-                cmdline += 2;
+                cmdline += 3;
             }
             else if (!strncmpiW(cmdline, onW, 2))
             {
                 info->whql_check = TRUE;
-                cmdline++;
+                cmdline += 2;
             }
             else
                 return FALSE;
@@ -166,8 +177,6 @@ static BOOL process_command_line(const WCHAR *cmdline, struct command_line_info 
         default:
             return FALSE;
         }
-
-        cmdline++;
     }
 
     return TRUE;
@@ -184,6 +193,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPWSTR cmdline, int cm
         usage();
 
     WINE_TRACE("WHQL check: %s\n", info.whql_check ? "TRUE" : "FALSE");
+    WINE_TRACE("No skip: %s\n", info.dont_skip ? "TRUE" : "FALSE");
     WINE_TRACE("Output type: %d\n", info.output_type);
     if (info.output_type != OUTPUT_NONE)
         WINE_TRACE("Output filename: %s\n", debugstr_output_type(info.output_type));

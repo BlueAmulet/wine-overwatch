@@ -171,6 +171,13 @@ static HRESULT STDMETHODCALLTYPE dxgi_swapchain_Present(IDXGISwapChain *iface, U
     TRACE("iface %p, sync_interval %u, flags %#x\n", iface, sync_interval, flags);
 
     if (sync_interval) FIXME("Unimplemented sync interval %u\n", sync_interval);
+
+    if (flags == DXGI_PRESENT_TEST)
+    {
+        WARN("DXGI_PRESENT_TEST stub!\n");
+        return S_OK;
+    }
+
     if (flags) FIXME("Unimplemented flags %#x\n", flags);
 
     wined3d_mutex_lock();
