@@ -41,6 +41,16 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(ver);
 
+typedef struct PACKAGE_ID
+{
+    UINT32 reserved;
+    UINT32 processorArchitecture;
+    UINT64 version;
+    PWSTR name;
+    PWSTR publisher;
+    PWSTR resourceId;
+    PWSTR publisherId;
+} PACKAGE_ID;
 
 /***********************************************************************
  *         GetVersion   (KERNEL32.@)
@@ -204,8 +214,18 @@ BOOL WINAPI GetProductInfo(DWORD dwOSMajorVersion, DWORD dwOSMinorVersion, DWORD
 
 LONG WINAPI GetCurrentPackageId(UINT32 *len, BYTE *buffer)
 {
-    FIXME("(%p %p): stub\n", len, buffer);
-    return APPMODEL_ERROR_NO_PACKAGE;
+    FIXME("(%p %p): partial stub\n", len, buffer);
+
+    if (*len < sizeof(PACKAGE_ID))
+    {
+        *len = sizeof(PACKAGE_ID);
+        return ERROR_INSUFFICIENT_BUFFER;
+    }
+
+    *len = sizeof(PACKAGE_ID);
+    memset(buffer, 0, sizeof(PACKAGE_ID));
+
+    return ERROR_SUCCESS;
 }
 
 /***********************************************************************

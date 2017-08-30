@@ -110,6 +110,7 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_APPLE_ycbcr_422",                  APPLE_YCBCR_422               },
 
     /* ARB */
+    {"GL_ARB_base_instance",                ARB_BASE_INSTANCE             },
     {"GL_ARB_blend_func_extended",          ARB_BLEND_FUNC_EXTENDED       },
     {"GL_ARB_clip_control",                 ARB_CLIP_CONTROL              },
     {"GL_ARB_color_buffer_float",           ARB_COLOR_BUFFER_FLOAT        },
@@ -154,10 +155,12 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_ARB_stencil_texturing",            ARB_STENCIL_TEXTURING         },
     {"GL_ARB_sync",                         ARB_SYNC                      },
     {"GL_ARB_texture_border_clamp",         ARB_TEXTURE_BORDER_CLAMP      },
+    {"GL_ARB_texture_buffer_range",         ARB_TEXTURE_BUFFER_RANGE      },
     {"GL_ARB_texture_compression",          ARB_TEXTURE_COMPRESSION       },
     {"GL_ARB_texture_compression_bptc",     ARB_TEXTURE_COMPRESSION_BPTC  },
     {"GL_ARB_texture_compression_rgtc",     ARB_TEXTURE_COMPRESSION_RGTC  },
     {"GL_ARB_texture_cube_map",             ARB_TEXTURE_CUBE_MAP          },
+    {"GL_ARB_texture_cube_map_array",       ARB_TEXTURE_CUBE_MAP_ARRAY    },
     {"GL_ARB_texture_env_combine",          ARB_TEXTURE_ENV_COMBINE       },
     {"GL_ARB_texture_env_dot3",             ARB_TEXTURE_ENV_DOT3          },
     {"GL_ARB_texture_float",                ARB_TEXTURE_FLOAT             },
@@ -200,6 +203,7 @@ static const struct wined3d_extension_map gl_extension_map[] =
     {"GL_EXT_framebuffer_blit",             EXT_FRAMEBUFFER_BLIT          },
     {"GL_EXT_framebuffer_multisample",      EXT_FRAMEBUFFER_MULTISAMPLE   },
     {"GL_EXT_framebuffer_object",           EXT_FRAMEBUFFER_OBJECT        },
+    {"GL_EXT_geometry_shader4",             EXT_GEOMETRY_SHADER4          },
     {"GL_EXT_gpu_program_parameters",       EXT_GPU_PROGRAM_PARAMETERS    },
     {"GL_EXT_gpu_shader4",                  EXT_GPU_SHADER4               },
     {"GL_EXT_packed_depth_stencil",         EXT_PACKED_DEPTH_STENCIL      },
@@ -2633,6 +2637,9 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     /* GL_APPLE_flush_buffer_range */
     USE_GL_FUNC(glBufferParameteriAPPLE)
     USE_GL_FUNC(glFlushMappedBufferRangeAPPLE)
+    /* GL_ARB_base_instance */
+    USE_GL_FUNC(glDrawArraysInstancedBaseInstance)
+    USE_GL_FUNC(glDrawElementsInstancedBaseVertexBaseInstance)
     /* GL_ARB_blend_func_extended */
     USE_GL_FUNC(glBindFragDataLocationIndexed)
     USE_GL_FUNC(glGetFragDataIndex)
@@ -2795,6 +2802,8 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     USE_GL_FUNC(glGetSynciv)
     USE_GL_FUNC(glIsSync)
     USE_GL_FUNC(glWaitSync)
+    /* GL_ARB_texture_buffer_range */
+    USE_GL_FUNC(glTexBufferRange)
     /* GL_ARB_texture_compression */
     USE_GL_FUNC(glCompressedTexImage2DARB)
     USE_GL_FUNC(glCompressedTexImage3DARB)
@@ -3137,6 +3146,7 @@ static void load_gl_funcs(struct wined3d_gl_info *gl_info)
     USE_GL_FUNC(glEnablei)                  /* OpenGL 3.0 */
     USE_GL_FUNC(glEnableVertexAttribArray)  /* OpenGL 2.0 */
     USE_GL_FUNC(glEndQuery)                 /* OpenGL 1.5 */
+    USE_GL_FUNC(glFramebufferTexture)
     USE_GL_FUNC(glGenBuffers)               /* OpenGL 1.5 */
     USE_GL_FUNC(glGenQueries)               /* OpenGL 1.5 */
     USE_GL_FUNC(glGenVertexArrays)          /* OpenGL 3.0 */

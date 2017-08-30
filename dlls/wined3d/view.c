@@ -125,6 +125,31 @@ static void create_texture_view(struct wined3d_gl_view *view, GLenum view_target
     context_release(context);
 }
 
+static void create_buffer_view(struct wined3d_gl_view *view, GLenum view_target,
+        const struct wined3d_view_desc *desc, struct wined3d_buffer *buffer,
+        const struct wined3d_format *view_format)
+{
+    const struct wined3d_gl_info *gl_info;
+    struct wined3d_context *context;
+
+    view->target = view_target;
+
+    context = context_acquire(buffer->resource.device, NULL);
+    gl_info = context->gl_info;
+
+    wined3d_resource_preload(&buffer->resource);
+
+    gl_info->gl_ops.gl.p_glGenTextures(1, &view->name);
+    gl_info->gl_ops.gl.p_glBindTexture(view->target, view->name);
+
+    GL_EXTCALL(glTexBufferRange(view->target, view_format->glInternal, buffer->buffer_object,
+            desc->u.buffer.start_idx * view_format->byte_count, desc->u.buffer.count * view_format->byte_count));
+    checkGLcall("Create buffer view");
+
+    gl_info->gl_ops.gl.p_glBindTexture(view->target, 0);
+    context_release(context);
+}
+
 ULONG CDECL wined3d_rendertarget_view_incref(struct wined3d_rendertarget_view *view)
 {
     ULONG refcount = InterlockedIncrement(&view->refcount);
@@ -286,8 +311,7 @@ static HRESULT wined3d_rendertarget_view_init(struct wined3d_rendertarget_view *
             return E_INVALIDARG;
 
         view->sub_resource_idx = desc->u.texture.level_idx;
-        if (resource->type != WINED3D_RTYPE_TEXTURE_3D)
-            view->sub_resource_idx += desc->u.texture.layer_idx * texture->level_count;
+        view->sub_resource_idx += desc->u.texture.layer_idx * texture->level_count;
         view->buffer_offset = 0;
         view->width = wined3d_texture_get_level_width(texture, desc->u.texture.level_idx);
         view->height = wined3d_texture_get_level_height(texture, desc->u.texture.level_idx);
@@ -421,7 +445,9 @@ static HRESULT wined3d_shader_resource_view_init(struct wined3d_shader_resource_
 
     if (resource->type == WINED3D_RTYPE_BUFFER)
     {
-        FIXME("Buffer shader resource views not supported.\n");
+        struct wined3d_buffer *buffer = buffer_from_resource(resource);
+
+        create_buffer_view(&view->gl_view, GL_TEXTURE_BUFFER, desc, buffer, view_format);
     }
     else
     {

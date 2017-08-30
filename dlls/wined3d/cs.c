@@ -862,6 +862,9 @@ static UINT wined3d_cs_exec_draw(struct wined3d_cs *cs, const void *data)
         device_invalidate_state(cs->device, STATE_BASEVERTEXINDEX);
     }
 
+    state->base_vertex_index = op->indexed ? op->base_vertex_idx : op->start_idx;
+    device_invalidate_state(cs->device, STATE_BASEVERTEXINDEX);
+
     draw_primitive(cs->device, state, op->base_vertex_idx, op->start_idx,
             op->index_count, op->start_instance, op->instance_count, op->indexed);
 

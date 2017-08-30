@@ -977,15 +977,23 @@ static gnutls_cipher_algorithm_t get_gnutls_cipher( const struct key *key )
     switch (key->alg_id)
     {
     case ALG_ID_AES:
-        WARN( "handle block size\n" );
+        if (key->secret_len != 16 && key->secret_len != 32)
+        {
+            FIXME( "bad secret_len %d for AES\n", key->secret_len );
+            return GNUTLS_CIPHER_UNKNOWN;
+        }
         switch (key->mode)
         {
-            case MODE_ID_GCM: return GNUTLS_CIPHER_AES_128_GCM;
-            case MODE_ID_CBC:
-            default:          return GNUTLS_CIPHER_AES_128_CBC;
+        case MODE_ID_GCM:
+            return key->secret_len == 16 ? GNUTLS_CIPHER_AES_128_GCM : GNUTLS_CIPHER_AES_256_GCM;
+        case MODE_ID_CBC:
+            return key->secret_len == 16 ? GNUTLS_CIPHER_AES_128_CBC : GNUTLS_CIPHER_AES_256_CBC;
+        default:
+            FIXME( "AES with mode %u not supported\n", key->mode );
+            return GNUTLS_CIPHER_UNKNOWN;
         }
     default:
-        FIXME( "algorithm %u not supported\n", key->alg_id );
+        FIXME( "algorithm %u with mode %u not supported\n", key->alg_id, key->mode );
         return GNUTLS_CIPHER_UNKNOWN;
     }
 }
@@ -1254,13 +1262,16 @@ NTSTATUS WINAPI BCryptEncrypt( BCRYPT_KEY_HANDLE handle, UCHAR *input, ULONG inp
 
         *ret_len = input_len;
         if (flags & BCRYPT_BLOCK_PADDING) return STATUS_INVALID_PARAMETER;
-        if (!output) return STATUS_SUCCESS;
-        if (output_len < *ret_len) return STATUS_BUFFER_TOO_SMALL;
 
         if (auth_info->pbAuthData && (status = key_set_auth_data( key, auth_info->pbAuthData, auth_info->cbAuthData )))
             return status;
-        if ((status = key_encrypt( key, input, input_len, output, output_len )))
-            return status;
+
+        if (input || output)
+        {
+            if (output_len < *ret_len) return STATUS_BUFFER_TOO_SMALL;
+            if ((status = key_encrypt( key, input, input_len, output, output_len )))
+                return status;
+        }
 
         return key_get_tag( key, auth_info->pbTag, auth_info->cbTag );
     }
@@ -1390,6 +1401,41 @@ NTSTATUS WINAPI BCryptDecrypt( BCRYPT_KEY_HANDLE handle, UCHAR *input, ULONG inp
     }
 
     return status;
+}
+
+NTSTATUS WINAPI BCryptImportKey(BCRYPT_ALG_HANDLE algorithm, BCRYPT_KEY_HANDLE hImportKey,
+                                const WCHAR *blobtype, BCRYPT_KEY_HANDLE *handle, UCHAR *object,
+                                ULONG object_len, UCHAR *pbInput, ULONG cbInput, ULONG flags)
+{
+    struct algorithm *alg = algorithm;
+    struct key *key;
+    NTSTATUS status;
+
+    FIXME("%p, %p, %s, %p, %p, %08x, %p, %08x, %08x - semistub\n", alg, hImportKey,
+          wine_dbgstr_w(blobtype), handle, object, object_len, pbInput, cbInput, flags);
+
+	if (!strcmpW(blobtype, BCRYPT_KEY_DATA_BLOB)) {
+		struct _BCRYPT_KEY_DATA_BLOB_HEADER *kdbh = (BCRYPT_KEY_DATA_BLOB_HEADER*)pbInput;
+
+		if (!(key = HeapAlloc( GetProcessHeap(), 0, sizeof(*key) )))
+		{
+		    *handle = NULL;
+		    return STATUS_NO_MEMORY;
+		}
+		key->hdr.magic = MAGIC_KEY;
+
+		if ((status = key_init( key, alg, pbInput + sizeof(BCRYPT_KEY_DATA_BLOB_HEADER), kdbh->cbKeyData )))
+		{
+		    HeapFree( GetProcessHeap(), 0, key );
+		    *handle = NULL;
+		    return status;
+		}
+
+		*handle = key;
+		return STATUS_SUCCESS;
+	} else {
+		return STATUS_NOT_IMPLEMENTED;
+	}
 }
 
 BOOL WINAPI DllMain( HINSTANCE hinst, DWORD reason, LPVOID reserved )

@@ -1986,6 +1986,9 @@ static GLenum buffer_type_hint_from_bind_flags(unsigned int bind_flags)
     if (bind_flags == WINED3D_BIND_INDEX_BUFFER)
         return GL_ELEMENT_ARRAY_BUFFER;
 
+    if (bind_flags == WINED3D_BIND_SHADER_RESOURCE)
+        return GL_TEXTURE_BUFFER;
+
     if (bind_flags & WINED3D_BIND_CONSTANT_BUFFER)
         return GL_UNIFORM_BUFFER;
 

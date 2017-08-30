@@ -42,6 +42,7 @@
 # include <mach/mach_time.h>
 #endif
 
+#define NONAMELESSUNION
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
 #include "windef.h"
@@ -50,6 +51,7 @@
 #include "wine/unicode.h"
 #include "wine/debug.h"
 #include "ntdll_misc.h"
+#include "ddk/wdm.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(ntdll);
 
@@ -465,6 +467,13 @@ NTSTATUS WINAPI NtQuerySystemTime( PLARGE_INTEGER Time )
     gettimeofday( &now, 0 );
     Time->QuadPart = now.tv_sec * (ULONGLONG)TICKSPERSEC + TICKS_1601_TO_1970;
     Time->QuadPart += now.tv_usec * 10;
+
+    user_shared_data->SystemTime.LowPart = Time->u.LowPart;
+    user_shared_data->SystemTime.High1Time = user_shared_data->SystemTime.High2Time = Time->u.HighPart;
+    user_shared_data->u.TickCountQuad = NtGetTickCount();
+    user_shared_data->u.TickCount.High2Time = user_shared_data->u.TickCount.High1Time;
+    user_shared_data->TickCountLowDeprecated = user_shared_data->u.TickCount.LowPart;
+    user_shared_data->TickCountMultiplier = 1 << 24;
     return STATUS_SUCCESS;
 }
 
