@@ -30,6 +30,9 @@
 #ifdef HAVE_SYS_SYSCTL_H
 # include <sys/sysctl.h>
 #endif
+#ifdef HAVE_SYS_SYSINFO_H
+# include <sys/sysinfo.h>
+#endif
 #ifdef HAVE_MACHINE_CPU_H
 # include <machine/cpu.h>
 #endif
@@ -56,6 +59,7 @@
 #include "winternl.h"
 #include "ntdll_misc.h"
 #include "wine/server.h"
+#include "wine/library.h"
 #include "ddk/wdm.h"
 
 #ifdef __APPLE__
@@ -65,6 +69,19 @@
 #endif
 
 WINE_DEFAULT_DEBUG_CHANNEL(ntdll);
+
+static DWORD translate_object_index(DWORD index)
+{
+    WORD version = MAKEWORD(NtCurrentTeb()->Peb->OSMinorVersion, NtCurrentTeb()->Peb->OSMajorVersion);
+
+    /* Process Hacker depends on this logic */
+    if (version >= 0x0602)
+        return index;
+    else if (version == 0x0601)
+        return index + 2;
+    else
+        return index + 1;
+}
 
 /*
  *	Token
@@ -115,6 +132,65 @@ NTSTATUS WINAPI NtDuplicateToken(
     SERVER_END_REQ;
 
     RtlFreeHeap( GetProcessHeap(), 0, objattr );
+    return status;
+}
+
+/******************************************************************************
+ *  NtFilterToken        [NTDLL.@]
+ *  ZwFilterToken        [NTDLL.@]
+ */
+NTSTATUS WINAPI NtFilterToken( HANDLE token, ULONG flags, TOKEN_GROUPS *disable_sids,
+                               TOKEN_PRIVILEGES *privileges, TOKEN_GROUPS *restrict_sids,
+                               HANDLE *new_token )
+{
+    data_size_t privileges_len = 0;
+    data_size_t sids_len = 0;
+    SID *sids = NULL;
+    NTSTATUS status;
+
+    TRACE( "(%p, 0x%08x, %p, %p, %p, %p)\n", token, flags, disable_sids, privileges,
+           restrict_sids, new_token );
+
+    if (flags)
+        FIXME( "flags %x unsupported\n", flags );
+
+    if (restrict_sids)
+        FIXME( "support for restricting sids not yet implemented\n" );
+
+    if (privileges)
+        privileges_len = privileges->PrivilegeCount * sizeof(LUID_AND_ATTRIBUTES);
+
+    if (disable_sids)
+    {
+        DWORD len, i;
+        BYTE *tmp;
+
+        for (i = 0; i < disable_sids->GroupCount; i++)
+            sids_len += RtlLengthSid( disable_sids->Groups[i].Sid );
+
+        sids = RtlAllocateHeap( GetProcessHeap(), 0, sids_len );
+        if (!sids) return STATUS_NO_MEMORY;
+
+        for (i = 0, tmp = (BYTE *)sids; i < disable_sids->GroupCount; i++, tmp += len)
+        {
+            len = RtlLengthSid( disable_sids->Groups[i].Sid );
+            memcpy( tmp, disable_sids->Groups[i].Sid, len );
+        }
+    }
+
+    SERVER_START_REQ( filter_token )
+    {
+        req->handle          = wine_server_obj_handle( token );
+        req->flags           = flags;
+        req->privileges_size = privileges_len;
+        wine_server_add_data( req, privileges->Privileges, privileges_len );
+        wine_server_add_data( req, sids, sids_len );
+        status = wine_server_call( req );
+        if (!status) *new_token = wine_server_ptr_handle( reply->new_handle );
+    }
+    SERVER_END_REQ;
+
+    RtlFreeHeap( GetProcessHeap(), 0, sids );
     return status;
 }
 
@@ -254,6 +330,21 @@ NTSTATUS WINAPI NtQueryInformationToken(
 	ULONG tokeninfolength,
 	PULONG retlen )
 {
+    static const struct
+    {
+        /* same fields as struct _SID */
+        BYTE Revision;
+        BYTE SubAuthorityCount;
+        SID_IDENTIFIER_AUTHORITY IdentifierAuthority;
+        DWORD SubAuthority[SECURITY_LOGON_IDS_RID_COUNT];
+    }
+    logon_sid =
+    {
+        SID_REVISION,
+        SECURITY_LOGON_IDS_RID_COUNT,
+        {SECURITY_NT_AUTHORITY},
+        {SECURITY_LOGON_IDS_RID, 0, 0}
+    };
     static const ULONG info_len [] =
     {
         0,
@@ -275,16 +366,16 @@ NTSTATUS WINAPI NtQueryInformationToken(
         0,    /* TokenAuditPolicy */
         0,    /* TokenOrigin */
         sizeof(TOKEN_ELEVATION_TYPE), /* TokenElevationType */
-        0,    /* TokenLinkedToken */
+        sizeof(TOKEN_LINKED_TOKEN), /* TokenLinkedToken */
         sizeof(TOKEN_ELEVATION), /* TokenElevation */
         0,    /* TokenHasRestrictions */
         0,    /* TokenAccessInformation */
         0,    /* TokenVirtualizationAllowed */
         0,    /* TokenVirtualizationEnabled */
-        sizeof(TOKEN_MANDATORY_LABEL) + sizeof(SID), /* TokenIntegrityLevel [sizeof(SID) includes one SubAuthority] */
+        0,    /* TokenIntegrityLevel */
         0,    /* TokenUIAccess */
         0,    /* TokenMandatoryPolicy */
-        0,    /* TokenLogonSid */
+        sizeof(TOKEN_GROUPS) + sizeof(logon_sid), /* TokenLogonSid */
         sizeof(DWORD), /* TokenIsAppContainer */
         0,    /* TokenCapabilities */
         sizeof(TOKEN_APPCONTAINER_INFORMATION) + sizeof(SID), /* TokenAppContainerSid */
@@ -506,18 +597,52 @@ NTSTATUS WINAPI NtQueryInformationToken(
         SERVER_END_REQ;
         break;
     case TokenElevationType:
+        SERVER_START_REQ( get_token_elevation_type )
         {
             TOKEN_ELEVATION_TYPE *elevation_type = tokeninfo;
-            FIXME("QueryInformationToken( ..., TokenElevationType, ...) semi-stub\n");
-            *elevation_type = TokenElevationTypeFull;
+            req->handle = wine_server_obj_handle( token );
+            status = wine_server_call( req );
+            if (status == STATUS_SUCCESS)
+                *elevation_type = reply->elevation;
         }
+        SERVER_END_REQ;
+        break;
+    case TokenLinkedToken:
+        SERVER_START_REQ( get_token_elevation_type )
+        {
+            TOKEN_LINKED_TOKEN *linked_token = tokeninfo;
+            req->handle = wine_server_obj_handle( token );
+            status = wine_server_call( req );
+            if (status == STATUS_SUCCESS)
+            {
+                HANDLE token;
+                /* FIXME: On Wine we do not have real linked tokens yet. Typically, a
+                 * program running with admin privileges is linked to a limited token,
+                 * and vice versa. We just create a new token instead of storing links
+                 * on the wineserver side. Using TokenLinkedToken twice should return
+                 * back the original token. */
+                if ((reply->elevation == TokenElevationTypeFull || reply->elevation == TokenElevationTypeLimited) &&
+                    (token = __wine_create_default_token( reply->elevation != TokenElevationTypeFull )))
+                {
+                    status = NtDuplicateToken( token, 0, NULL, SecurityIdentification, TokenImpersonation, &linked_token->LinkedToken );
+                    NtClose( token );
+                }
+                else
+                    status = STATUS_NO_TOKEN;
+            }
+        }
+        SERVER_END_REQ;
         break;
     case TokenElevation:
+        SERVER_START_REQ( get_token_elevation_type )
         {
             TOKEN_ELEVATION *elevation = tokeninfo;
-            FIXME("QueryInformationToken( ..., TokenElevation, ...) semi-stub\n");
-            elevation->TokenIsElevated = TRUE;
+            req->handle = wine_server_obj_handle( token );
+            status = wine_server_call( req );
+            if (status == STATUS_SUCCESS)
+                elevation->TokenIsElevated = (reply->elevation == TokenElevationTypeFull);
         }
+        SERVER_END_REQ;
         break;
     case TokenSessionId:
         {
@@ -526,18 +651,23 @@ NTSTATUS WINAPI NtQueryInformationToken(
         }
         break;
     case TokenIntegrityLevel:
+        SERVER_START_REQ( get_token_integrity )
         {
-            /* report always "S-1-16-12288" (high mandatory level) for now */
-            static const SID high_level = {SID_REVISION, 1, {SECURITY_MANDATORY_LABEL_AUTHORITY},
-                                                            {SECURITY_MANDATORY_HIGH_RID}};
-
             TOKEN_MANDATORY_LABEL *tml = tokeninfo;
-            PSID psid = tml + 1;
+            PSID sid = tml + 1;
+            DWORD sid_len = tokeninfolength < sizeof(*tml) ? 0 : tokeninfolength - sizeof(*tml);
 
-            tml->Label.Sid = psid;
-            tml->Label.Attributes = SE_GROUP_INTEGRITY | SE_GROUP_INTEGRITY_ENABLED;
-            memcpy(psid, &high_level, sizeof(SID));
+            req->handle = wine_server_obj_handle( token );
+            wine_server_set_reply( req, sid, sid_len );
+            status = wine_server_call( req );
+            if (retlen) *retlen = reply->sid_len + sizeof(*tml);
+            if (status == STATUS_SUCCESS)
+            {
+                tml->Label.Sid = sid;
+                tml->Label.Attributes = SE_GROUP_INTEGRITY | SE_GROUP_INTEGRITY_ENABLED;
+            }
         }
+        SERVER_END_REQ;
         break;
     case TokenAppContainerSid:
         {
@@ -552,6 +682,17 @@ NTSTATUS WINAPI NtQueryInformationToken(
             *(DWORD*)tokeninfo = 0;
             break;
         }
+    case TokenLogonSid:
+        {
+            TOKEN_GROUPS *groups = tokeninfo;
+            SID *sid = (SID *)(groups + 1);
+            FIXME("QueryInformationToken( ..., TokenLogonSid, ...) semi-stub\n");
+            groups->GroupCount = 1;
+            groups->Groups[0].Sid = sid;
+            groups->Groups[0].Attributes = 0;
+            memcpy(sid, &logon_sid, sizeof(logon_sid));
+        }
+        break;
     default:
         {
             ERR("Unhandled Token Information class %d!\n", tokeninfoclass);
@@ -602,6 +743,24 @@ NTSTATUS WINAPI NtSetInformationToken(
             ret = wine_server_call( req );
         }
         SERVER_END_REQ;
+        break;
+    case TokenSessionId:
+        if (TokenInformationLength < sizeof(DWORD))
+        {
+            ret = STATUS_INFO_LENGTH_MISMATCH;
+            break;
+        }
+        if (!TokenInformation)
+        {
+            ret = STATUS_ACCESS_VIOLATION;
+            break;
+        }
+        FIXME("handling of TokenSessionId not implemented\n");
+        ret = STATUS_SUCCESS;
+        break;
+    case TokenIntegrityLevel:
+        FIXME("TokenIntegrityLevel stub!\n");
+        ret = STATUS_SUCCESS;
         break;
     default:
         FIXME("unimplemented class %u\n", TokenInformationClass);
@@ -1872,6 +2031,9 @@ NTSTATUS WINAPI NtQuerySystemInformation(
             SYSTEM_PERFORMANCE_INFORMATION spi;
             static BOOL fixme_written = FALSE;
             FILE *fp;
+        #ifdef HAVE_SYSINFO
+            struct sysinfo sinfo;
+        #endif
 
             memset(&spi, 0 , sizeof(spi));
             len = sizeof(spi);
@@ -1891,6 +2053,63 @@ NTSTATUS WINAPI NtQuerySystemInformation(
                 static ULONGLONG idle;
                 /* many programs expect IdleTime to change so fake change */
                 spi.IdleTime.QuadPart = ++idle;
+            }
+
+        #ifdef HAVE_SYSINFO
+            if (!sysinfo(&sinfo))
+            {
+                ULONG64 freeram   = (ULONG64)sinfo.freeram * sinfo.mem_unit;
+                ULONG64 totalram  = (ULONG64)sinfo.totalram * sinfo.mem_unit;
+                ULONG64 totalswap = (ULONG64)sinfo.totalswap * sinfo.mem_unit;
+                ULONG64 freeswap  = (ULONG64)sinfo.freeswap * sinfo.mem_unit;
+
+                if ((fp = fopen("/proc/meminfo", "r")))
+                {
+                    unsigned long long available;
+                    char line[64];
+                    while (fgets(line, sizeof(line), fp))
+                    {
+                        if (sscanf(line, "MemAvailable: %llu kB", &available) == 1)
+                        {
+                            freeram = min(available * 1024, totalram);
+                            break;
+                        }
+                    }
+                    fclose(fp);
+                }
+
+                spi.AvailablePages      = freeram / page_size;
+                spi.TotalCommittedPages = (totalram + totalswap - freeram - freeswap) / page_size;
+                spi.TotalCommitLimit    = (totalram + totalswap) / page_size;
+            }
+        #endif
+
+            if ((fp = fopen("/proc/diskstats", "r")))
+            {
+                unsigned long long reads, reads_merged, sectors_read, read_time;
+                unsigned long long writes, writes_merged, sectors_written, write_time;
+                unsigned long long io_time, weighted_io_time, current_io;
+                unsigned int major, minor;
+                char dev[30], buffer[256];
+
+                /* the exact size (32 or 64 bits) depends on the kernel */
+                while (fscanf(fp, "%u %u %s %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu",
+                    &major, &minor, dev, &reads, &reads_merged, &sectors_read, &read_time,
+                    &writes, &writes_merged, &sectors_written, &write_time,
+                    &current_io, &io_time, &weighted_io_time) == 14)
+                {
+                    /* we have to ignore partitions as their I/O is also included in the block device */
+                    sprintf(buffer, "/sys/dev/block/%u:%u/device", major, minor);
+                    if (access(buffer, F_OK) != 0)
+                        continue;
+
+                    spi.ReadTransferCount.QuadPart += sectors_read * 512;
+                    spi.WriteTransferCount.QuadPart += sectors_written * 512;
+                    spi.ReadOperationCount += reads;
+                    spi.WriteOperationCount += writes;
+                }
+
+                fclose(fp);
             }
 
             if (Length >= len)
@@ -1927,11 +2146,13 @@ NTSTATUS WINAPI NtQuerySystemInformation(
         {
             SYSTEM_PROCESS_INFORMATION* spi = SystemInformation;
             SYSTEM_PROCESS_INFORMATION* last = NULL;
+            unsigned long clk_tck = sysconf(_SC_CLK_TCK);
             HANDLE hSnap = 0;
             WCHAR procname[1024];
             WCHAR* exename;
             DWORD wlen = 0;
             DWORD procstructlen = 0;
+            int unix_pid = -1;
 
             SERVER_START_REQ( create_snapshot )
             {
@@ -1964,7 +2185,7 @@ NTSTATUS WINAPI NtQuerySystemInformation(
 
                         if (Length >= len + procstructlen)
                         {
-                            /* ftCreationTime, ftUserTime, ftKernelTime;
+                            /* ftCreationTime;
                              * vmCounters, ioCounters
                              */
  
@@ -1979,9 +2200,17 @@ NTSTATUS WINAPI NtQuerySystemInformation(
                             spi->UniqueProcessId = UlongToHandle(reply->pid);
                             spi->ParentProcessId = UlongToHandle(reply->ppid);
                             spi->HandleCount = reply->handles;
+                            spi->CreationTime.QuadPart = reply->start_time;
 
                             /* spi->ti will be set later on */
 
+                            if (reply->unix_pid != -1)
+                            {
+                                read_process_time(reply->unix_pid, -1, clk_tck,
+                                                  &spi->KernelTime, &spi->UserTime);
+                                read_process_memory_stats(reply->unix_pid, &spi->vmCounters);
+                            }
+                            unix_pid = reply->unix_pid;
                         }
                         len += procstructlen;
                     }
@@ -2017,11 +2246,15 @@ NTSTATUS WINAPI NtQuerySystemInformation(
 
                                     memset(&spi->ti[i], 0, sizeof(spi->ti));
 
-                                    spi->ti[i].CreateTime.QuadPart = 0xdeadbeef;
+                                    spi->ti[i].CreateTime.QuadPart = reply->creation_time;
                                     spi->ti[i].ClientId.UniqueProcess = UlongToHandle(reply->pid);
                                     spi->ti[i].ClientId.UniqueThread  = UlongToHandle(reply->tid);
                                     spi->ti[i].dwCurrentPriority = reply->base_pri + reply->delta_pri;
                                     spi->ti[i].dwBasePriority = reply->base_pri;
+
+                                    if (unix_pid != -1 && reply->unix_tid != -1)
+                                        read_process_time(unix_pid, reply->unix_tid, clk_tck,
+                                                          &spi->ti[i].KernelTime, &spi->ti[i].UserTime);
                                     i++;
                                 }
                             }
@@ -2191,12 +2424,65 @@ NTSTATUS WINAPI NtQuerySystemInformation(
                         shi->Handle[i].OwnerPid     = info[i].owner;
                         shi->Handle[i].HandleValue  = info[i].handle;
                         shi->Handle[i].AccessMask   = info[i].access;
-                        /* FIXME: Fill out ObjectType, HandleFlags, ObjectPointer */
+                        shi->Handle[i].ObjectType   = translate_object_index(info[i].type);
+                        /* FIXME: Fill out HandleFlags, ObjectPointer */
                     }
                 }
                 else if (ret == STATUS_BUFFER_TOO_SMALL)
                 {
                     len = FIELD_OFFSET( SYSTEM_HANDLE_INFORMATION, Handle[reply->count] );
+                    ret = STATUS_INFO_LENGTH_MISMATCH;
+                }
+            }
+            SERVER_END_REQ;
+
+            RtlFreeHeap( GetProcessHeap(), 0, info );
+        }
+        break;
+    case SystemExtendedHandleInformation:
+        {
+            struct handle_info *info;
+            DWORD i, num_handles;
+
+            if (Length < sizeof(SYSTEM_HANDLE_INFORMATION_EX))
+            {
+                ret = STATUS_INFO_LENGTH_MISMATCH;
+                break;
+            }
+
+            if (!SystemInformation)
+            {
+                ret = STATUS_ACCESS_VIOLATION;
+                break;
+            }
+
+            num_handles = (Length - FIELD_OFFSET( SYSTEM_HANDLE_INFORMATION_EX, Handle ));
+            num_handles /= sizeof(SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX);
+            if (!(info = RtlAllocateHeap( GetProcessHeap(), 0, sizeof(*info) * num_handles )))
+                return STATUS_NO_MEMORY;
+
+            SERVER_START_REQ( get_system_handles )
+            {
+                wine_server_set_reply( req, info, sizeof(*info) * num_handles );
+                if (!(ret = wine_server_call( req )))
+                {
+                    SYSTEM_HANDLE_INFORMATION_EX *shi = SystemInformation;
+                    shi->Count = wine_server_reply_size( req ) / sizeof(*info);
+                    shi->Reserved = 0;
+                    len = FIELD_OFFSET( SYSTEM_HANDLE_INFORMATION_EX, Handle[shi->Count] );
+                    for (i = 0; i < shi->Count; i++)
+                    {
+                        memset( &shi->Handle[i], 0, sizeof(shi->Handle[i]) );
+                        shi->Handle[i].UniqueProcessId = info[i].owner;
+                        shi->Handle[i].HandleValue     = info[i].handle;
+                        shi->Handle[i].GrantedAccess   = info[i].access;
+                        shi->Handle[i].ObjectTypeIndex = translate_object_index(info[i].type);
+                        /* FIXME: Fill out remaining fields */
+                    }
+                }
+                else if (ret == STATUS_BUFFER_TOO_SMALL)
+                {
+                    len = FIELD_OFFSET( SYSTEM_HANDLE_INFORMATION_EX, Handle[reply->count] );
                     ret = STATUS_INFO_LENGTH_MISMATCH;
                 }
             }
@@ -2224,9 +2510,20 @@ NTSTATUS WINAPI NtQuerySystemInformation(
     case SystemInterruptInformation:
         {
             SYSTEM_INTERRUPT_INFORMATION sii;
+            int dev_random;
 
             memset(&sii, 0, sizeof(sii));
             len = sizeof(sii);
+
+            /* Some applications use the returned buffer for random number
+             * generation. Its unlikely that an app depends on the exact
+             * layout, so just fill with values from /dev/urandom. */
+            dev_random = open( "/dev/urandom", O_RDONLY );
+            if (dev_random != -1)
+            {
+                read( dev_random, &sii, sizeof(sii) );
+                close( dev_random );
+            }
 
             if ( Length >= len)
             {
@@ -2782,7 +3079,32 @@ NTSTATUS WINAPI NtSystemDebugControl(SYSDBG_COMMAND command, PVOID inbuffer, ULO
 NTSTATUS WINAPI NtSetLdtEntries(ULONG selector1, ULONG entry1_low, ULONG entry1_high,
                                 ULONG selector2, ULONG entry2_low, ULONG entry2_high)
 {
-    FIXME("(%u, %u, %u, %u, %u, %u): stub\n", selector1, entry1_low, entry1_high, selector2, entry2_low, entry2_high);
+#ifdef __i386__
+    union
+    {
+        LDT_ENTRY entry;
+        ULONG dw[2];
+    } sel;
 
+    TRACE("(%x,%x,%x,%x,%x,%x)\n", selector1, entry1_low, entry1_high, selector2, entry2_low, entry2_high);
+
+    if (selector1)
+    {
+        sel.dw[0] = entry1_low;
+        sel.dw[1] = entry1_high;
+        if (wine_ldt_set_entry(selector1, &sel.entry) < 0)
+            return STATUS_ACCESS_DENIED;
+    }
+    if (selector2)
+    {
+        sel.dw[0] = entry2_low;
+        sel.dw[1] = entry2_high;
+        if (wine_ldt_set_entry(selector2, &sel.entry) < 0)
+            return STATUS_ACCESS_DENIED;
+    }
+    return STATUS_SUCCESS;
+#else
+    FIXME("(%x,%x,%x,%x,%x,%x): stub\n", selector1, entry1_low, entry1_high, selector2, entry2_low, entry2_high);
     return STATUS_NOT_IMPLEMENTED;
+#endif
 }

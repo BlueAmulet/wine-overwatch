@@ -68,6 +68,7 @@ static const struct object_ops event_ops =
     directory_link_name,       /* link_name */
     default_unlink_name,       /* unlink_name */
     no_open_file,              /* open_file */
+    no_alloc_handle,           /* alloc_handle */
     no_close_handle,           /* close_handle */
     no_destroy                 /* destroy */
 };
@@ -101,6 +102,7 @@ static const struct object_ops keyed_event_ops =
     directory_link_name,         /* link_name */
     default_unlink_name,         /* unlink_name */
     no_open_file,                /* open_file */
+    no_alloc_handle,             /* alloc_handle */
     no_close_handle,             /* close_handle */
     no_destroy                   /* destroy */
 };
@@ -159,8 +161,7 @@ static void event_dump( struct object *obj, int verbose )
 
 static struct object_type *event_get_type( struct object *obj )
 {
-    static const WCHAR name[] = {'E','v','e','n','t'};
-    static const struct unicode_str str = { name, sizeof(name) };
+    static const struct unicode_str str = { type_Event, sizeof(type_Event) };
     return get_object_type( &str );
 }
 
@@ -229,8 +230,7 @@ static void keyed_event_dump( struct object *obj, int verbose )
 
 static struct object_type *keyed_event_get_type( struct object *obj )
 {
-    static const WCHAR name[] = {'K','e','y','e','d','E','v','e','n','t'};
-    static const struct unicode_str str = { name, sizeof(name) };
+    static const struct unicode_str str = { type_KeyedEvent, sizeof(type_KeyedEvent) };
     return get_object_type( &str );
 }
 

@@ -93,6 +93,39 @@ static LDR_MODULE *find_ldr_module( HMODULE module )
     return ldr;
 }
 
+/* change permissions of a specific memory range, save original permissions */
+static void virtual_protect_save( void *addr, SIZE_T size, ULONG new_prot, ULONG *old_prot )
+{
+    SYSTEM_BASIC_INFORMATION info;
+    UINT i = 0;
+
+    NtQuerySystemInformation( SystemBasicInformation, &info, sizeof(info), NULL );
+    while (size)
+    {
+        SIZE_T block_size = min( size, info.PageSize - ((UINT_PTR)addr & (info.PageSize - 1)) );
+        VirtualProtect( addr, block_size, new_prot, &old_prot[i++] );
+        addr  = (void *)((char *)addr + block_size);
+        size -= block_size;
+    }
+}
+
+/* restore permissions for a specific memory range */
+static void virtual_protect_load( void *addr, SIZE_T size, ULONG *old_prot )
+{
+    SYSTEM_BASIC_INFORMATION info;
+    DWORD dummy;
+    UINT i = 0;
+
+    NtQuerySystemInformation( SystemBasicInformation, &info, sizeof(info), NULL );
+    while (size)
+    {
+        SIZE_T block_size = min( size, info.PageSize - ((UINT_PTR)addr & (info.PageSize - 1)) );
+        VirtualProtect( addr, block_size, old_prot[i++], &dummy );
+        addr  = (void *)((char *)addr + block_size);
+        size -= block_size;
+    }
+}
+
 /* load the driver module file */
 static HMODULE load_driver_module( const WCHAR *name )
 {
@@ -116,7 +149,7 @@ static HMODULE load_driver_module( const WCHAR *name )
     if (nt->OptionalHeader.SectionAlignment < info.PageSize ||
         !(nt->FileHeader.Characteristics & IMAGE_FILE_DLL))
     {
-        DWORD old;
+        DWORD old_prot[3];
         IMAGE_BASE_RELOCATION *rel, *end;
 
         if ((rel = RtlImageDirectoryEntryToData( module, TRUE, IMAGE_DIRECTORY_ENTRY_BASERELOC, &size )))
@@ -124,20 +157,24 @@ static HMODULE load_driver_module( const WCHAR *name )
             WINE_TRACE( "%s: relocating from %p to %p\n",
                         wine_dbgstr_w(name), (char *)module - delta, module );
             end = (IMAGE_BASE_RELOCATION *)((char *)rel + size);
-            while (rel < end && rel->SizeOfBlock)
+            while (rel < end - 1 && rel->SizeOfBlock)
             {
                 void *page = (char *)module + rel->VirtualAddress;
-                VirtualProtect( page, info.PageSize, PAGE_EXECUTE_READWRITE, &old );
+                /* LdrProcessRelocationBlock can access the memory range from page - (page + 0xfff + 8), so
+                 * changing permissions of a single page is not sufficient. We assume here that the minimum
+                 * page size is 0x1000, so we have to save/restore two or three pages, depending on the
+                 * virtual address. */
+                virtual_protect_save( page, 0xfff + 8, PAGE_EXECUTE_READWRITE, old_prot );
                 rel = LdrProcessRelocationBlock( page, (rel->SizeOfBlock - sizeof(*rel)) / sizeof(USHORT),
                                                  (USHORT *)(rel + 1), delta );
-                if (old != PAGE_EXECUTE_READWRITE) VirtualProtect( page, info.PageSize, old, &old );
+                virtual_protect_load( page, 0xfff + 8, old_prot );
                 if (!rel) goto error;
             }
             /* make sure we don't try again */
             size = FIELD_OFFSET( IMAGE_NT_HEADERS, OptionalHeader ) + nt->FileHeader.SizeOfOptionalHeader;
-            VirtualProtect( nt, size, PAGE_READWRITE, &old );
+            VirtualProtect( nt, size, PAGE_READWRITE, &old_prot[0] );
             nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress = 0;
-            VirtualProtect( nt, size, old, &old );
+            VirtualProtect( nt, size, old_prot[0], &old_prot[0] );
         }
     }
 
@@ -546,7 +583,33 @@ static DWORD WINAPI service_handler( DWORD ctrl, DWORD event_type, LPVOID event_
 
 static void WINAPI ServiceMain( DWORD argc, LPWSTR *argv )
 {
+    static const WCHAR ntoskrnlW[] = {'n','t','o','s','k','r','n','l','.','e','x','e',0};
+    static const WCHAR win32kW[]   = {'w','i','n','3','2','k','.','s','y','s',0};
+    static const WCHAR dxgkrnlW[]  = {'d','x','g','k','r','n','l','.','s','y','s',0};
+    static const WCHAR dxgmms1W[]  = {'d','x','g','m','m','s','1','.','s','y','s',0};
+    static const WCHAR *stubs[] = { win32kW, dxgkrnlW, dxgmms1W };
     const WCHAR *service_group = (argc >= 2) ? argv[1] : argv[0];
+    LDR_MODULE *ldr;
+    ULONG_PTR magic;
+    int i;
+
+    /* Load some default drivers (required by anticheat drivers) */
+    for (i = 0; i < sizeof(stubs)/sizeof(stubs[0]); i++)
+    {
+        if (!LoadLibraryW( stubs[i] ))
+            ERR( "Failed to load %s\n", debugstr_w( stubs[i] ) );
+    }
+
+    /* ntoskrnl.exe must be the first module */
+    LdrLockLoaderLock( 0, NULL, &magic );
+    if (!LdrFindEntryForAddress( GetModuleHandleW( ntoskrnlW ), &ldr ))
+    {
+        RemoveEntryList( &ldr->InLoadOrderModuleList );
+        InsertHeadList( &NtCurrentTeb()->Peb->LdrData->InLoadOrderModuleList, &ldr->InLoadOrderModuleList );
+        RemoveEntryList( &ldr->InMemoryOrderModuleList);
+        InsertHeadList( &NtCurrentTeb()->Peb->LdrData->InMemoryOrderModuleList, &ldr->InMemoryOrderModuleList );
+    }
+    LdrUnlockLoaderLock( 0, magic );
 
     if (!(stop_event = CreateEventW( NULL, TRUE, FALSE, NULL )))
         return;

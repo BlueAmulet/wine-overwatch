@@ -1626,11 +1626,13 @@ static void test_swapchain_fullscreen_state(IDXGISwapChain *swapchain,
 static void test_set_fullscreen(void)
 {
     struct swapchain_fullscreen_state initial_state;
+    DXGI_GAMMA_CONTROL_CAPABILITIES caps;
     DXGI_SWAP_CHAIN_DESC swapchain_desc;
     IDXGISwapChain *swapchain;
     IDXGIFactory *factory;
     IDXGIAdapter *adapter;
     IDXGIDevice *device;
+    IDXGIOutput *output;
     ULONG refcount;
     HRESULT hr;
 
@@ -1645,6 +1647,17 @@ static void test_set_fullscreen(void)
 
     hr = IDXGIAdapter_GetParent(adapter, &IID_IDXGIFactory, (void **)&factory);
     ok(SUCCEEDED(hr), "GetParent failed, hr %#x.\n", hr);
+
+    hr = IDXGIAdapter_EnumOutputs(adapter, 0, &output);
+    if (SUCCEEDED(hr))
+    {
+        hr = IDXGIOutput_GetGammaControlCapabilities(output, &caps);
+        todo_wine ok(hr == DXGI_ERROR_INVALID_CALL, "Expected DXGI_ERROR_INVALID_CALL, got %#x.\n", hr);
+
+        IDXGIOutput_Release(output);
+    }
+    else
+        skip("Failed to get output, skipping gamma test.\n");
 
     swapchain_desc.BufferDesc.Width = 800;
     swapchain_desc.BufferDesc.Height = 600;
@@ -1676,6 +1689,38 @@ static void test_set_fullscreen(void)
         skip("Could not change fullscreen state.\n");
         goto done;
     }
+
+    hr = IDXGISwapChain_GetContainingOutput(swapchain, &output);
+    if (SUCCEEDED(hr))
+    {
+        DXGI_GAMMA_CONTROL gamma;
+        int i;
+
+        memset(&caps, 0, sizeof(caps));
+        hr = IDXGIOutput_GetGammaControlCapabilities(output, &caps);
+        ok(hr == S_OK, "Expected S_OK, got %#x.\n", hr);
+
+        ok(caps.MaxConvertedValue > caps.MinConvertedValue,
+           "Expected max gamma value (%f) to be bigger than the min value (%f).\n",
+           caps.MaxConvertedValue, caps.MinConvertedValue);
+
+        for (i = 1; i < caps.NumGammaControlPoints; i++)
+        {
+            ok(caps.ControlPointPositions[i] > caps.ControlPointPositions[i-1],
+               "Expected control point positions to be strictly monotonically increasing (%f > %f).\n",
+               caps.ControlPointPositions[i], caps.ControlPointPositions[i-1]);
+        }
+
+        hr = IDXGIOutput_GetGammaControl(output, &gamma);
+        ok(hr == S_OK, "Expected S_OK, got %#x.\n", hr);
+        hr = IDXGIOutput_SetGammaControl(output, &gamma);
+        ok(hr == S_OK, "Expected S_OK, got %#x.\n", hr);
+
+        IDXGIOutput_Release(output);
+    }
+    else
+        skip("Failed to get output, skipping gamma test.\n");
+
     hr = IDXGISwapChain_SetFullscreenState(swapchain, FALSE, NULL);
     ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
     refcount = IDXGISwapChain_Release(swapchain);

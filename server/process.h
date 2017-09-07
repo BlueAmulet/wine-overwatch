@@ -115,7 +115,7 @@ struct process_snapshot
 extern unsigned int alloc_ptid( void *ptr );
 extern void free_ptid( unsigned int id );
 extern void *get_ptid_entry( unsigned int id );
-extern struct thread *create_process( int fd, struct thread *parent_thread, int inherit_all );
+extern struct thread *create_process( int fd, struct thread *parent_thread, int inherit_all, struct token *token );
 extern data_size_t init_process( struct thread *thread );
 extern struct thread *get_process_first_thread( struct process *process );
 extern struct process *get_process_from_id( process_id_t id );
@@ -137,6 +137,7 @@ extern void break_process( struct process *process );
 extern void detach_debugged_processes( struct thread *debugger );
 extern struct process_snapshot *process_snap( int *count );
 extern void enum_processes( int (*cb)(struct process*, void*), void *user);
+extern void replace_process_token( struct process *process, struct token *token );
 
 /* console functions */
 extern void inherit_console(struct thread *parent_thread, struct process *process, obj_handle_t hconin);

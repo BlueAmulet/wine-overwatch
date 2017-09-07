@@ -302,6 +302,7 @@ static void delete_multi_sz_value( HKEY hkey, const WCHAR *value, const WCHAR *s
  */
 static BOOL do_reg_operation( HKEY hkey, const WCHAR *value, INFCONTEXT *context, INT flags )
 {
+    static const WCHAR emptyW[] = {0};
     DWORD type, size;
 
     if (flags & (FLG_ADDREG_DELREG_BIT | FLG_ADDREG_DELVAL))  /* deletion */
@@ -320,7 +321,11 @@ static BOOL do_reg_operation( HKEY hkey, const WCHAR *value, INFCONTEXT *context
             }
             else RegDeleteValueW( hkey, value );
         }
-        else NtDeleteKey( hkey );
+        else
+        {
+            RegDeleteTreeW( hkey, NULL );
+            RegDeleteKeyW( hkey, emptyW );
+        }
         return TRUE;
     }
 

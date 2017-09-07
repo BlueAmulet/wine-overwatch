@@ -35,6 +35,7 @@
 #include "dsconf.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(dsound);
+WINE_DECLARE_DEBUG_CHANNEL(winediag);
 
 /*******************************************************************************
  *		IDirectSoundNotify
@@ -983,33 +984,38 @@ static const IDirectSoundBuffer8Vtbl dsbvt =
 	IDirectSoundBufferImpl_GetObjectInPath
 };
 
-HRESULT secondarybuffer_create(DirectSoundDevice *device, const DSBUFFERDESC *dsbd,
-        IDirectSoundBuffer **buffer)
+HRESULT IDirectSoundBufferImpl_Create(
+	DirectSoundDevice * device,
+	IDirectSoundBufferImpl **pdsb,
+	LPCDSBUFFERDESC dsbd)
 {
 	IDirectSoundBufferImpl *dsb;
 	LPWAVEFORMATEX wfex = dsbd->lpwfxFormat;
 	HRESULT err = DS_OK;
 	DWORD capf = 0;
-
-        TRACE("(%p,%p,%p)\n", device, dsbd, buffer);
+	TRACE("(%p,%p,%p)\n",device,pdsb,dsbd);
 
 	if (dsbd->dwBufferBytes < DSBSIZE_MIN || dsbd->dwBufferBytes > DSBSIZE_MAX) {
 		WARN("invalid parameter: dsbd->dwBufferBytes = %d\n", dsbd->dwBufferBytes);
+		*pdsb = NULL;
 		return DSERR_INVALIDPARAM; /* FIXME: which error? */
 	}
 
 	dsb = HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,sizeof(*dsb));
 
-        if (!dsb)
+	if (dsb == 0) {
+		WARN("out of memory\n");
+		*pdsb = NULL;
 		return DSERR_OUTOFMEMORY;
+	}
 
 	TRACE("Created buffer at %p\n", dsb);
 
-        dsb->ref = 1;
+	dsb->ref = 0;
         dsb->refn = 0;
         dsb->ref3D = 0;
         dsb->refiks = 0;
-        dsb->numIfaces = 1;
+	dsb->numIfaces = 0;
 	dsb->device = device;
 	dsb->IDirectSoundBuffer8_iface.lpVtbl = &dsbvt;
         dsb->IDirectSoundNotify_iface.lpVtbl = &dsnvt;
@@ -1020,8 +1026,9 @@ HRESULT secondarybuffer_create(DirectSoundDevice *device, const DSBUFFERDESC *ds
 	CopyMemory(&dsb->dsbd, dsbd, dsbd->dwSize);
 
 	dsb->pwfx = DSOUND_CopyFormat(wfex);
-        if (!dsb->pwfx) {
-                IDirectSoundBuffer8_Release(&dsb->IDirectSoundBuffer8_iface);
+	if (dsb->pwfx == NULL) {
+		HeapFree(GetProcessHeap(),0,dsb);
+		*pdsb = NULL;
 		return DSERR_OUTOFMEMORY;
 	}
 
@@ -1046,16 +1053,22 @@ HRESULT secondarybuffer_create(DirectSoundDevice *device, const DSBUFFERDESC *ds
 
 	/* Allocate an empty buffer */
 	dsb->buffer = HeapAlloc(GetProcessHeap(),0,sizeof(*(dsb->buffer)));
-        if (!dsb->buffer) {
-                IDirectSoundBuffer8_Release(&dsb->IDirectSoundBuffer8_iface);
+	if (dsb->buffer == NULL) {
+		WARN("out of memory\n");
+		HeapFree(GetProcessHeap(),0,dsb->pwfx);
+		HeapFree(GetProcessHeap(),0,dsb);
+		*pdsb = NULL;
 		return DSERR_OUTOFMEMORY;
 	}
 
 	/* Allocate system memory for buffer */
 	dsb->buffer->memory = HeapAlloc(GetProcessHeap(),0,dsb->buflen);
-        if (!dsb->buffer->memory) {
+	if (dsb->buffer->memory == NULL) {
 		WARN("out of memory\n");
-                IDirectSoundBuffer8_Release(&dsb->IDirectSoundBuffer8_iface);
+		HeapFree(GetProcessHeap(),0,dsb->pwfx);
+		HeapFree(GetProcessHeap(),0,dsb->buffer);
+		HeapFree(GetProcessHeap(),0,dsb);
+		*pdsb = NULL;
 		return DSERR_OUTOFMEMORY;
 	}
 
@@ -1103,13 +1116,23 @@ HRESULT secondarybuffer_create(DirectSoundDevice *device, const DSBUFFERDESC *ds
 
 	RtlInitializeResource(&dsb->lock);
 
-        /* register buffer */
-        err = DirectSoundDevice_AddBuffer(device, dsb);
-        if (err == DS_OK)
-                *buffer = (IDirectSoundBuffer*)&dsb->IDirectSoundBuffer8_iface;
-        else
-                IDirectSoundBuffer8_Release(&dsb->IDirectSoundBuffer8_iface);
+	/* register buffer if not primary */
+	if (!(dsbd->dwFlags & DSBCAPS_PRIMARYBUFFER)) {
+        init_eax_buffer(dsb);
 
+		err = DirectSoundDevice_AddBuffer(device, dsb);
+		if (err != DS_OK) {
+			HeapFree(GetProcessHeap(),0,dsb->buffer->memory);
+			HeapFree(GetProcessHeap(),0,dsb->buffer);
+			RtlDeleteResource(&dsb->lock);
+			HeapFree(GetProcessHeap(),0,dsb->pwfx);
+			HeapFree(GetProcessHeap(),0,dsb);
+			dsb = NULL;
+		}
+	}
+
+        IDirectSoundBuffer8_AddRef(&dsb->IDirectSoundBuffer8_iface);
+	*pdsb = dsb;
 	return err;
 }
 
@@ -1145,6 +1168,8 @@ void secondarybuffer_destroy(IDirectSoundBufferImpl *This)
         HeapFree(GetProcessHeap(), 0, This->filters);
     }
 
+    free_eax_buffer(This);
+
     HeapFree(GetProcessHeap(), 0, This);
 
     TRACE("(%p) released\n", This);
@@ -1159,7 +1184,7 @@ HRESULT IDirectSoundBufferImpl_Duplicate(
     HRESULT hres = DS_OK;
     TRACE("(%p,%p,%p)\n", device, ppdsb, pdsb);
 
-    dsb = HeapAlloc(GetProcessHeap(),0,sizeof(*dsb));
+    dsb = HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,sizeof(*dsb));
     if (dsb == NULL) {
         WARN("out of memory\n");
         *ppdsb = NULL;
@@ -1195,6 +1220,8 @@ HRESULT IDirectSoundBufferImpl_Duplicate(
     DSOUND_RecalcFormat(dsb);
 
     RtlInitializeResource(&dsb->lock);
+
+    init_eax_buffer(dsb); /* FIXME: should we duplicate EAX properties? */
 
     /* register buffer */
     hres = DirectSoundDevice_AddBuffer(device, dsb);
@@ -1276,6 +1303,9 @@ static HRESULT WINAPI IKsPropertySetImpl_Get(IKsPropertySet *iface, REFGUID guid
     TRACE("(iface=%p,guidPropSet=%s,dwPropID=%d,pInstanceData=%p,cbInstanceData=%d,pPropData=%p,cbPropData=%d,pcbReturned=%p)\n",
     This,debugstr_guid(guidPropSet),dwPropID,pInstanceData,cbInstanceData,pPropData,cbPropData,pcbReturned);
 
+    if (IsEqualGUID(&DSPROPSETID_EAX_ReverbProperties, guidPropSet) || IsEqualGUID(&DSPROPSETID_EAXBUFFER_ReverbProperties, guidPropSet))
+        return EAX_Get(This, guidPropSet, dwPropID, pInstanceData, cbInstanceData, pPropData, cbPropData, pcbReturned);
+
     return E_PROP_ID_UNSUPPORTED;
 }
 
@@ -1287,6 +1317,9 @@ static HRESULT WINAPI IKsPropertySetImpl_Set(IKsPropertySet *iface, REFGUID guid
 
     TRACE("(%p,%s,%d,%p,%d,%p,%d)\n",This,debugstr_guid(guidPropSet),dwPropID,pInstanceData,cbInstanceData,pPropData,cbPropData);
 
+    if (IsEqualGUID(&DSPROPSETID_EAX_ReverbProperties, guidPropSet) || IsEqualGUID(&DSPROPSETID_EAXBUFFER_ReverbProperties, guidPropSet))
+        return EAX_Set(This, guidPropSet, dwPropID, pInstanceData, cbInstanceData, pPropData, cbPropData);
+
     return E_PROP_ID_UNSUPPORTED;
 }
 
@@ -1296,6 +1329,13 @@ static HRESULT WINAPI IKsPropertySetImpl_QuerySupport(IKsPropertySet *iface, REF
     IDirectSoundBufferImpl *This = impl_from_IKsPropertySet(iface);
 
     TRACE("(%p,%s,%d,%p)\n",This,debugstr_guid(guidPropSet),dwPropID,pTypeSupport);
+
+    if (EAX_QuerySupport(guidPropSet, dwPropID, pTypeSupport)) {
+        static int once;
+        if (!once++)
+            FIXME_(winediag)("EAX sound effects are enabled - try to disable it if your app crashes unexpectedly\n");
+        return S_OK;
+    }
 
     return E_PROP_ID_UNSUPPORTED;
 }

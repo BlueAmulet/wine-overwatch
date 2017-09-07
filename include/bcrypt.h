@@ -58,6 +58,10 @@ typedef LONG NTSTATUS;
 #define BCRYPT_PROVIDER_HANDLE (const WCHAR []){'P','r','o','v','i','d','e','r','H','a','n','d','l','e',0}
 #define BCRYPT_SIGNATURE_LENGTH (const WCHAR []){'S','i','g','n','a','t','u','r','e','L','e','n','g','t','h',0}
 
+#define BCRYPT_OPAQUE_KEY_BLOB   (const WCHAR []){'O','p','a','q','u','e','K','e','y','B','l','o','b',0}
+#define BCRYPT_KEY_DATA_BLOB     (const WCHAR []){'K','e','y','D','a','t','a','B','l','o','b',0}
+#define BCRYPT_AES_WRAP_KEY_BLOB (const WCHAR []){'R','f','c','3','5','6','5','K','e','y','W','r','a','p','B','l','o','b',0}
+
 #define MS_PRIMITIVE_PROVIDER (const WCHAR [])\
     {'M','i','c','r','o','s','o','f','t',' ','P','r','i','m','i','t','i','v','e',' ','P','r','o','v','i','d','e','r',0}
 #define MS_PLATFORM_CRYPTO_PROVIDER (const WCHAR [])\
@@ -74,6 +78,9 @@ typedef LONG NTSTATUS;
 #define BCRYPT_CHAIN_MODE_NA        (const WCHAR []){'C','h','a','i','n','i','n','g','M','o','d','e','N','/','A',0}
 #define BCRYPT_CHAIN_MODE_CBC       (const WCHAR []){'C','h','a','i','n','i','n','g','M','o','d','e','C','B','C',0}
 #define BCRYPT_CHAIN_MODE_ECB       (const WCHAR []){'C','h','a','i','n','i','n','g','M','o','d','e','E','C','B',0}
+#define BCRYPT_CHAIN_MODE_CFB       (const WCHAR []){'C','h','a','i','n','i','n','g','M','o','d','e','C','F','B',0}
+#define BCRYPT_CHAIN_MODE_CCM       (const WCHAR []){'C','h','a','i','n','i','n','g','M','o','d','e','C','C','M',0}
+#define BCRYPT_CHAIN_MODE_GCM       (const WCHAR []){'C','h','a','i','n','i','n','g','M','o','d','e','G','C','M',0}
 
 typedef struct _BCRYPT_ALGORITHM_IDENTIFIER
 {
@@ -87,7 +94,39 @@ typedef struct __BCRYPT_KEY_LENGTHS_STRUCT
     ULONG dwMinLength;
     ULONG dwMaxLength;
     ULONG dwIncrement;
-} BCRYPT_KEY_LENGTHS_STRUCT;
+} BCRYPT_KEY_LENGTHS_STRUCT, BCRYPT_AUTH_TAG_LENGTHS_STRUCT;
+
+typedef struct _BCRYPT_KEY_DATA_BLOB_HEADER
+{
+    ULONG dwMagic;
+    ULONG dwVersion;
+    ULONG cbKeyData;
+} BCRYPT_KEY_DATA_BLOB_HEADER, *PBCRYPT_KEY_DATA_BLOB_HEADER;
+
+typedef struct _BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO
+{
+    ULONG cbSize;
+    ULONG dwInfoVersion;
+    UCHAR *pbNonce;
+    ULONG cbNonce;
+    UCHAR *pbAuthData;
+    ULONG cbAuthData;
+    UCHAR *pbTag;
+    ULONG cbTag;
+    UCHAR *pbMacContext;
+    ULONG cbMacContext;
+    ULONG cbAAD;
+    ULONGLONG cbData;
+    ULONG dwFlags;
+} BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO, *PBCRYPT_AUTHENTICATED_CIPHER_MODE_INFO;
+
+#define BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO_VERSION 1
+
+#define BCRYPT_AUTH_MODE_CHAIN_CALLS_FLAG 0x00000001
+#define BCRYPT_AUTH_MODE_IN_PROGRESS_FLAG 0x00000002
+
+#define BCRYPT_KEY_DATA_BLOB_MAGIC    0x4d42444b
+#define BCRYPT_KEY_DATA_BLOB_VERSION1 1
 
 typedef PVOID BCRYPT_ALG_HANDLE;
 typedef PVOID BCRYPT_KEY_HANDLE;

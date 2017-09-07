@@ -234,6 +234,7 @@ static const struct wined3d_typed_format_info typed_formats[] =
     {WINED3DFMT_R8G8B8A8_SINT,            WINED3DFMT_R8G8B8A8_TYPELESS,     "IIII"},
     {WINED3DFMT_R8G8B8A8_UNORM_SRGB,      WINED3DFMT_R8G8B8A8_TYPELESS,     "uuuu"},
     {WINED3DFMT_R8G8B8A8_UNORM,           WINED3DFMT_R8G8B8A8_TYPELESS,     "uuuu"},
+    {WINED3DFMT_R8G8B8A8_SNORM,           WINED3DFMT_R8G8B8A8_TYPELESS,     "iiii"},
     {WINED3DFMT_R16G16_UNORM,             WINED3DFMT_R16G16_TYPELESS,       "uu"},
     {WINED3DFMT_R16G16_SNORM,             WINED3DFMT_R16G16_TYPELESS,       "ii"},
     {WINED3DFMT_R16G16_UINT,              WINED3DFMT_R16G16_TYPELESS,       "UU"},
@@ -1642,6 +1643,10 @@ static const struct wined3d_format_texture_info format_texture_info[] =
             GL_RGBA_INTEGER,            GL_INT,                           0,
             WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_RENDERTARGET,
             EXT_TEXTURE_INTEGER,        NULL},
+    {WINED3DFMT_R24_UNORM_X8_TYPELESS,  GL_DEPTH_COMPONENT24_ARB,         GL_DEPTH_COMPONENT24_ARB,               0,
+            GL_DEPTH_COMPONENT,         GL_UNSIGNED_INT_24_8,             0,
+            WINED3DFMT_FLAG_TEXTURE | WINED3DFMT_FLAG_DEPTH,
+            ARB_DEPTH_TEXTURE,          NULL},
     /* Vendor-specific formats */
     {WINED3DFMT_ATI1N,                  GL_COMPRESSED_RED_RGTC1,          GL_COMPRESSED_RED_RGTC1,                0,
             GL_RED,                     GL_UNSIGNED_BYTE,                 0,
@@ -4122,6 +4127,7 @@ const char *debug_d3dresourcetype(enum wined3d_resource_type resource_type)
 #define WINED3D_TO_STR(x) case x: return #x
         WINED3D_TO_STR(WINED3D_RTYPE_NONE);
         WINED3D_TO_STR(WINED3D_RTYPE_BUFFER);
+        WINED3D_TO_STR(WINED3D_RTYPE_TEXTURE_1D);
         WINED3D_TO_STR(WINED3D_RTYPE_TEXTURE_2D);
         WINED3D_TO_STR(WINED3D_RTYPE_TEXTURE_3D);
 #undef WINED3D_TO_STR
@@ -4248,7 +4254,6 @@ const char *debug_d3drenderstate(enum wined3d_render_state state)
         D3DSTATE_TO_STR(WINED3D_RS_DEBUGMONITORTOKEN);
         D3DSTATE_TO_STR(WINED3D_RS_POINTSIZE_MAX);
         D3DSTATE_TO_STR(WINED3D_RS_INDEXEDVERTEXBLENDENABLE);
-        D3DSTATE_TO_STR(WINED3D_RS_COLORWRITEENABLE);
         D3DSTATE_TO_STR(WINED3D_RS_TWEENFACTOR);
         D3DSTATE_TO_STR(WINED3D_RS_BLENDOP);
         D3DSTATE_TO_STR(WINED3D_RS_POSITIONDEGREE);
@@ -4268,9 +4273,14 @@ const char *debug_d3drenderstate(enum wined3d_render_state state)
         D3DSTATE_TO_STR(WINED3D_RS_BACK_STENCILZFAIL);
         D3DSTATE_TO_STR(WINED3D_RS_BACK_STENCILPASS);
         D3DSTATE_TO_STR(WINED3D_RS_BACK_STENCILFUNC);
+        D3DSTATE_TO_STR(WINED3D_RS_COLORWRITEENABLE);
         D3DSTATE_TO_STR(WINED3D_RS_COLORWRITEENABLE1);
         D3DSTATE_TO_STR(WINED3D_RS_COLORWRITEENABLE2);
         D3DSTATE_TO_STR(WINED3D_RS_COLORWRITEENABLE3);
+        D3DSTATE_TO_STR(WINED3D_RS_COLORWRITEENABLE4);
+        D3DSTATE_TO_STR(WINED3D_RS_COLORWRITEENABLE5);
+        D3DSTATE_TO_STR(WINED3D_RS_COLORWRITEENABLE6);
+        D3DSTATE_TO_STR(WINED3D_RS_COLORWRITEENABLE7);
         D3DSTATE_TO_STR(WINED3D_RS_BLENDFACTOR);
         D3DSTATE_TO_STR(WINED3D_RS_SRGBWRITEENABLE);
         D3DSTATE_TO_STR(WINED3D_RS_DEPTHBIAS);
@@ -4286,6 +4296,7 @@ const char *debug_d3drenderstate(enum wined3d_render_state state)
         D3DSTATE_TO_STR(WINED3D_RS_SRCBLENDALPHA);
         D3DSTATE_TO_STR(WINED3D_RS_DESTBLENDALPHA);
         D3DSTATE_TO_STR(WINED3D_RS_BLENDOPALPHA);
+        D3DSTATE_TO_STR(WINED3D_RS_DEPTHCLIP);
 #undef D3DSTATE_TO_STR
         default:
             FIXME("Unrecognized %u render state!\n", state);
@@ -5223,6 +5234,281 @@ void multiply_matrix(struct wined3d_matrix *dst, const struct wined3d_matrix *sr
     *dst = tmp;
 }
 
+/* Taken and adapted from Mesa. */
+BOOL invert_matrix_3d(struct wined3d_matrix *out, const struct wined3d_matrix *in)
+{
+    float pos, neg, t, det;
+    struct wined3d_matrix temp;
+
+    /* Calculate the determinant of upper left 3x3 submatrix and
+     * determine if the matrix is singular. */
+    pos = neg = 0.0f;
+    t =  in->_11 * in->_22 * in->_33;
+    if (t >= 0.0f)
+        pos += t;
+    else
+        neg += t;
+
+    t =  in->_21 * in->_32 * in->_13;
+    if (t >= 0.0f)
+        pos += t;
+    else
+        neg += t;
+    t =  in->_31 * in->_12 * in->_23;
+    if (t >= 0.0f)
+        pos += t;
+    else
+        neg += t;
+
+    t = -in->_31 * in->_22 * in->_13;
+    if (t >= 0.0f)
+        pos += t;
+    else
+        neg += t;
+    t = -in->_21 * in->_12 * in->_33;
+    if (t >= 0.0f)
+        pos += t;
+    else
+        neg += t;
+
+    t = -in->_11 * in->_32 * in->_23;
+    if (t >= 0.0f)
+        pos += t;
+    else
+        neg += t;
+
+    det = pos + neg;
+
+    if (fabsf(det) < 1e-25f)
+        return FALSE;
+
+    det = 1.0f / det;
+    temp._11 =  (in->_22 * in->_33 - in->_32 * in->_23) * det;
+    temp._12 = -(in->_12 * in->_33 - in->_32 * in->_13) * det;
+    temp._13 =  (in->_12 * in->_23 - in->_22 * in->_13) * det;
+    temp._21 = -(in->_21 * in->_33 - in->_31 * in->_23) * det;
+    temp._22 =  (in->_11 * in->_33 - in->_31 * in->_13) * det;
+    temp._23 = -(in->_11 * in->_23 - in->_21 * in->_13) * det;
+    temp._31 =  (in->_21 * in->_32 - in->_31 * in->_22) * det;
+    temp._32 = -(in->_11 * in->_32 - in->_31 * in->_12) * det;
+    temp._33 =  (in->_11 * in->_22 - in->_21 * in->_12) * det;
+
+    *out = temp;
+    return TRUE;
+}
+
+static void swap_rows(float **a, float **b)
+{
+    float *tmp = *a;
+
+    *a = *b;
+    *b = tmp;
+}
+
+BOOL invert_matrix(struct wined3d_matrix *out, struct wined3d_matrix *m)
+{
+    float wtmp[4][8];
+    float m0, m1, m2, m3, s;
+    float *r0, *r1, *r2, *r3;
+
+    r0 = wtmp[0];
+    r1 = wtmp[1];
+    r2 = wtmp[2];
+    r3 = wtmp[3];
+
+    r0[0] = m->_11;
+    r0[1] = m->_12;
+    r0[2] = m->_13;
+    r0[3] = m->_14;
+    r0[4] = 1.0f;
+    r0[5] = r0[6] = r0[7] = 0.0f;
+
+    r1[0] = m->_21;
+    r1[1] = m->_22;
+    r1[2] = m->_23;
+    r1[3] = m->_24;
+    r1[5] = 1.0f;
+    r1[4] = r1[6] = r1[7] = 0.0f;
+
+    r2[0] = m->_31;
+    r2[1] = m->_32;
+    r2[2] = m->_33;
+    r2[3] = m->_34;
+    r2[6] = 1.0f;
+    r2[4] = r2[5] = r2[7] = 0.0f;
+
+    r3[0] = m->_41;
+    r3[1] = m->_42;
+    r3[2] = m->_43;
+    r3[3] = m->_44;
+    r3[7] = 1.0f;
+    r3[4] = r3[5] = r3[6] = 0.0f;
+
+    /* Choose pivot - or die. */
+    if (fabsf(r3[0]) > fabsf(r2[0]))
+        swap_rows(&r3, &r2);
+    if (fabsf(r2[0]) > fabsf(r1[0]))
+        swap_rows(&r2, &r1);
+    if (fabsf(r1[0]) > fabsf(r0[0]))
+        swap_rows(&r1, &r0);
+    if (r0[0] == 0.0f)
+        return FALSE;
+
+    /* Eliminate first variable. */
+    m1 = r1[0] / r0[0]; m2 = r2[0] / r0[0]; m3 = r3[0] / r0[0];
+    s = r0[1]; r1[1] -= m1 * s; r2[1] -= m2 * s; r3[1] -= m3 * s;
+    s = r0[2]; r1[2] -= m1 * s; r2[2] -= m2 * s; r3[2] -= m3 * s;
+    s = r0[3]; r1[3] -= m1 * s; r2[3] -= m2 * s; r3[3] -= m3 * s;
+    s = r0[4];
+    if (s != 0.0f)
+    {
+        r1[4] -= m1 * s;
+        r2[4] -= m2 * s;
+        r3[4] -= m3 * s;
+    }
+    s = r0[5];
+    if (s != 0.0f)
+    {
+        r1[5] -= m1 * s;
+        r2[5] -= m2 * s;
+        r3[5] -= m3 * s;
+    }
+    s = r0[6];
+    if (s != 0.0f)
+    {
+        r1[6] -= m1 * s;
+        r2[6] -= m2 * s;
+        r3[6] -= m3 * s;
+    }
+    s = r0[7];
+    if (s != 0.0f)
+    {
+        r1[7] -= m1 * s;
+        r2[7] -= m2 * s;
+        r3[7] -= m3 * s;
+    }
+
+    /* Choose pivot - or die. */
+    if (fabsf(r3[1]) > fabsf(r2[1]))
+        swap_rows(&r3, &r2);
+    if (fabsf(r2[1]) > fabsf(r1[1]))
+        swap_rows(&r2, &r1);
+    if (r1[1] == 0.0f)
+        return FALSE;
+
+    /* Eliminate second variable. */
+    m2 = r2[1] / r1[1]; m3 = r3[1] / r1[1];
+    r2[2] -= m2 * r1[2]; r3[2] -= m3 * r1[2];
+    r2[3] -= m2 * r1[3]; r3[3] -= m3 * r1[3];
+    s = r1[4];
+    if (s != 0.0f)
+    {
+        r2[4] -= m2 * s;
+        r3[4] -= m3 * s;
+    }
+    s = r1[5];
+    if (s != 0.0f)
+    {
+        r2[5] -= m2 * s;
+        r3[5] -= m3 * s;
+    }
+    s = r1[6];
+    if (s != 0.0f)
+    {
+        r2[6] -= m2 * s;
+        r3[6] -= m3 * s;
+    }
+    s = r1[7];
+    if (s != 0.0f)
+    {
+        r2[7] -= m2 * s;
+        r3[7] -= m3 * s;
+    }
+
+    /* Choose pivot - or die. */
+    if (fabsf(r3[2]) > fabsf(r2[2]))
+        swap_rows(&r3, &r2);
+    if (r2[2] == 0.0f)
+        return FALSE;
+
+    /* Eliminate third variable. */
+    m3 = r3[2] / r2[2];
+    r3[3] -= m3 * r2[3];
+    r3[4] -= m3 * r2[4];
+    r3[5] -= m3 * r2[5];
+    r3[6] -= m3 * r2[6];
+    r3[7] -= m3 * r2[7];
+
+    /* Last check. */
+    if (r3[3] == 0.0f)
+        return FALSE;
+
+    /* Back substitute row 3. */
+    s = 1.0f / r3[3];
+    r3[4] *= s;
+    r3[5] *= s;
+    r3[6] *= s;
+    r3[7] *= s;
+
+    /* Back substitute row 2. */
+    m2 = r2[3];
+    s = 1.0f / r2[2];
+    r2[4] = s * (r2[4] - r3[4] * m2);
+    r2[5] = s * (r2[5] - r3[5] * m2);
+    r2[6] = s * (r2[6] - r3[6] * m2);
+    r2[7] = s * (r2[7] - r3[7] * m2);
+    m1 = r1[3];
+    r1[4] -= r3[4] * m1;
+    r1[5] -= r3[5] * m1;
+    r1[6] -= r3[6] * m1;
+    r1[7] -= r3[7] * m1;
+    m0 = r0[3];
+    r0[4] -= r3[4] * m0;
+    r0[5] -= r3[5] * m0;
+    r0[6] -= r3[6] * m0;
+    r0[7] -= r3[7] * m0;
+
+    /* Back substitute row 1. */
+    m1 = r1[2];
+    s = 1.0f / r1[1];
+    r1[4] = s * (r1[4] - r2[4] * m1);
+    r1[5] = s * (r1[5] - r2[5] * m1);
+    r1[6] = s * (r1[6] - r2[6] * m1);
+    r1[7] = s * (r1[7] - r2[7] * m1);
+    m0 = r0[2];
+    r0[4] -= r2[4] * m0;
+    r0[5] -= r2[5] * m0;
+    r0[6] -= r2[6] * m0;
+    r0[7] -= r2[7] * m0;
+
+    /* Back substitute row 0. */
+    m0 = r0[1];
+    s = 1.0f / r0[0];
+    r0[4] = s * (r0[4] - r1[4] * m0);
+    r0[5] = s * (r0[5] - r1[5] * m0);
+    r0[6] = s * (r0[6] - r1[6] * m0);
+    r0[7] = s * (r0[7] - r1[7] * m0);
+
+    out->_11 = r0[4];
+    out->_12 = r0[5];
+    out->_13 = r0[6];
+    out->_14 = r0[7];
+    out->_21 = r1[4];
+    out->_22 = r1[5];
+    out->_23 = r1[6];
+    out->_24 = r1[7];
+    out->_31 = r2[4];
+    out->_32 = r2[5];
+    out->_33 = r2[6];
+    out->_34 = r2[7];
+    out->_41 = r3[4];
+    out->_42 = r3[5];
+    out->_43 = r3[6];
+    out->_44 = r3[7];
+
+    return TRUE;
+}
+
 DWORD get_flexible_vertex_size(DWORD d3dvtVertexType) {
     DWORD size = 0;
     int i;
@@ -5609,7 +5895,27 @@ void texture_activate_dimensions(const struct wined3d_texture *texture, const st
     {
         switch (texture->target)
         {
+            case GL_TEXTURE_1D:
+                gl_info->gl_ops.gl.p_glDisable(GL_TEXTURE_2D);
+                checkGLcall("glDisable(GL_TEXTURE_2D)");
+                gl_info->gl_ops.gl.p_glDisable(GL_TEXTURE_3D);
+                checkGLcall("glDisable(GL_TEXTURE_3D)");
+                if (gl_info->supported[ARB_TEXTURE_CUBE_MAP])
+                {
+                    gl_info->gl_ops.gl.p_glDisable(GL_TEXTURE_CUBE_MAP_ARB);
+                    checkGLcall("glDisable(GL_TEXTURE_CUBE_MAP_ARB)");
+                }
+                if (gl_info->supported[ARB_TEXTURE_RECTANGLE])
+                {
+                    gl_info->gl_ops.gl.p_glDisable(GL_TEXTURE_RECTANGLE_ARB);
+                    checkGLcall("glDisable(GL_TEXTURE_RECTANGLE_ARB)");
+                }
+                gl_info->gl_ops.gl.p_glEnable(GL_TEXTURE_1D);
+                checkGLcall("glEnable(GL_TEXTURE_1D)");
+                break;
             case GL_TEXTURE_2D:
+                gl_info->gl_ops.gl.p_glDisable(GL_TEXTURE_1D);
+                checkGLcall("glDisable(GL_TEXTURE_1D)");
                 gl_info->gl_ops.gl.p_glDisable(GL_TEXTURE_3D);
                 checkGLcall("glDisable(GL_TEXTURE_3D)");
                 if (gl_info->supported[ARB_TEXTURE_CUBE_MAP])
@@ -5626,6 +5932,8 @@ void texture_activate_dimensions(const struct wined3d_texture *texture, const st
                 checkGLcall("glEnable(GL_TEXTURE_2D)");
                 break;
             case GL_TEXTURE_RECTANGLE_ARB:
+                gl_info->gl_ops.gl.p_glDisable(GL_TEXTURE_1D);
+                checkGLcall("glDisable(GL_TEXTURE_1D)");
                 gl_info->gl_ops.gl.p_glDisable(GL_TEXTURE_2D);
                 checkGLcall("glDisable(GL_TEXTURE_2D)");
                 gl_info->gl_ops.gl.p_glDisable(GL_TEXTURE_3D);
@@ -5649,12 +5957,16 @@ void texture_activate_dimensions(const struct wined3d_texture *texture, const st
                     gl_info->gl_ops.gl.p_glDisable(GL_TEXTURE_RECTANGLE_ARB);
                     checkGLcall("glDisable(GL_TEXTURE_RECTANGLE_ARB)");
                 }
+                gl_info->gl_ops.gl.p_glDisable(GL_TEXTURE_1D);
+                checkGLcall("glDisable(GL_TEXTURE_1D)");
                 gl_info->gl_ops.gl.p_glDisable(GL_TEXTURE_2D);
                 checkGLcall("glDisable(GL_TEXTURE_2D)");
                 gl_info->gl_ops.gl.p_glEnable(GL_TEXTURE_3D);
                 checkGLcall("glEnable(GL_TEXTURE_3D)");
                 break;
             case GL_TEXTURE_CUBE_MAP_ARB:
+                gl_info->gl_ops.gl.p_glDisable(GL_TEXTURE_1D);
+                checkGLcall("glDisable(GL_TEXTURE_1D)");
                 gl_info->gl_ops.gl.p_glDisable(GL_TEXTURE_2D);
                 checkGLcall("glDisable(GL_TEXTURE_2D)");
                 gl_info->gl_ops.gl.p_glDisable(GL_TEXTURE_3D);
@@ -5671,6 +5983,8 @@ void texture_activate_dimensions(const struct wined3d_texture *texture, const st
     }
     else
     {
+        gl_info->gl_ops.gl.p_glDisable(GL_TEXTURE_1D);
+        checkGLcall("glDisable(GL_TEXTURE_1D)");
         gl_info->gl_ops.gl.p_glEnable(GL_TEXTURE_2D);
         checkGLcall("glEnable(GL_TEXTURE_2D)");
         gl_info->gl_ops.gl.p_glDisable(GL_TEXTURE_3D);
@@ -5769,6 +6083,14 @@ void wined3d_ffp_get_vs_settings(const struct wined3d_context *context,
         default:
             FIXME("Unsupported vertex blending: %d\n", state->render_states[WINED3D_RS_VERTEXBLEND]);
             break;
+    }
+
+    if (use_indexed_vertex_blending(state, si))
+    {
+        if (use_software_vertex_processing(context->device))
+            settings->sw_blending = 1;
+        else
+            settings->vb_indices = 1;
     }
 
     settings->clipping = state->render_states[WINED3D_RS_CLIPPING]
