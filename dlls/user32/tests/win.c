@@ -77,6 +77,7 @@ static HWND hwndMessage;
 static HWND hwndMain, hwndMain2;
 static HHOOK hhook;
 static BOOL app_activated, app_deactivated;
+static BOOL nc_activated, nc_activate_w;
 
 static const char* szAWRClass = "Winsize";
 static HMENU hmenu;
@@ -862,6 +863,10 @@ static LRESULT WINAPI main_window_procA(HWND hwnd, UINT msg, WPARAM wparam, LPAR
         case WM_ACTIVATEAPP:
             if (wparam) app_activated = TRUE;
             else app_deactivated = TRUE;
+            break;
+        case WM_NCACTIVATE:
+            nc_activated = TRUE;
+            nc_activate_w = (wparam != 0);
             break;
     }
 
@@ -8279,11 +8284,12 @@ static void test_FlashWindow(void)
         "FlashWindow returned with %d\n", GetLastError() );
 }
 
-static void test_FlashWindowEx(void)
+static void test_FlashWindowEx(HWND hwndMain)
 {
     HWND hwnd;
     FLASHWINFO finfo;
-    BOOL prev, ret;
+    BOOL expected, ret;
+    int i, flags;
 
     if (!pFlashWindowEx)
     {
@@ -8314,7 +8320,7 @@ static void test_FlashWindowEx(void)
 
     SetLastError(0xdeadbeef);
     ret = pFlashWindowEx(&finfo);
-    todo_wine ok(!ret, "previous window state should not be active\n");
+    ok(!ret, "previous window state should not be active\n");
 
     finfo.cbSize = sizeof(FLASHWINFO) - 1;
     SetLastError(0xdeadbeef);
@@ -8343,31 +8349,35 @@ static void test_FlashWindowEx(void)
     ok(finfo.uCount == 3, "FlashWindowEx modified uCount to %x\n", finfo.uCount);
     ok(finfo.dwTimeout == 200, "FlashWindowEx modified dwTimeout to %x\n", finfo.dwTimeout);
 
-    hwnd = CreateWindowExA( 0, "MainWindowClass", "FlashWindow", WS_VISIBLE | WS_POPUPWINDOW,
-                            0, 0, 0, 0, 0, 0, 0, NULL );
-    ok( hwnd != 0, "CreateWindowExA error %d\n", GetLastError() );
-    finfo.hwnd = hwnd;
+    finfo.hwnd = hwndMain;
+    finfo.uCount = 1;
+    finfo.dwTimeout = 1;
 
     SetLastError(0xdeadbeef);
     ret = pFlashWindowEx(NULL);
     ok(!ret && GetLastError() == ERROR_NOACCESS,
        "FlashWindowEx returned with %d\n", GetLastError());
 
-    SetLastError(0xdeadbeef);
-    prev = pFlashWindowEx(&finfo);
+    for (i = 0; i < 2; i++)
+    {
+        ShowWindow(finfo.hwnd, i ? SW_HIDE : SW_SHOW);
+        expected = !i;
 
-    ok(finfo.cbSize == sizeof(FLASHWINFO), "FlashWindowEx modified cdSize to %x\n", finfo.cbSize);
-    ok(finfo.hwnd == hwnd, "FlashWindowEx modified hwnd to %p\n", finfo.hwnd);
-    ok(finfo.dwFlags == FLASHW_TIMER, "FlashWindowEx modified dwFlags to %x\n", finfo.dwFlags);
-    ok(finfo.uCount == 3, "FlashWindowEx modified uCount to %x\n", finfo.uCount);
-    ok(finfo.dwTimeout == 200, "FlashWindowEx modified dwTimeout to %x\n", finfo.dwTimeout);
-
-    finfo.dwFlags = FLASHW_STOP;
-    SetLastError(0xdeadbeef);
-    ret = pFlashWindowEx(&finfo);
-    ok(prev != ret, "previous window state should be different\n");
-
-    DestroyWindow( hwnd );
+        for (flags = 0; flags < 16; flags++)
+        {
+            nc_activated = nc_activate_w = FALSE;
+            finfo.dwFlags = flags;
+            ret = pFlashWindowEx(&finfo) != 0;
+            Sleep(50);
+            flush_events(TRUE);
+            ok(nc_activated, "didn't get expected WM_NCACTIVATE message\n");
+            ok(expected == nc_activate_w, "expected WM_NCACTIVE message with wParam == %u, got %u\n", expected, nc_activate_w);
+            if (finfo.dwFlags & FLASHW_CAPTION)
+                ok(ret == TRUE, "expected FlashWindowEx to return TRUE, got %s\n", ret ? "TRUE" : "FALSE");
+            else
+                ok(ret == expected, "expected FlashWindowEx to return %s, got %s\n", expected ? "TRUE" : "FALSE", ret ? "TRUE" : "FALSE");
+        }
+    }
 }
 
 static void test_FindWindowEx(void)
@@ -10127,7 +10137,7 @@ START_TEST(win)
     test_capture_4();
     test_rtl_layout();
     test_FlashWindow();
-    test_FlashWindowEx();
+    test_FlashWindowEx(hwndMain);
 
     test_CreateWindow();
     test_parent_owner();
