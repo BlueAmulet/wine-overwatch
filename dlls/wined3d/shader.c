@@ -1161,6 +1161,20 @@ static HRESULT shader_get_registers_used(struct wined3d_shader *shader, const st
                             ins.handler_idx, shader_version.type);
             }
         }
+        else if (ins.handler_idx == WINED3DSIH_DCL_INPUT_PS)
+        {
+            unsigned int reg_idx = ins.declaration.dst.reg.idx[0].offset;
+            if (reg_idx >= ARRAY_SIZE(shader->u.ps.interpolation_mode))
+            {
+                ERR("Invalid register index %u.\n", reg_idx);
+                break;
+            }
+            if (shader_version.type == WINED3D_SHADER_TYPE_PIXEL)
+                shader->u.ps.interpolation_mode[reg_idx] = ins.flags;
+            else
+                FIXME("Invalid instruction %#x for shader type %#x.\n",
+                        ins.handler_idx, shader_version.type);
+        }
         else if (ins.handler_idx == WINED3DSIH_DCL_OUTPUT_CONTROL_POINT_COUNT)
         {
             if (shader_version.type == WINED3D_SHADER_TYPE_HULL)
@@ -3937,6 +3951,8 @@ void find_ps_compile_args(const struct wined3d_state *state, const struct wined3
 
     args->render_offscreen = shader->reg_maps.vpos && gl_info->supported[ARB_FRAGMENT_COORD_CONVENTIONS]
             ? context->render_offscreen : 0;
+
+    args->dual_source_blend = wined3d_dualblend_enabled(state, gl_info);
 }
 
 static HRESULT pixel_shader_init(struct wined3d_shader *shader, struct wined3d_device *device,

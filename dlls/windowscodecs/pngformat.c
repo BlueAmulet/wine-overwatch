@@ -1,5 +1,6 @@
 /*
  * Copyright 2009 Vincent Povirk for CodeWeavers
+ * Copyright 2016 Dmitry Timoshkov
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -325,8 +326,10 @@ MAKE_FUNCPTR(png_set_gray_to_rgb);
 MAKE_FUNCPTR(png_set_interlace_handling);
 MAKE_FUNCPTR(png_set_IHDR);
 MAKE_FUNCPTR(png_set_pHYs);
+MAKE_FUNCPTR(png_set_PLTE);
 MAKE_FUNCPTR(png_set_read_fn);
 MAKE_FUNCPTR(png_set_strip_16);
+MAKE_FUNCPTR(png_set_tRNS);
 MAKE_FUNCPTR(png_set_tRNS_to_alpha);
 MAKE_FUNCPTR(png_set_write_fn);
 MAKE_FUNCPTR(png_read_end);
@@ -389,8 +392,10 @@ static void *load_libpng(void)
         LOAD_FUNCPTR(png_set_interlace_handling);
         LOAD_FUNCPTR(png_set_IHDR);
         LOAD_FUNCPTR(png_set_pHYs);
+        LOAD_FUNCPTR(png_set_PLTE);
         LOAD_FUNCPTR(png_set_read_fn);
         LOAD_FUNCPTR(png_set_strip_16);
+        LOAD_FUNCPTR(png_set_tRNS);
         LOAD_FUNCPTR(png_set_tRNS_to_alpha);
         LOAD_FUNCPTR(png_set_write_fn);
         LOAD_FUNCPTR(png_read_end);
@@ -617,7 +622,7 @@ static HRESULT WINAPI PngDecoder_Initialize(IWICBitmapDecoder *iface, IStream *p
         ppng_destroy_read_struct(&This->png_ptr, &This->info_ptr, &This->end_info);
         HeapFree(GetProcessHeap(), 0, row_pointers);
         This->png_ptr = NULL;
-        hr = E_FAIL;
+        hr = WINCODEC_ERR_UNKNOWNIMAGEFORMAT;
         goto end;
     }
     ppng_set_error_fn(This->png_ptr, jmpbuf, user_error_fn, user_warning_fn);
@@ -848,10 +853,14 @@ static HRESULT WINAPI PngDecoder_CopyPalette(IWICBitmapDecoder *iface,
 }
 
 static HRESULT WINAPI PngDecoder_GetMetadataQueryReader(IWICBitmapDecoder *iface,
-    IWICMetadataQueryReader **ppIMetadataQueryReader)
+    IWICMetadataQueryReader **reader)
 {
-    FIXME("(%p,%p): stub\n", iface, ppIMetadataQueryReader);
-    return E_NOTIMPL;
+    FIXME("(%p,%p): stub\n", iface, reader);
+
+    if (!reader) return E_INVALIDARG;
+
+    *reader = NULL;
+    return WINCODEC_ERR_UNSUPPORTEDOPERATION;
 }
 
 static HRESULT WINAPI PngDecoder_GetPreview(IWICBitmapDecoder *iface,
@@ -1349,6 +1358,10 @@ static const struct png_pixelformat formats[] = {
     {&GUID_WICPixelFormat32bppBGR, 32, 8, PNG_COLOR_TYPE_RGB, 1, 1},
     {&GUID_WICPixelFormat48bppRGB, 48, 16, PNG_COLOR_TYPE_RGB, 0, 0},
     {&GUID_WICPixelFormat64bppRGBA, 64, 16, PNG_COLOR_TYPE_RGB_ALPHA, 0, 0},
+    {&GUID_WICPixelFormat1bppIndexed, 1, 1, PNG_COLOR_TYPE_PALETTE, 0, 0},
+    {&GUID_WICPixelFormat2bppIndexed, 2, 2, PNG_COLOR_TYPE_PALETTE, 0, 0},
+    {&GUID_WICPixelFormat4bppIndexed, 4, 4, PNG_COLOR_TYPE_PALETTE, 0, 0},
+    {&GUID_WICPixelFormat8bppIndexed, 8, 8, PNG_COLOR_TYPE_PALETTE, 0, 0},
     {NULL},
 };
 
@@ -1651,6 +1664,42 @@ static HRESULT WINAPI PngFrameEncode_WritePixels(IWICBitmapFrameEncode *iface,
                 (This->yres+0.0127) / 0.0254, PNG_RESOLUTION_METER);
         }
 
+        if (This->format->color_type == PNG_COLOR_TYPE_PALETTE && This->colors)
+        {
+            png_color png_palette[256];
+            png_byte trans[256];
+            UINT i, num_trans = 0, colors;
+
+            /* Newer libpng versions don't accept larger palettes than the declared
+             * bit depth, so we need to generate the palette of the correct length.
+             */
+            colors = 1 << This->format->bit_depth;
+
+            for (i = 0; i < colors; i++)
+            {
+                if (i < This->colors)
+                {
+                    png_palette[i].red = (This->palette[i] >> 16) & 0xff;
+                    png_palette[i].green = (This->palette[i] >> 8) & 0xff;
+                    png_palette[i].blue = This->palette[i] & 0xff;
+                    trans[i] = (This->palette[i] >> 24) & 0xff;
+                    if (trans[i] != 0xff)
+                        num_trans++;
+                }
+                else
+                {
+                    png_palette[i].red = 0;
+                    png_palette[i].green = 0;
+                    png_palette[i].blue = 0;
+                }
+            }
+
+            ppng_set_PLTE(This->png_ptr, This->info_ptr, png_palette, colors);
+
+            if (num_trans)
+                ppng_set_tRNS(This->png_ptr, This->info_ptr, trans, colors, NULL);
+        }
+
         ppng_write_info(This->png_ptr, This->info_ptr);
 
         if (This->format->remove_filler)
@@ -1950,11 +1999,22 @@ static HRESULT WINAPI PngEncoder_GetContainerFormat(IWICBitmapEncoder *iface,
     return E_NOTIMPL;
 }
 
-static HRESULT WINAPI PngEncoder_GetEncoderInfo(IWICBitmapEncoder *iface,
-    IWICBitmapEncoderInfo **ppIEncoderInfo)
+static HRESULT WINAPI PngEncoder_GetEncoderInfo(IWICBitmapEncoder *iface, IWICBitmapEncoderInfo **info)
 {
-    FIXME("(%p,%p): stub\n", iface, ppIEncoderInfo);
-    return E_NOTIMPL;
+    IWICComponentInfo *comp_info;
+    HRESULT hr;
+
+    TRACE("%p,%p\n", iface, info);
+
+    if (!info) return E_INVALIDARG;
+
+    hr = CreateComponentInfo(&CLSID_WICPngEncoder, &comp_info);
+    if (hr == S_OK)
+    {
+        hr = IWICComponentInfo_QueryInterface(comp_info, &IID_IWICBitmapEncoderInfo, (void **)info);
+        IWICComponentInfo_Release(comp_info);
+    }
+    return hr;
 }
 
 static HRESULT WINAPI PngEncoder_SetColorContexts(IWICBitmapEncoder *iface,

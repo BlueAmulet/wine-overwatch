@@ -209,10 +209,10 @@
 @ stdcall CreateProcessAsUserA(long str str ptr ptr long long ptr str ptr ptr) advapi32.CreateProcessAsUserA
 @ stdcall CreateProcessAsUserW(long wstr wstr ptr ptr long long ptr wstr ptr ptr) advapi32.CreateProcessAsUserW
 # @ stub CreateProcessInternalA
-# @ stub CreateProcessInternalW
+@ stdcall CreateProcessInternalW(long wstr wstr ptr ptr long long ptr wstr ptr ptr ptr) kernel32.CreateProcessInternalW
 @ stdcall CreateProcessW(wstr wstr ptr ptr long long ptr wstr ptr ptr) kernel32.CreateProcessW
 @ stdcall CreateRemoteThread(long ptr long ptr long long ptr) kernel32.CreateRemoteThread
-@ stub CreateRemoteThreadEx
+@ stdcall CreateRemoteThreadEx(long ptr long ptr long long ptr ptr) kernel32.CreateRemoteThreadEx
 @ stdcall CreateRestrictedToken(long long long ptr long ptr long ptr ptr) advapi32.CreateRestrictedToken
 @ stdcall CreateSemaphoreExW(ptr long long wstr long long) kernel32.CreateSemaphoreExW
 @ stdcall CreateSemaphoreW(ptr long long wstr) kernel32.CreateSemaphoreW
@@ -1037,7 +1037,7 @@
 # @ stub PathCchCanonicalize
 # @ stub PathCchCanonicalizeEx
 # @ stub PathCchCombine
-# @ stub PathCchCombineEx
+@ stdcall PathCchCombineEx(ptr long ptr ptr long)
 # @ stub PathCchFindExtension
 # @ stub PathCchIsRoot
 # @ stub PathCchRemoveBackslash
@@ -1223,7 +1223,7 @@
 @ stdcall QueueUserWorkItem(ptr ptr long) kernel32.QueueUserWorkItem
 # @ stub QuirkGetData
 # @ stub QuirkGetData2
-# @ stub QuirkIsEnabled
+@ stdcall QuirkIsEnabled(ptr)
 # @ stub QuirkIsEnabled2
 @ stdcall QuirkIsEnabled3(ptr ptr)
 # @ stub QuirkIsEnabledForPackage

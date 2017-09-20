@@ -415,6 +415,14 @@ LRESULT CALLBACK THEMING_ButtonSubclassProc(HWND hwnd, UINT msg,
         break;
     }
 
+    case BM_SETCHECK:
+    case BM_SETSTATE:
+        theme = GetWindowTheme(hwnd);
+        if (theme) {
+            InvalidateRect(hwnd, NULL, FALSE);
+        }
+        return THEMING_CallOriginalClass(hwnd, msg, wParam, lParam);
+
     default:
 	/* Call old proc */
 	return THEMING_CallOriginalClass(hwnd, msg, wParam, lParam);

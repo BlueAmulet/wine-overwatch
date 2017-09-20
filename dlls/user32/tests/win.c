@@ -67,6 +67,8 @@ static BOOL (WINAPI *pFlashWindowEx)( PFLASHWINFO pfwi );
 static DWORD (WINAPI *pSetLayout)(HDC hdc, DWORD layout);
 static DWORD (WINAPI *pGetLayout)(HDC hdc);
 static BOOL (WINAPI *pMirrorRgn)(HWND hwnd, HRGN hrgn);
+static BOOL (WINAPI *pGetWindowDisplayAffinity)(HWND hwnd, DWORD *affinity);
+static BOOL (WINAPI *pSetWindowDisplayAffinity)(HWND hwnd, DWORD affinity);
 
 static BOOL test_lbuttondown_flag;
 static DWORD num_gettext_msgs;
@@ -4452,15 +4454,65 @@ static void test_window_styles(void)
     }
 }
 
+static HWND root_dialog(HWND hwnd)
+{
+    while ((GetWindowLongA(hwnd, GWL_EXSTYLE) & WS_EX_CONTROLPARENT) &&
+           (GetWindowLongA(hwnd, GWL_STYLE) & (WS_CHILD|WS_POPUP)) == WS_CHILD)
+    {
+        HWND parent = GetParent(hwnd);
+
+        /* simple detector for a window being a dialog */
+        if (!DefDlgProcA(parent, DM_GETDEFID, 0, 0))
+            break;
+
+        hwnd = parent;
+
+        if (!(GetWindowLongA(hwnd, GWL_STYLE) & DS_CONTROL))
+            break;
+    }
+
+    return hwnd;
+}
+
 static INT_PTR WINAPI empty_dlg_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
     return 0;
 }
 
+static LRESULT expected_id;
+
 static INT_PTR WINAPI empty_dlg_proc3(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
     if (msg == WM_INITDIALOG)
+    {
+        HWND parent = GetParent(hwnd);
+        LRESULT id, ret;
+
+        id = DefDlgProcA(parent, DM_GETDEFID, 0, 0);
+        if (!id || root_dialog(hwnd) == hwnd)
+            parent = 0;
+
+        id = DefDlgProcA(hwnd, DM_GETDEFID, 0, 0);
+        if (!parent)
+            ok(id == MAKELONG(IDOK,DC_HASDEFID), "expected (IDOK,DC_HASDEFID), got %08lx\n", id);
+        else
+            ok(id == expected_id, "expected %08lx, got %08lx\n", expected_id, id);
+
+        ret = DefDlgProcA(hwnd, DM_SETDEFID, 0x3333, 0);
+        ok(ret, "DefDlgProc(DM_SETDEFID) failed\n");
+        id = DefDlgProcA(hwnd, DM_GETDEFID, 0, 0);
+        ok(id == MAKELONG(0x3333,DC_HASDEFID), "expected (0x3333,DC_HASDEFID), got %08lx\n", id);
+
+        if (parent)
+        {
+            id = DefDlgProcA(parent, DM_GETDEFID, 0, 0);
+            ok(id == MAKELONG(0x3333,DC_HASDEFID), "expected (0x3333,DC_HASDEFID), got %08lx\n", id);
+
+            expected_id = MAKELONG(0x3333,DC_HASDEFID);
+        }
+
         EndDialog(hwnd, 0);
+    }
 
     return 0;
 }
@@ -4479,6 +4531,16 @@ static INT_PTR WINAPI empty_dlg_proc2(HWND hwnd, UINT msg, WPARAM wparam, LPARAM
         struct dialog_param *param = (struct dialog_param *)lparam;
         BOOL parent_is_child;
         HWND disabled_hwnd;
+        LRESULT id, ret;
+
+        id = DefDlgProcA(hwnd, DM_GETDEFID, 0, 0);
+        ok(id == MAKELONG(IDOK,DC_HASDEFID), "expected (IDOK,DC_HASDEFID), got %08lx\n", id);
+        ret = DefDlgProcA(hwnd, DM_SETDEFID, 0x2222, 0);
+        ok(ret, "DefDlgProc(DM_SETDEFID) failed\n");
+        id = DefDlgProcA(hwnd, DM_GETDEFID, 0, 0);
+        ok(id == MAKELONG(0x2222,DC_HASDEFID), "expected (0x2222,DC_HASDEFID), got %08lx\n", id);
+
+        expected_id = MAKELONG(0x2222,DC_HASDEFID);
 
         parent_is_child = (GetWindowLongA(param->parent, GWL_STYLE) & (WS_POPUP | WS_CHILD)) == WS_CHILD;
 
@@ -4520,6 +4582,25 @@ static INT_PTR WINAPI empty_dlg_proc2(HWND hwnd, UINT msg, WPARAM wparam, LPARAM
         DialogBoxIndirectParamA(GetModuleHandleA(NULL), param->dlg_data, hwnd, empty_dlg_proc3, 0);
         ok(IsWindowEnabled(hwnd), "wrong state for %p (%08x)\n", hwnd, style);
 
+        param->dlg_data->style |= DS_CONTROL;
+        DialogBoxIndirectParamA(GetModuleHandleA(NULL), param->dlg_data, hwnd, empty_dlg_proc3, 0);
+        ok(IsWindowEnabled(hwnd), "wrong state for %p (%08x)\n", hwnd, style);
+
+        param->dlg_data->dwExtendedStyle |= WS_EX_CONTROLPARENT;
+        SetWindowLongA(hwnd, GWL_EXSTYLE, GetWindowLongA(hwnd, GWL_EXSTYLE) | WS_EX_CONTROLPARENT);
+        SetWindowLongA(hwnd, GWL_STYLE, style & ~DS_CONTROL);
+        param->dlg_data->style &= ~DS_CONTROL;
+        DialogBoxIndirectParamA(GetModuleHandleA(NULL), param->dlg_data, hwnd, empty_dlg_proc3, 0);
+        ok(IsWindowEnabled(hwnd), "wrong state for %p (%08x)\n", hwnd, style);
+
+        SetWindowLongA(hwnd, GWL_STYLE, style | DS_CONTROL);
+        DialogBoxIndirectParamA(GetModuleHandleA(NULL), param->dlg_data, hwnd, empty_dlg_proc3, 0);
+        ok(IsWindowEnabled(hwnd), "wrong state for %p (%08x)\n", hwnd, style);
+
+        param->dlg_data->style |= DS_CONTROL;
+        DialogBoxIndirectParamA(GetModuleHandleA(NULL), param->dlg_data, hwnd, empty_dlg_proc3, 0);
+        ok(IsWindowEnabled(hwnd), "wrong state for %p (%08x)\n", hwnd, style);
+
         EndDialog(hwnd, 0);
     }
     return 0;
@@ -4538,6 +4619,7 @@ static void check_dialog_style(DWORD style_in, DWORD ex_style_in, DWORD style_ou
     DWORD style, ex_style;
     HWND hwnd, grand_parent = 0, parent = 0;
     struct dialog_param param;
+    LRESULT id, ret;
 
     if (style_in & WS_CHILD)
     {
@@ -4564,6 +4646,13 @@ static void check_dialog_style(DWORD style_in, DWORD ex_style_in, DWORD style_ou
 
     hwnd = CreateDialogIndirectParamA(GetModuleHandleA(NULL), &dlg_data.dt, parent, empty_dlg_proc, 0);
     ok(hwnd != 0, "dialog creation failed, style %#x, exstyle %#x\n", style_in, ex_style_in);
+
+    id = DefDlgProcA(hwnd, DM_GETDEFID, 0, 0);
+    ok(id == MAKELONG(IDOK,DC_HASDEFID), "expected (IDOK,DC_HASDEFID), got %08lx\n", id);
+    ret = DefDlgProcA(hwnd, DM_SETDEFID, 0x1111, 0);
+    ok(ret, "DefDlgProc(DM_SETDEFID) failed\n");
+    id = DefDlgProcA(hwnd, DM_GETDEFID, 0, 0);
+    ok(id == MAKELONG(0x1111,DC_HASDEFID), "expected (0x1111,DC_HASDEFID), got %08lx\n", id);
 
     flush_events( TRUE );
 
@@ -9863,6 +9952,88 @@ static void test_desktop( void )
     }
 }
 
+static void test_display_affinity( HWND win )
+{
+    DWORD affinity;
+    BOOL ret, dwm;
+    LONG styleex;
+
+    if (!pGetWindowDisplayAffinity || !pSetWindowDisplayAffinity)
+    {
+        win_skip("GetWindowDisplayAffinity or SetWindowDisplayAffinity missing\n");
+        return;
+    }
+
+    ret = pGetWindowDisplayAffinity(NULL, NULL);
+    ok(!ret, "GetWindowDisplayAffinity succeeded\n");
+    ok(GetLastError() == ERROR_INVALID_WINDOW_HANDLE, "Expected ERROR_INVALID_WINDOW_HANDLE, got %u\n", GetLastError());
+
+    ret = pGetWindowDisplayAffinity(NULL, &affinity);
+    ok(!ret, "GetWindowDisplayAffinity succeeded\n");
+    ok(GetLastError() == ERROR_INVALID_WINDOW_HANDLE, "Expected ERROR_INVALID_WINDOW_HANDLE, got %u\n", GetLastError());
+
+    ret = pGetWindowDisplayAffinity(win, NULL);
+    ok(!ret, "GetWindowDisplayAffinity succeeded\n");
+    ok(GetLastError() == ERROR_NOACCESS, "Expected ERROR_NOACCESS, got %u\n", GetLastError());
+
+    styleex = GetWindowLongW(win, GWL_EXSTYLE);
+    SetWindowLongW(win, GWL_EXSTYLE, styleex & ~WS_EX_LAYERED);
+
+    affinity = 0xdeadbeef;
+    ret = pGetWindowDisplayAffinity(win, &affinity);
+    ok(ret, "GetWindowDisplayAffinity failed with %u\n", GetLastError());
+    ok(affinity == WDA_NONE, "Expected WDA_NONE, got 0x%x\n", affinity);
+
+    /* Windows 7 fails with ERROR_NOT_ENOUGH_MEMORY when dwm compositing is disabled */
+    ret = pSetWindowDisplayAffinity(win, WDA_MONITOR);
+    ok(ret || GetLastError() == ERROR_NOT_ENOUGH_MEMORY,
+       "SetWindowDisplayAffinity failed with %u\n", GetLastError());
+    dwm = ret;
+
+    affinity = 0xdeadbeef;
+    ret = pGetWindowDisplayAffinity(win, &affinity);
+    ok(ret, "GetWindowDisplayAffinity failed with %u\n", GetLastError());
+    if (dwm) ok(affinity == WDA_MONITOR, "Expected WDA_MONITOR, got 0x%x\n", affinity);
+    else ok(affinity == WDA_NONE, "Expected WDA_NONE, got 0x%x\n", affinity);
+
+    ret = pSetWindowDisplayAffinity(win, WDA_NONE);
+    ok(ret || GetLastError() == ERROR_NOT_ENOUGH_MEMORY,
+       "SetWindowDisplayAffinity failed with %u\n", GetLastError());
+
+    affinity = 0xdeadbeef;
+    ret = pGetWindowDisplayAffinity(win, &affinity);
+    ok(ret, "GetWindowDisplayAffinity failed with %u\n", GetLastError());
+    ok(affinity == WDA_NONE, "Expected WDA_NONE, got 0x%x\n", affinity);
+
+    SetWindowLongW(win, GWL_EXSTYLE, styleex | WS_EX_LAYERED);
+
+    affinity = 0xdeadbeef;
+    ret = pGetWindowDisplayAffinity(win, &affinity);
+    ok(ret, "GetWindowDisplayAffinity failed with %u\n", GetLastError());
+    ok(affinity == WDA_NONE, "Expected WDA_NONE, got 0x%x\n", affinity);
+
+    ret = pSetWindowDisplayAffinity(win, WDA_MONITOR);
+    ok(ret || GetLastError() == ERROR_NOT_ENOUGH_MEMORY,
+       "SetWindowDisplayAffinity failed with %u\n", GetLastError());
+
+    affinity = 0xdeadbeef;
+    ret = pGetWindowDisplayAffinity(win, &affinity);
+    ok(ret, "GetWindowDisplayAffinity failed with %u\n", GetLastError());
+    if (dwm) ok(affinity == WDA_MONITOR, "Expected WDA_MONITOR, got 0x%x\n", affinity);
+    else ok(affinity == WDA_NONE, "Expected WDA_NONE, got 0x%x\n", affinity);
+
+    ret = pSetWindowDisplayAffinity(win, WDA_NONE);
+    ok(ret || GetLastError() == ERROR_NOT_ENOUGH_MEMORY,
+       "SetWindowDisplayAffinity failed with %u\n", GetLastError());
+
+    affinity = 0xdeadbeef;
+    ret = pGetWindowDisplayAffinity(win, &affinity);
+    ok(ret, "GetWindowDisplayAffinity failed with %u\n", GetLastError());
+    ok(affinity == WDA_NONE, "Expected WDA_NONE, got 0x%x\n", affinity);
+
+    SetWindowLongW(win, GWL_EXSTYLE, styleex);
+}
+
 START_TEST(win)
 {
     char **argv;
@@ -9887,6 +10058,8 @@ START_TEST(win)
     pGetLayout = (void *)GetProcAddress( gdi32, "GetLayout" );
     pSetLayout = (void *)GetProcAddress( gdi32, "SetLayout" );
     pMirrorRgn = (void *)GetProcAddress( gdi32, "MirrorRgn" );
+    pGetWindowDisplayAffinity = (void *)GetProcAddress( user32, "GetWindowDisplayAffinity" );
+    pSetWindowDisplayAffinity = (void *)GetProcAddress( user32, "SetWindowDisplayAffinity" );
 
     if (argc==4 && !strcmp(argv[2], "create_children"))
     {
@@ -10012,6 +10185,7 @@ START_TEST(win)
     test_deferwindowpos();
     test_LockWindowUpdate(hwndMain);
     test_desktop();
+    test_display_affinity(hwndMain);
 
     /* add the tests above this line */
     if (hhook) UnhookWindowsHookEx(hhook);

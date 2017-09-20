@@ -1669,7 +1669,7 @@ static void MENU_DrawMenuItem( HWND hwnd, POPUPMENU *menu, HWND hwndOwner, HDC h
         SetViewportOrgEx( hdc, origorg.x, origorg.y, NULL);
     }
     /* process text if present */
-    if (lpitem->text)
+    if (!IS_INTRESOURCE(lpitem->text))
     {
 	int i;
 	HFONT hfontOld = 0;

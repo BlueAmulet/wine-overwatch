@@ -313,11 +313,27 @@ void MODULE_get_binary_info( HANDLE hfile, struct binary_info *info )
             unsigned char magic[4];
             unsigned char class;
             unsigned char data;
-            unsigned char version;
-            unsigned char ignored[9];
+            unsigned char ignored1[10];
             unsigned short type;
             unsigned short machine;
+            unsigned char ignored2[8];
+            unsigned int phoff;
+            unsigned char ignored3[12];
+            unsigned short phnum;
         } elf;
+        struct
+        {
+            unsigned char magic[4];
+            unsigned char class;
+            unsigned char data;
+            unsigned char ignored1[10];
+            unsigned short type;
+            unsigned short machine;
+            unsigned char ignored2[12];
+            unsigned long long phoff;
+            unsigned char ignored3[16];
+            unsigned short phnum;
+        } elf64;
         struct
         {
             unsigned int magic;
@@ -347,11 +363,52 @@ void MODULE_get_binary_info( HANDLE hfile, struct binary_info *info )
         {
             header.elf.type = RtlUshortByteSwap( header.elf.type );
             header.elf.machine = RtlUshortByteSwap( header.elf.machine );
+            if (header.elf.class == 2)
+            {
+                header.elf64.phoff = RtlUlonglongByteSwap( header.elf64.phoff );
+                header.elf64.phnum = RtlUshortByteSwap( header.elf64.phnum );
+            }
+            else
+            {
+                header.elf.phoff = RtlUlongByteSwap( header.elf.phoff );
+                header.elf.phnum = RtlUshortByteSwap( header.elf.phnum );
+            }
         }
         switch(header.elf.type)
         {
         case 2: info->type = BINARY_UNIX_EXE; break;
         case 3: info->type = BINARY_UNIX_LIB; break;
+        }
+        if (header.elf.type == 3)
+        {
+            unsigned long long phoff;
+            unsigned short phnum;
+            unsigned int type;
+            if (header.elf.class == 2)
+            {
+                phoff = header.elf64.phoff;
+                phnum = header.elf64.phnum;
+            }
+            else
+            {
+                phoff = header.elf.phoff;
+                phnum = header.elf.phnum;
+            }
+            while (phnum--)
+            {
+                if (SetFilePointer( hfile, phoff, NULL, SEEK_SET ) == -1) return;
+                if (!ReadFile( hfile, &type, sizeof(type), &len, NULL ) || len < sizeof(type)) return;
+#ifdef WORDS_BIGENDIAN
+                if (header.elf.data == 1)
+#else
+                if (header.elf.data == 2)
+#endif
+                {
+                    type = RtlUlongByteSwap( type );
+                }
+                if (type == 3) info->type = BINARY_UNIX_EXE;
+                phoff += (header.elf.class == 2) ? 56 : 32;
+            }
         }
         switch(header.elf.machine)
         {

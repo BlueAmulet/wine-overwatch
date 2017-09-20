@@ -50,6 +50,8 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(exec);
 
+extern HANDLE CDECL __wine_create_default_token(BOOL admin);
+
 static const WCHAR wszOpen[] = {'o','p','e','n',0};
 static const WCHAR wszExe[] = {'.','e','x','e',0};
 static const WCHAR wszILPtr[] = {':','%','p',0};
@@ -312,6 +314,8 @@ static HRESULT SHELL_GetPathFromIDListForExecuteW(LPCITEMIDLIST pidl, LPWSTR psz
 static UINT_PTR SHELL_ExecuteW(const WCHAR *lpCmd, WCHAR *env, BOOL shWait,
 			    const SHELLEXECUTEINFOW *psei, LPSHELLEXECUTEINFOW psei_out)
 {
+    static WCHAR runasW[] = {'r','u','n','a','s',0};
+    HANDLE token = NULL;
     STARTUPINFOW  startup;
     PROCESS_INFORMATION info;
     UINT_PTR retval = SE_ERR_NOASSOC;
@@ -344,8 +348,20 @@ static UINT_PTR SHELL_ExecuteW(const WCHAR *lpCmd, WCHAR *env, BOOL shWait,
     dwCreationFlags = CREATE_UNICODE_ENVIRONMENT;
     if (!(psei->fMask & SEE_MASK_NO_CONSOLE))
         dwCreationFlags |= CREATE_NEW_CONSOLE;
-    if (CreateProcessW(NULL, (LPWSTR)lpCmd, NULL, NULL, FALSE, dwCreationFlags, env,
-                       lpDirectory, &startup, &info))
+
+    /* Spawning a process with runas verb means that the process should be
+     * executed with admin rights. This function ignores the manifest data,
+     * and allows programs to elevate rights on-demand. On Windows a complex
+     * RPC menchanism is used, using CreateProcessAsUser would fail because
+     * it can only be used to drop rights. */
+    if (psei->lpVerb && !strcmpiW(psei->lpVerb, runasW))
+    {
+        if (!(token = __wine_create_default_token(TRUE)))
+            ERR("Failed to create admin token\n");
+    }
+
+    if (CreateProcessAsUserW(token, NULL, (LPWSTR)lpCmd, NULL, NULL, FALSE,
+                             dwCreationFlags, env, lpDirectory, &startup, &info))
     {
         /* Give 30 seconds to the app to come up, if desired. Probably only needed
            when starting app immediately before making a DDE connection. */
@@ -364,6 +380,8 @@ static UINT_PTR SHELL_ExecuteW(const WCHAR *lpCmd, WCHAR *env, BOOL shWait,
         TRACE("CreateProcess returned error %ld\n", retval);
         retval = ERROR_BAD_FORMAT;
     }
+
+    if (token) CloseHandle(token);
 
     TRACE("returning %lu\n", retval);
 
@@ -1299,6 +1317,7 @@ static HRESULT shellex_load_object_and_run( HKEY hkey, LPCGUID guid, LPSHELLEXEC
     if ( !dataobj )
     {
         ERR("failed to get data object\n");
+        r = E_FAIL;
         goto end;
     }
 
@@ -1557,6 +1576,26 @@ static void do_error_dialog( UINT_PTR retval, HWND hwnd )
     MessageBoxW(hwnd, msg, NULL, MB_ICONERROR);
 }
 
+static WCHAR *expand_environment( const WCHAR *str )
+{
+    WCHAR *buf;
+    DWORD len;
+
+    len = ExpandEnvironmentStringsW(str, NULL, 0);
+    if (!len) return NULL;
+
+    buf = HeapAlloc(GetProcessHeap(), 0, len * sizeof(WCHAR));
+    if (!buf) return NULL;
+
+    len = ExpandEnvironmentStringsW(str, buf, len);
+    if (!len)
+    {
+        HeapFree(GetProcessHeap(), 0, buf);
+        return NULL;
+    }
+    return buf;
+}
+
 /*************************************************************************
  *	SHELL_execute [Internal]
  */
@@ -1570,7 +1609,7 @@ static BOOL SHELL_execute( LPSHELLEXECUTEINFOW sei, SHELL_ExecuteW32 execfunc )
         SEE_MASK_UNICODE       | SEE_MASK_ASYNCOK      | SEE_MASK_HMONITOR;
 
     WCHAR parametersBuffer[1024], dirBuffer[MAX_PATH], wcmdBuffer[1024];
-    WCHAR *wszApplicationName, *wszParameters, *wszDir, *wcmd;
+    WCHAR *wszApplicationName, *wszParameters, *wszDir, *wcmd = NULL;
     DWORD dwApplicationNameLen = MAX_PATH+2;
     DWORD parametersLen = sizeof(parametersBuffer) / sizeof(WCHAR);
     DWORD wcmdLen = sizeof(wcmdBuffer) / sizeof(WCHAR);
@@ -1674,6 +1713,29 @@ static BOOL SHELL_execute( LPSHELLEXECUTEINFOW sei, SHELL_ExecuteW32 execfunc )
 
         SHGetPathFromIDListW(sei_tmp.lpIDList, wszApplicationName);
         TRACE("-- idlist=%p (%s)\n", sei_tmp.lpIDList, debugstr_w(wszApplicationName));
+    }
+
+    if (sei_tmp.fMask & SEE_MASK_DOENVSUBST)
+    {
+        WCHAR *tmp;
+
+        tmp = expand_environment(sei_tmp.lpFile);
+        if (!tmp)
+        {
+            retval = SE_ERR_OOM;
+            goto end;
+        }
+        HeapFree(GetProcessHeap(), 0, wszApplicationName);
+        sei_tmp.lpFile = wszApplicationName = tmp;
+
+        tmp = expand_environment(sei_tmp.lpDirectory);
+        if (!tmp)
+        {
+            retval = SE_ERR_OOM;
+            goto end;
+        }
+        if (wszDir != dirBuffer) HeapFree(GetProcessHeap(), 0, wszDir);
+        sei_tmp.lpDirectory = wszDir = tmp;
     }
 
     if ( ERROR_SUCCESS == ShellExecute_FromContextMenu( &sei_tmp ) )
@@ -1846,6 +1908,7 @@ static BOOL SHELL_execute( LPSHELLEXECUTEINFOW sei, SHELL_ExecuteW32 execfunc )
         retval = (UINT_PTR)ShellExecuteW(sei_tmp.hwnd, sei_tmp.lpVerb, lpstrTmpFile, NULL, NULL, 0);
     }
 
+end:
     TRACE("retval %lu\n", retval);
 
     HeapFree(GetProcessHeap(), 0, wszApplicationName);
